@@ -136,7 +136,7 @@ function buildPrompt(d){
   return `Bark lead:\nName: ${d.name}\nEvent: ${d.eventType||'not specified'}\nDate: ${formatDate(d.date)}\nGuests: ${d.guests||'not specified'}\nNotes: ${d.notes||'none'}`;
 }
 
-async function callClaude(prompt){
+async function callClaude(prompt, toPhone){
   const r=await fetch('/api/chat',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -144,12 +144,13 @@ async function callClaude(prompt){
       model:'claude-sonnet-4-6',
       max_tokens:200,
       system:SYSTEM_PROMPT,
-      messages:[{role:'user',content:prompt}]
+      messages:[{role:'user',content:prompt}],
+      toPhone: toPhone || null
     })
   });
   const data=await r.json();
   if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
-  return data.content[0].text;
+  return data;
 }
 
 async function generatePreview(){
@@ -162,8 +163,8 @@ async function generatePreview(){
   document.getElementById('preview-box').className='preview-box show';
   document.getElementById('preview-text').textContent='Writing message...';
   try{
-    const msg=await callClaude(buildPrompt(d));
-    document.getElementById('preview-text').textContent=msg;
+    const result=await callClaude(buildPrompt(d), null);
+    document.getElementById('preview-text').textContent=result.message||result.content[0].text;
   }catch(e){
     document.getElementById('preview-text').textContent='Error: '+e.message;
   }
@@ -178,12 +179,16 @@ async function sendLead(){
   const btn=document.getElementById('send-btn');
   btn.disabled=true;
   btn.textContent='Sending...';
-  showStatus('Writing personalized message...','loading');
+  showStatus('Writing and sending personalized message...','loading');
   try{
-    const msg=await callClaude(buildPrompt(d));
+    const result=await callClaude(buildPrompt(d), d.phone);
+    const msg=result.message||result.content[0].text;
     document.getElementById('preview-box').className='preview-box show';
     document.getElementById('preview-text').textContent=msg;
-    showStatus(`Message ready for ${d.name} at ${d.phone}!<br><br><em>"${msg}"</em><br><br>${document.getElementById('followup').checked?'Follow-up scheduled in 24 hours.':''}`, 'success');
+    showStatus(
+      `✓ SMS sent to ${d.name} at ${d.phone}!<br><br><em>"${msg}"</em><br><br>${document.getElementById('followup').checked?'✓ Follow-up scheduled in 24 hours if no reply.':''}`,
+      'success'
+    );
   }catch(e){
     showStatus('Error: '+e.message,'error');
   }
