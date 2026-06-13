@@ -136,7 +136,7 @@ function buildPrompt(d){
   return `Bark lead:\nName: ${d.name}\nEvent: ${d.eventType||'not specified'}\nDate: ${formatDate(d.date)}\nGuests: ${d.guests||'not specified'}\nNotes: ${d.notes||'none'}`;
 }
 
-async function callClaude(prompt, toPhone){
+async function callAPI(prompt, d, sendMessages){
   const r=await fetch('/api/chat',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -145,7 +145,10 @@ async function callClaude(prompt, toPhone){
       max_tokens:200,
       system:SYSTEM_PROMPT,
       messages:[{role:'user',content:prompt}],
-      toPhone: toPhone || null
+      toPhone: sendMessages ? (d.phone||null) : null,
+      toEmail: sendMessages ? (d.email||null) : null,
+      clientName: d.name,
+      eventType: d.eventType
     })
   });
   const data=await r.json();
@@ -163,7 +166,7 @@ async function generatePreview(){
   document.getElementById('preview-box').className='preview-box show';
   document.getElementById('preview-text').textContent='Writing message...';
   try{
-    const result=await callClaude(buildPrompt(d), null);
+    const result=await callAPI(buildPrompt(d), d, false);
     document.getElementById('preview-text').textContent=result.message||result.content[0].text;
   }catch(e){
     document.getElementById('preview-text').textContent='Error: '+e.message;
@@ -181,12 +184,15 @@ async function sendLead(){
   btn.textContent='Sending...';
   showStatus('Writing and sending personalized message...','loading');
   try{
-    const result=await callClaude(buildPrompt(d), d.phone);
+    const result=await callAPI(buildPrompt(d), d, true);
     const msg=result.message||result.content[0].text;
     document.getElementById('preview-box').className='preview-box show';
     document.getElementById('preview-text').textContent=msg;
     showStatus(
-      `✓ SMS sent to ${d.name} at ${d.phone}!<br><br><em>"${msg}"</em><br><br>${document.getElementById('followup').checked?'✓ Follow-up scheduled in 24 hours if no reply.':''}`,
+      `${result.smsSent?'✓ SMS sent to '+d.phone+'!':'⚠ SMS pending A2P approval'}<br>
+       ${result.emailSent?'✓ Email sent to '+d.email+'!':d.email?'⚠ Email not sent':''}
+       <br><br><em>"${msg}"</em><br><br>
+       ${document.getElementById('followup').checked?'✓ Follow-up scheduled in 24 hours if no reply.':''}`,
       'success'
     );
   }catch(e){
