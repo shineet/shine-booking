@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shine, The Mentalist — Booking Assistant</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f7;color:#1d1d1f;font-size:15px;min-height:100vh;padding:16px}
+.app{max-width:420px;margin:0 auto}
+.header{text-align:center;padding:24px 0 16px}
+.header h1{font-size:22px;font-weight:600}
+.header p{font-size:13px;color:#6e6e73;margin-top:4px}
+.card{background:#fff;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
+.field{margin-bottom:14px}
+.field:last-child{margin-bottom:0}
+.field label{display:block;font-size:12px;color:#6e6e73;margin-bottom:5px;font-weight:500;text-transform:uppercase;letter-spacing:0.04em}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;font-size:15px;border:1px solid #e0e0e5;border-radius:10px;background:#f5f5f7;color:#1d1d1f;font-family:inherit;-webkit-appearance:none}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:#0071e3;background:#fff}
+.field textarea{resize:none;min-height:70px;line-height:1.5}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.section-label{font-size:11px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px}
+.preview-btn{width:100%;padding:10px;background:transparent;border:1px solid #e0e0e5;border-radius:10px;font-size:14px;cursor:pointer;color:#0071e3;font-weight:500;margin-bottom:10px;font-family:inherit}
+.preview-box{background:#f5f5f7;border-radius:10px;padding:12px;margin-top:10px;font-size:14px;line-height:1.6;display:none}
+.preview-box.show{display:block}
+.preview-label{font-size:10px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px}
+.followup-row{display:flex;align-items:center;gap:10px;margin-top:12px}
+.followup-row input[type=checkbox]{width:18px;height:18px;cursor:pointer;accent-color:#0071e3}
+.followup-row label{font-size:13px;color:#6e6e73;cursor:pointer}
+.send-btn{width:100%;padding:14px;background:#0071e3;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;margin-top:4px;font-family:inherit}
+.send-btn:disabled{background:#b0c8f0;cursor:not-allowed}
+.status{margin-top:16px;padding:14px;border-radius:12px;font-size:13px;line-height:1.7;display:none}
+.status.success{background:#f0faf0;border:1px solid #c0ddc0;color:#1a5c1a;display:block}
+.status.error{background:#fff0f0;border:1px solid #f0c0c0;color:#8b0000;display:block}
+.status.loading{background:#f5f5f7;border:1px solid #e0e0e5;color:#6e6e73;display:block}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>✦ Shine, The Mentalist</h1>
+    <p>Booking assistant — paste lead details from Bark</p>
+  </div>
+  <div class="card">
+    <div class="section-label">Client details</div>
+    <div class="field">
+      <label>Client name</label>
+      <input type="text" id="name" placeholder="e.g. Abigail">
+    </div>
+    <div class="two-col">
+      <div class="field">
+        <label>Phone</label>
+        <input type="tel" id="phone" placeholder="(909) 283-2141">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="abigail@gmail.com">
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-label">Event details</div>
+    <div class="field">
+      <label>Event type</label>
+      <select id="event_type">
+        <option value="">Select event type</option>
+        <option value="Birthday party">Birthday party</option>
+        <option value="Bachelorette party">Bachelorette party</option>
+        <option value="Corporate event">Corporate event</option>
+        <option value="Private celebration">Private celebration</option>
+        <option value="Anniversary">Anniversary</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="two-col">
+      <div class="field">
+        <label>Event date</label>
+        <input type="date" id="date">
+      </div>
+      <div class="field">
+        <label>Guests</label>
+        <select id="guests">
+          <option value="">How many?</option>
+          <option value="Under 10">Under 10</option>
+          <option value="10-25">10-25</option>
+          <option value="25-50">25-50</option>
+          <option value="50-100">50-100</option>
+          <option value="100+">100+</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Notes (optional)</label>
+      <textarea id="notes" placeholder="e.g. Rooftop venue, surprise party, evening event..."></textarea>
+    </div>
+  </div>
+  <div class="card">
+    <div class="section-label">Message</div>
+    <button class="preview-btn" onclick="generatePreview()">Preview AI message</button>
+    <div class="preview-box" id="preview-box">
+      <div class="preview-label">SMS that will be sent</div>
+      <div id="preview-text"></div>
+    </div>
+    <div class="followup-row">
+      <input type="checkbox" id="followup" checked>
+      <label for="followup">Auto follow-up if no reply in 24 hours</label>
+    </div>
+  </div>
+  <button class="send-btn" onclick="sendLead()" id="send-btn">Send message & set up follow-ups</button>
+  <div class="status" id="status"></div>
+</div>
+<script>
+const ANTHROPIC_KEY = 'YOUR_API_KEY_HERE';
+const SYSTEM_PROMPT = `You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic show performer in Texas. Perform 45-60 min interactive shows. Private events from $400, corporate from $800. Write warm personalized first SMS to Bark lead. Rules: under 160 chars, use first name, mention event type, sign off as "- Shine, The Mentalist", no pricing, end with a question. Return ONLY the SMS text.`;
+function formatDate(d){if(!d)return 'not specified';const dt=new Date(d+'T00:00:00');return dt.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});}
+function getFormData(){return{name:document.getElementById('name').value.trim(),phone:document.getElementById('phone').value.trim(),email:document.getElementById('email').value.trim(),eventType:document.getElementById('event_type').value,date:document.getElementById('date').value,guests:document.getElementById('guests').value,notes:document.getElementById('notes').value.trim()};}
+function buildPrompt(d){return `Bark lead:\nName: ${d.name}\nEvent: ${d.eventType||'not specified'}\nDate: ${formatDate(d.date)}\nGuests: ${d.guests||'not specified'}\nNotes: ${d.notes||'none'}`;}
+async function callClaude(prompt){const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:200,system:SYSTEM_PROMPT,messages:[{role:'user',content:prompt}]})});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.content[0].text;}
+async function generatePreview(){const d=getFormData();if(!d.name||!d.eventType){document.getElementById('preview-box').className='preview-box show';document.getElementById('preview-text').textContent='Please fill in client name and event type first.';return;}document.getElementById('preview-box').className='preview-box show';document.getElementById('preview-text').textContent='Writing message...';try{const msg=await callClaude(buildPrompt(d));document.getElementById('preview-text').textContent=msg;}catch(e){document.getElementById('preview-text').textContent='Error: '+e.message;}}
+async function sendLead(){const d=getFormData();if(!d.name||!d.phone||!d.eventType){showStatus('Please fill in client name, phone, and event type.','error');return;}const btn=document.getElementById('send-btn');btn.disabled=true;btn.textContent='Sending...';showStatus('Writing personalized message...','loading');try{const msg=await callClaude(buildPrompt(d));document.getElementById('preview-box').className='preview-box show';document.getElementById('preview-text').textContent=msg;showStatus(`Message ready for ${d.name} at ${d.phone}!<br><br><em>"${msg}"</em><br><br>${document.getElementById('followup').checked?'Follow-up scheduled in 24 hours.':''}`, 'success');}catch(e){showStatus('Error: '+e.message,'error');}btn.disabled=false;btn.textContent='Send message & set up follow-ups';}
+function showStatus(msg,type){const el=document.getElementById('status');el.className='status '+type;el.innerHTML=msg;}
+</script>
+</body>
+</html>
