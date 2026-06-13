@@ -110,7 +110,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="status" id="status"></div>
 </div>
 <script>
-const ANTHROPIC_KEY = 'YOUR_API_KEY_HERE';
+const ANTHROPIC_KEY = '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';
 const SYSTEM_PROMPT = `You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic show performer in Texas. Perform 45-60 min interactive shows. Private events from $400, corporate from $800. Write warm personalized first SMS to Bark lead. Rules: under 160 chars, use first name, mention event type, sign off as "- Shine, The Mentalist", no pricing, end with a question. Return ONLY the SMS text.`;
 function formatDate(d){if(!d)return 'not specified';const dt=new Date(d+'T00:00:00');return dt.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});}
 function getFormData(){return{name:document.getElementById('name').value.trim(),phone:document.getElementById('phone').value.trim(),email:document.getElementById('email').value.trim(),eventType:document.getElementById('event_type').value,date:document.getElementById('date').value,guests:document.getElementById('guests').value,notes:document.getElementById('notes').value.trim()};}
