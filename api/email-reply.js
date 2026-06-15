@@ -5,26 +5,40 @@ export default async function handler(req, res) {
   }
 
   try {
-    const payload = req.body;
+    const { from, to, subject, body, rawEmail } = req.body;
 
-    // Extract email details from Resend webhook
-    const fromEmail = payload.from || '';
-    const fromName = payload.headers?.['from'] || fromEmail;
-    const subject = payload.subject || '';
-    const body = payload.text || payload.html?.replace(/<[^>]*>/g, '') || '';
-    const toEmail = fromEmail;
-
-    if (!fromEmail || !body) {
+    if (!from) {
       res.status(200).json({ received: true });
       return;
     }
 
-    // Don't reply to your own emails or notifications
-    if (fromEmail.includes('texasmentalist.com') || 
-        fromEmail.includes('2020shine@gmail.com') ||
-        fromEmail.includes('resend.com')) {
-      res.status(200).json({ received: true });
+    // Don't reply to your own emails
+    if (from.includes('texasmentalist.com') ||
+        from.includes('2020shine@gmail.com') ||
+        from.includes('resend.com') ||
+        from.includes('noreply')) {
+      res.status(200).json({ received: true, skipped: 'own email' });
       return;
+    }
+
+    // Extract readable text from raw email if body is empty
+    let emailBody = body || '';
+    if (!emailBody && rawEmail) {
+      // Try to extract plain text from raw email
+      const textMatch = rawEmail.match(/Content-Type: text\/plain[\s\S]*?\r?\n\r?\n([\s\S]*?)(?:\r?\n--|\r?\n\r?\nContent-Type)/);
+      if (textMatch) {
+        emailBody = textMatch[1].trim();
+      } else {
+        // Just use everything after the headers
+        const headerEnd = rawEmail.indexOf('\r\n\r\n') || rawEmail.indexOf('\n\n');
+        if (headerEnd > -1) {
+          emailBody = rawEmail.substring(headerEnd).trim().substring(0, 1000);
+        }
+      }
+    }
+
+    if (!emailBody) {
+      emailBody = `Client sent an email with subject: ${subject}`;
     }
 
     const SYSTEM_PROMPT = `You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic show performer in Texas.
@@ -40,15 +54,15 @@ You are handling email conversations with potential clients. Be warm, profession
 Rules:
 - Answer pricing questions honestly
 - If asked about availability, say you will check and confirm shortly
-- Keep responses concise but friendly — 2-3 short paragraphs max
-- Do NOT ask about date or number of guests — they already provided that on Bark
-- If the client says something like "yes lets book", "I want to book", "lets confirm", "send the contract" — reply saying you will send over the contract shortly, then add [BOOKING_INTENT] at the very end of your response
+- Keep responses concise — 2-3 short paragraphs max
+- Do NOT ask about date or number of guests
+- If the client says something like "yes lets book", "I want to book", "lets confirm", "send the contract" — reply saying you will send over the contract shortly, then add [BOOKING_INTENT] at the very end
 - Always sign off with:
   Shine, The Mentalist
   +1 (612) 865-7681
   www.texasmentalist.com`;
 
-    // Call Claude to write the reply
+    // Call Claude
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -62,7 +76,7 @@ Rules:
         system: SYSTEM_PROMPT,
         messages: [{
           role: 'user',
-          content: `Client email:\nFrom: ${fromEmail}\nSubject: ${subject}\n\n${body}`
+          content: `Client email:\nFrom: ${from}\nSubject: ${subject}\n\n${emailBody}`
         }]
       })
     });
@@ -74,8 +88,8 @@ Rules:
     const bookingIntent = replyText.includes('[BOOKING_INTENT]');
     const cleanReply = replyText.replace('[BOOKING_INTENT]', '').trim();
 
-    // Send email reply via Resend
-    await fetch('https://api.resend.com/emails', {
+    // Send reply email via Resend
+    const resendReply = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -83,11 +97,13 @@ Rules:
       },
       body: JSON.stringify({
         from: 'Shine, The Mentalist <shine@texasmentalist.com>',
-        to: toEmail,
-        subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
+        to: from,
+        subject: subject?.startsWith('Re:') ? subject : `Re: ${subject || 'Your inquiry'}`,
         text: cleanReply
       })
     });
+
+    const resendData = await resendReply.json();
 
     // If booking intent — notify you
     if (bookingIntent) {
@@ -100,13 +116,18 @@ Rules:
         body: JSON.stringify({
           from: 'Shine Booking Assistant <shine@texasmentalist.com>',
           to: '2020shine@gmail.com',
-          subject: `🎯 Booking intent from ${fromEmail}`,
-          text: `A client wants to book!\n\nFrom: ${fromEmail}\nSubject: ${subject}\n\nTheir message:\n${body}\n\nYour reply:\n${cleanReply}\n\nLog into your booking app to send the contract:\nshine-booking.vercel.app`
+          subject: `🎯 Booking intent from ${from}`,
+          text: `A client wants to book!\n\nFrom: ${from}\nSubject: ${subject}\n\nTheir message:\n${emailBody}\n\nYour reply:\n${cleanReply}\n\nLog in to send the contract:\nshine-booking.vercel.app`
         })
       });
     }
 
-    res.status(200).json({ received: true, replied: true, bookingIntent });
+    res.status(200).json({ 
+      received: true, 
+      replied: true, 
+      bookingIntent,
+      resendId: resendData.id 
+    });
 
   } catch(e) {
     console.error('Email reply error:', e);
