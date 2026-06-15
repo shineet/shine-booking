@@ -1,17 +1,45 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    res.setHeader('Content-Type', 'text/xml');
-    res.status(200).send('<Response></Response>');
+    res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
   try {
-    const { From, Body } = req.body;
+    const payload = req.body;
+    const data = payload.data || payload;
 
-    if (!From || !Body) {
-      res.setHeader('Content-Type', 'text/xml');
-      res.status(200).send('<Response></Response>');
+    const fromEmail = data.from || '';
+    const subject = data.subject || 'Your inquiry';
+    const emailId = data.email_id || '';
+    let body = data.text || data.html?.replace(/<[^>]*>/g, '') || '';
+
+    if (!fromEmail) {
+      res.status(200).json({ received: true });
       return;
+    }
+
+    // Don't reply to your own emails
+    if (fromEmail.includes('texasmentalist.com') ||
+        fromEmail.includes('2020shine@gmail.com') ||
+        fromEmail.includes('resend.com')) {
+      res.status(200).json({ received: true, skipped: 'own email' });
+      return;
+    }
+
+    // If no body, fetch full email from Resend API
+    if (!body && emailId) {
+      const emailResponse = await fetch(`https://api.resend.com/emails/${emailId}`, {
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_KEY}`
+        }
+      });
+      const emailData = await emailResponse.json();
+      body = emailData.text || emailData.html?.replace(/<[^>]*>/g, '') || '';
+    }
+
+    // If still no body use subject as context
+    if (!body) {
+      body = `Client sent an email with subject: ${subject}`;
     }
 
     const SYSTEM_PROMPT = `You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic show performer in Texas.
@@ -22,15 +50,18 @@ Payment: Cash, Zelle (2020shine@gmail.com), Venmo (@Shine-Thankappan), PayPal (s
 Website: www.texasmentalist.com
 Phone: +1 (612) 865-7681
 
-You are handling SMS conversations with potential clients. Be warm, professional, and concise (under 160 characters per message).
+You are handling email conversations with potential clients. Be warm, professional, and helpful.
 
 Rules:
 - Answer pricing questions honestly
 - If asked about availability, say you will check and confirm shortly
-- Never make promises about specific dates without confirmation
-- If the client says something like "yes lets book", "I want to book", "lets do it", "sounds good lets confirm" — respond with ONE final message saying you will send over the contract details, then add the tag [BOOKING_INTENT] at the very end
-- Keep responses short and conversational for SMS
-- Sign off as "- Shine"`;
+- Keep responses concise — 2-3 short paragraphs max
+- Do NOT ask about date or number of guests
+- If the client says something like "yes lets book", "I want to book", "lets confirm", "send the contract" — reply saying you will send over the contract shortly, then add [BOOKING_INTENT] at the very end
+- Always sign off with:
+  Shine, The Mentalist
+  +1 (612) 865-7681
+  www.texasmentalist.com`;
 
     // Call Claude
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -42,9 +73,12 @@ Rules:
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 200,
+        max_tokens: 500,
         system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: `Client texted: ${Body}` }]
+        messages: [{
+          role: 'user',
+          content: `Client email:\nFrom: ${fromEmail}\nSubject: ${subject}\n\n${body}`
+        }]
       })
     });
 
@@ -55,25 +89,24 @@ Rules:
     const bookingIntent = replyText.includes('[BOOKING_INTENT]');
     const cleanReply = replyText.replace('[BOOKING_INTENT]', '').trim();
 
-    // Send SMS reply via Twilio
-    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
-    const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
-    const smsBody = new URLSearchParams({
-      From: process.env.TWILIO_FROM,
-      To: From,
-      Body: cleanReply
-    });
-
-    await fetch(twilioUrl, {
+    // Send reply email
+    const resendReply = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        'Authorization': `Basic ${twilioAuth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.RESEND_KEY}`
       },
-      body: smsBody.toString()
+      body: JSON.stringify({
+        from: 'Shine, The Mentalist <shine@texasmentalist.com>',
+        to: fromEmail,
+        subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
+        text: cleanReply
+      })
     });
 
-    // If booking intent — notify you by email
+    const resendData = await resendReply.json();
+
+    // If booking intent — notify you
     if (bookingIntent) {
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -84,18 +117,16 @@ Rules:
         body: JSON.stringify({
           from: 'Shine Booking Assistant <shine@texasmentalist.com>',
           to: '2020shine@gmail.com',
-          subject: `Booking intent detected from ${From}`,
-          text: `A client is ready to book!\n\nPhone: ${From}\nTheir message: ${Body}\n\nLog into your booking app to confirm and send the contract.\n\nshine-booking.vercel.app`
+          subject: `🎯 Booking intent from ${fromEmail}`,
+          text: `A client wants to book!\n\nFrom: ${fromEmail}\nSubject: ${subject}\n\nTheir message:\n${body}\n\nYour reply:\n${cleanReply}\n\nLog in to send the contract:\nshine-booking.vercel.app`
         })
       });
     }
 
-    res.setHeader('Content-Type', 'text/xml');
-    res.status(200).send('<Response></Response>');
+    res.status(200).json({ received: true, replied: true, bookingIntent, resendId: resendData.id });
 
   } catch(e) {
-    console.error('Reply error:', e);
-    res.setHeader('Content-Type', 'text/xml');
-    res.status(200).send('<Response></Response>');
+    console.error('Email reply error:', e);
+    res.status(200).json({ received: true, error: e.message });
   }
 }
