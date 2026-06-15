@@ -89,7 +89,7 @@ Rules:
           'Authorization': `Bearer ${process.env.RESEND_KEY}`
         },
         body: JSON.stringify({
-          from: 'Shine, The Mentalist <onboarding@resend.dev>',
+          from: 'Shine, The Mentalist <shine@texasmentalist.com>',
           to: toEmail,
           subject: subjectLine,
           text: emailBody
