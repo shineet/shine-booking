@@ -5,57 +5,73 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   try {
-    const { toPhone, toEmail, clientName, eventType, ...claudeBody } = req.body;
+    const { toPhone, toEmail, clientName, eventType, smsOverride, emailOverride, ...claudeBody } = req.body;
 
-    // Step 1: Claude writes the SMS
-    const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify(claudeBody)
-    });
-    const claudeData = await claudeResponse.json();
-    if (claudeData.error) throw new Error(claudeData.error.message);
-    const smsMessage = claudeData.content[0].text;
+    // Step 1: Claude writes SMS (or use override)
+    let smsMessage = smsOverride;
+    if (!smsMessage) {
+      const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify(claudeBody)
+      });
+      const claudeData = await claudeResponse.json();
+      if (claudeData.error) throw new Error(claudeData.error.message);
+      smsMessage = claudeData.content[0].text;
+    }
 
-    // Step 2: Claude writes the email
-    const emailPrompt = `Write a warm, professional booking inquiry email for this Bark lead:
+    // Step 2: Claude writes email (or use override)
+    let emailSubject = '';
+    let emailBody = '';
+
+    if (emailOverride) {
+      const lines = emailOverride.split('\n');
+      emailSubject = lines[0].replace('Subject:', '').trim();
+      emailBody = lines.slice(2).join('\n').trim();
+    } else {
+      const emailPrompt = `Write a warm, professional first contact email for this Bark lead:
 Name: ${clientName}
 Event: ${eventType}
 
 Rules:
-- Friendly and personal tone
-- 3-4 short paragraphs
+- Friendly and personal, use their first name
+- 2-3 short paragraphs
 - Introduce yourself as Shine, The Mentalist
 - Mention you do 45-60 min interactive mentalism and magic shows
-- Ask about their event details
-- Do NOT mention pricing yet
-- Sign off as "Shine, The Mentalist"
-- Subject line on first line as "Subject: ..."
+- Tell them you'd love to be part of their ${eventType}
+- Ask ONE simple question to keep the conversation going
+- Do NOT ask about date, number of guests, or pricing
+- Signature must be exactly:
+  Shine, The Mentalist
+  +1 (612) 865-7681
+  www.texasmentalist.com
+- First line must be: Subject: [subject line]
 - Then blank line
 - Then email body`;
 
-    const emailResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 500,
-        messages: [{ role: 'user', content: emailPrompt }]
-      })
-    });
-    const emailData = await emailResponse.json();
-    const emailFull = emailData.content[0].text;
-    const emailLines = emailFull.split('\n');
-    const subjectLine = emailLines[0].replace('Subject: ', '').trim();
-    const emailBody = emailLines.slice(2).join('\n').trim();
+      const emailResponse = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 500,
+          messages: [{ role: 'user', content: emailPrompt }]
+        })
+      });
+      const emailData = await emailResponse.json();
+      const emailFull = emailData.content[0].text;
+      const emailLines = emailFull.split('\n');
+      emailSubject = emailLines[0].replace('Subject:', '').trim();
+      emailBody = emailLines.slice(2).join('\n').trim();
+    }
 
     // Step 3: Send SMS via Twilio
     let smsSent = false;
@@ -91,7 +107,7 @@ Rules:
         body: JSON.stringify({
           from: 'Shine, The Mentalist <shine@texasmentalist.com>',
           to: toEmail,
-          subject: subjectLine,
+          subject: emailSubject,
           text: emailBody
         })
       });
@@ -99,13 +115,7 @@ Rules:
       if (resendData.id) emailSent = true;
     }
 
-    res.status(200).json({
-      message: smsMessage,
-      emailBody,
-      subjectLine,
-      smsSent,
-      emailSent
-    });
+    res.status(200).json({ smsMessage, emailSubject, emailBody, smsSent, emailSent });
 
   } catch(e) {
     res.status(500).json({ error: { message: e.message } });
