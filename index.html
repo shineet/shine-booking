@@ -17,15 +17,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .field label{display:block;font-size:12px;color:#6e6e73;margin-bottom:5px;font-weight:500;text-transform:uppercase;letter-spacing:0.04em}
 .field input,.field select,.field textarea{width:100%;padding:10px 12px;font-size:15px;border:1px solid #e0e0e5;border-radius:10px;background:#f5f5f7;color:#1d1d1f;font-family:inherit;-webkit-appearance:none}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:#0071e3;background:#fff}
-.field textarea{resize:none;min-height:70px;line-height:1.5}
+.field textarea{resize:vertical;min-height:80px;line-height:1.5}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .section-label{font-size:11px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px}
-.preview-btn{width:100%;padding:10px;background:transparent;border:1px solid #e0e0e5;border-radius:10px;font-size:14px;cursor:pointer;color:#0071e3;font-weight:500;margin-bottom:10px;font-family:inherit}
-.preview-btn:hover{background:#f5f5f7}
-.preview-box{background:#f5f5f7;border-radius:10px;padding:12px;margin-top:10px;font-size:14px;line-height:1.6;display:none}
-.preview-box.show{display:block}
-.preview-label{font-size:10px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px}
-.followup-row{display:flex;align-items:center;gap:10px;margin-top:12px}
+.generate-btn{width:100%;padding:10px;background:transparent;border:1px solid #e0e0e5;border-radius:10px;font-size:14px;cursor:pointer;color:#0071e3;font-weight:500;margin-bottom:14px;font-family:inherit}
+.generate-btn:hover{background:#f5f5f7}
+.generate-btn:disabled{color:#b0b0b5;cursor:not-allowed}
+.msg-label{font-size:11px;font-weight:600;color:#6e6e73;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;margin-top:14px}
+.msg-label:first-of-type{margin-top:0}
+.char-count{font-size:11px;color:#6e6e73;text-align:right;margin-top:4px}
+.char-count.over{color:#c0392b}
+.followup-row{display:flex;align-items:center;gap:10px;margin-top:14px}
 .followup-row input[type=checkbox]{width:18px;height:18px;cursor:pointer;accent-color:#0071e3}
 .followup-row label{font-size:13px;color:#6e6e73;cursor:pointer}
 .send-btn{width:100%;padding:14px;background:#0071e3;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;margin-top:4px;font-family:inherit}
@@ -35,6 +37,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .status.success{background:#f0faf0;border:1px solid #c0ddc0;color:#1a5c1a;display:block}
 .status.error{background:#fff0f0;border:1px solid #f0c0c0;color:#8b0000;display:block}
 .status.loading{background:#f5f5f7;border:1px solid #e0e0e5;color:#6e6e73;display:block}
+.edit-note{font-size:12px;color:#6e6e73;margin-top:6px;font-style:italic}
 </style>
 </head>
 <body>
@@ -43,6 +46,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <h1>✦ Shine, The Mentalist</h1>
     <p>Booking assistant — paste lead details from Bark</p>
   </div>
+
   <div class="card">
     <div class="section-label">Client details</div>
     <div class="field">
@@ -60,6 +64,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
     </div>
   </div>
+
   <div class="card">
     <div class="section-label">Event details</div>
     <div class="field">
@@ -96,21 +101,40 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <textarea id="notes" placeholder="e.g. Rooftop venue, surprise party, evening event..."></textarea>
     </div>
   </div>
+
   <div class="card">
-    <div class="section-label">Message</div>
-    <button class="preview-btn" onclick="generatePreview()">Preview AI message</button>
-    <div class="preview-box" id="preview-box">
-      <div class="preview-label">SMS that will be sent</div>
-      <div id="preview-text"></div>
-    </div>
-    <div class="followup-row">
-      <input type="checkbox" id="followup" checked>
-      <label for="followup">Auto follow-up if no reply in 24 hours</label>
+    <div class="section-label">Preview & edit messages</div>
+    <button class="generate-btn" onclick="generateMessages()" id="gen-btn">Generate AI messages</button>
+
+    <div id="messages-area" style="display:none">
+      <div class="msg-label">SMS message <span style="font-weight:400;color:#6e6e73">(tap to edit)</span></div>
+      <div class="field">
+        <textarea id="sms-text" rows="3" oninput="updateCharCount()"></textarea>
+      </div>
+      <div class="char-count" id="char-count">0 / 160 characters</div>
+
+      <div class="msg-label" style="margin-top:16px">Email subject <span style="font-weight:400;color:#6e6e73">(tap to edit)</span></div>
+      <div class="field">
+        <input type="text" id="email-subject">
+      </div>
+
+      <div class="msg-label">Email body <span style="font-weight:400;color:#6e6e73">(tap to edit)</span></div>
+      <div class="field">
+        <textarea id="email-body" rows="8"></textarea>
+      </div>
+      <p class="edit-note">Edit any message above before sending. Changes are saved automatically.</p>
+
+      <div class="followup-row">
+        <input type="checkbox" id="followup" checked>
+        <label for="followup">Auto follow-up if no reply in 24 hours</label>
+      </div>
     </div>
   </div>
-  <button class="send-btn" onclick="sendLead()" id="send-btn">Send message & set up follow-ups</button>
+
+  <button class="send-btn" onclick="sendMessages()" id="send-btn" disabled>Send messages</button>
   <div class="status" id="status"></div>
 </div>
+
 <script>
 const SYSTEM_PROMPT = `You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic show performer in Texas. Performs 45-60 min interactive shows. Private events (birthdays, bachelorette, celebrations) start at $400. Corporate events start at $800. Write a warm, personalized first contact SMS to a potential client from a Bark lead. Rules: under 160 characters total, use client first name, mention the event type naturally, sign off as "- Shine, The Mentalist", do NOT mention pricing, end with a short question. Return ONLY the SMS text, nothing else.`;
 
@@ -136,76 +160,115 @@ function buildPrompt(d){
   return `Bark lead:\nName: ${d.name}\nEvent: ${d.eventType||'not specified'}\nDate: ${formatDate(d.date)}\nGuests: ${d.guests||'not specified'}\nNotes: ${d.notes||'none'}`;
 }
 
-async function callAPI(prompt, d, sendMessages){
-  const r=await fetch('/api/chat',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      model:'claude-sonnet-4-6',
-      max_tokens:200,
-      system:SYSTEM_PROMPT,
-      messages:[{role:'user',content:prompt}],
-      toPhone: sendMessages ? (d.phone||null) : null,
-      toEmail: sendMessages ? (d.email||null) : null,
-      clientName: d.name,
-      eventType: d.eventType
-    })
-  });
-  const data=await r.json();
-  if(data.error) throw new Error(data.error.message||JSON.stringify(data.error));
-  return data;
+function updateCharCount(){
+  const txt = document.getElementById('sms-text').value;
+  const el = document.getElementById('char-count');
+  el.textContent = `${txt.length} / 160 characters`;
+  el.className = txt.length > 160 ? 'char-count over' : 'char-count';
 }
 
-async function generatePreview(){
-  const d=getFormData();
-  if(!d.name||!d.eventType){
-    document.getElementById('preview-box').className='preview-box show';
-    document.getElementById('preview-text').textContent='Please fill in client name and event type first.';
+async function generateMessages(){
+  const d = getFormData();
+  if(!d.name || !d.eventType){
+    showStatus('Please fill in client name and event type first.', 'error');
     return;
   }
-  document.getElementById('preview-box').className='preview-box show';
-  document.getElementById('preview-text').textContent='Writing message...';
-  try{
-    const result=await callAPI(buildPrompt(d), d, false);
-    document.getElementById('preview-text').textContent=result.message||result.content[0].text;
-  }catch(e){
-    document.getElementById('preview-text').textContent='Error: '+e.message;
+
+  const btn = document.getElementById('gen-btn');
+  btn.disabled = true;
+  btn.textContent = 'Writing messages...';
+  showStatus('Claude is writing personalized SMS and email...', 'loading');
+
+  try {
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 200,
+        system: SYSTEM_PROMPT,
+        messages: [{role: 'user', content: buildPrompt(d)}],
+        clientName: d.name,
+        eventType: d.eventType
+      })
+    });
+    const data = await r.json();
+    if(data.error) throw new Error(data.error.message);
+
+    document.getElementById('sms-text').value = data.smsMessage;
+    document.getElementById('email-subject').value = data.emailSubject;
+    document.getElementById('email-body').value = data.emailBody;
+    document.getElementById('messages-area').style.display = 'block';
+    document.getElementById('send-btn').disabled = false;
+    updateCharCount();
+    showStatus('Messages ready — review and edit if needed, then hit Send.', 'success');
+  } catch(e) {
+    showStatus('Error: ' + e.message, 'error');
   }
+
+  btn.disabled = false;
+  btn.textContent = 'Regenerate messages';
 }
 
-async function sendLead(){
-  const d=getFormData();
-  if(!d.name||!d.phone||!d.eventType){
-    showStatus('Please fill in client name, phone, and event type.','error');
+async function sendMessages(){
+  const d = getFormData();
+  if(!d.name || !d.phone || !d.eventType){
+    showStatus('Please fill in client name, phone, and event type.', 'error');
     return;
   }
-  const btn=document.getElementById('send-btn');
-  btn.disabled=true;
-  btn.textContent='Sending...';
-  showStatus('Writing and sending personalized message...','loading');
-  try{
-    const result=await callAPI(buildPrompt(d), d, true);
-    const msg=result.message||result.content[0].text;
-    document.getElementById('preview-box').className='preview-box show';
-    document.getElementById('preview-text').textContent=msg;
+
+  const smsText = document.getElementById('sms-text').value.trim();
+  const emailSubject = document.getElementById('email-subject').value.trim();
+  const emailBody = document.getElementById('email-body').value.trim();
+
+  if(!smsText){
+    showStatus('Please generate messages first.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('send-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  showStatus('Sending messages...', 'loading');
+
+  try {
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 200,
+        system: SYSTEM_PROMPT,
+        messages: [{role: 'user', content: buildPrompt(d)}],
+        toPhone: d.phone || null,
+        toEmail: d.email || null,
+        clientName: d.name,
+        eventType: d.eventType,
+        smsOverride: smsText,
+        emailOverride: `Subject: ${emailSubject}\n\n${emailBody}`
+      })
+    });
+    const data = await r.json();
+    if(data.error) throw new Error(data.error.message);
+
     showStatus(
-      `${result.smsSent?'✓ SMS sent to '+d.phone+'!':'⚠ SMS pending A2P approval'}<br>
-       ${result.emailSent?'✓ Email sent to '+d.email+'!':d.email?'⚠ Email not sent':''}
-       <br><br><em>"${msg}"</em><br><br>
-       ${document.getElementById('followup').checked?'✓ Follow-up scheduled in 24 hours if no reply.':''}`,
+      `${data.smsSent ? '✓ SMS sent to ' + d.phone : '⚠ SMS pending A2P approval'}<br>
+       ${data.emailSent ? '✓ Email sent to ' + d.email : d.email ? '⚠ Email not sent' : ''}<br><br>
+       ${document.getElementById('followup').checked ? '✓ Follow-up scheduled in 24 hours if no reply.' : ''}`,
       'success'
     );
-  }catch(e){
-    showStatus('Error: '+e.message,'error');
+  } catch(e) {
+    showStatus('Error: ' + e.message, 'error');
   }
-  btn.disabled=false;
-  btn.textContent='Send message & set up follow-ups';
+
+  btn.disabled = false;
+  btn.textContent = 'Send messages';
 }
 
-function showStatus(msg,type){
-  const el=document.getElementById('status');
-  el.className='status '+type;
-  el.innerHTML=msg;
+function showStatus(msg, type){
+  const el = document.getElementById('status');
+  el.className = 'status ' + type;
+  el.innerHTML = msg;
 }
 </script>
 </body>
