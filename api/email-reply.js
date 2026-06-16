@@ -63,7 +63,7 @@ Rules:
 - Be warm and conversational, not salesy
 - Keep replies concise — 2-3 short paragraphs
 - If asked about pricing, reply warmly saying you have three packages to suit different needs and will send the full details right away. Do NOT include any link or prices. Then add [PRICING_REQUESTED] at the very end
-- If client says "yes lets book", "I want to book", "send the contract" — reply saying you will send over the contract shortly, then add [BOOKING_INTENT] at the very end
+- If client says "yes lets book", "I want to book", "send the contract" — reply thanking them warmly for booking and let them know you'll send a quick questionnaire to get everything set up, then add [BOOKING_INTENT] at the very end
 - Never make up availability
 
 Signature:
@@ -123,6 +123,60 @@ www.texasmentalist.com`;
             { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: 'sent' }
           ])
         });
+
+        // Client confirmed booking intent — send thank-you + intake questionnaire
+        if (bookingIntent) {
+          try {
+            const bookingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': process.env.SUPABASE_SECRET_KEY,
+                'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+                'Prefer': 'return=representation'
+              },
+              body: JSON.stringify({
+                client_id: client.id,
+                client_name: client.name,
+                client_email: fromEmail,
+                event_type: client.event_type || '',
+                event_date: client.event_date || null,
+                fee: client.selected_price || null,
+                contract_status: 'not_sent',
+                intake_status: 'sent'
+              })
+            });
+            const bookingRows = await bookingRes.json();
+            const booking = Array.isArray(bookingRows) ? bookingRows[0] : null;
+
+            if (booking) {
+              const intakeLink = `https://shine-booking.vercel.app/intake.html?bid=${booking.id}`;
+              await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+                body: JSON.stringify({
+                  from: 'Shine, The Mentalist <shine@texasmentalist.com>',
+                  to: fromEmail,
+                  subject: 'Thank you for booking! Quick questionnaire inside',
+                  text: `Hi ${client.name ? client.name.split(' ')[0] : 'there'},\n\nThank you so much for booking — I'm really looking forward to your event!\n\nTo get everything set up, including your performance agreement, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`
+                })
+              });
+
+              await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+                body: JSON.stringify({
+                  status: 'intake_sent',
+                  booking_id: booking.id,
+                  last_activity: new Date().toISOString(),
+                  notes: `Intake form sent: ${intakeLink}`
+                })
+              });
+            }
+          } catch (intakeErr) {
+            console.error('Send intake on booking intent failed:', intakeErr);
+          }
+        }
       } catch(e) {
         console.error('Supabase update failed:', e.message);
       }
@@ -139,7 +193,7 @@ www.texasmentalist.com`;
             to: 'shinethementalist@gmail.com',
             subject: bookingIntent ? `🎯 ${client?.name || fromEmail} wants to book!` : `💰 ${client?.name || fromEmail} is asking about pricing`,
             text: bookingIntent
-              ? `Client is ready to book!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\n\nLog in to send the contract:\nshine-booking.vercel.app`
+              ? `Client is ready to book!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\n\nA thank-you note with the intake questionnaire was sent automatically.\n\nshine-booking.vercel.app`
               : `Client is asking about pricing!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\n\nOpen the app to send their pricing:\nshine-booking.vercel.app`
           })
         });
