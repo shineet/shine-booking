@@ -81,7 +81,7 @@ export default async function handler(req, res) {
     drawParagraph(`This Performance Agreement ("Agreement") is entered into on ${todayDate} by and between MindGames, represented by Shine, The Mentalist ("Performer"), and ${booking.client_name} ("Client"), located at ${booking.venue_address}.`);
 
     drawHeading('1. PERFORMANCE DETAILS');
-    drawParagraph(`Performer shall present a professional Magic & Mentalism performance for the event titled "${booking.event_title}" at ${booking.venue_address} on ${eventDateFormatted}, beginning at approximately ${booking.start_time} and concluding at approximately ${booking.end_time}, for a total performance length of up to ${booking.duration}.`);
+    drawParagraph(`Performer shall present a professional Magic & Mentalism performance for the event titled "${booking.event_title}" at ${booking.venue_address} on ${eventDateFormatted}, beginning at approximately ${booking.start_time}, for a total performance length of up to ${booking.duration}.`);
 
     drawHeading('2. COMPENSATION');
     drawParagraph(`The total performance fee shall be $${booking.fee}.`);
