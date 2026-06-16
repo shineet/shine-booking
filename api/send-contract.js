@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   try {
     const {
       bookingId, clientId, clientName, clientEmail, eventType,
-      eventTitle, venueAddress, eventDate, startTime, endTime, duration, fee
+      eventTitle, venueAddress, eventDate, startTime, duration, fee
     } = req.body;
 
     if (!bookingId || !clientName || !clientEmail || !venueAddress || !eventDate || !fee) {
@@ -28,7 +28,6 @@ export default async function handler(req, res) {
         venue_address: venueAddress,
         event_date: eventDate,
         start_time: startTime,
-        end_time: endTime,
         duration: duration,
         fee: fee,
         contract_status: 'sent'
