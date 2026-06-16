@@ -4,6 +4,19 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
+  function normalizeTime(value) {
+    if (!value) return null;
+    const match = String(value).trim().match(/^(\d{1,2})(?::(\d{1,2}))?/);
+    if (!match) return value;
+    let hours = parseInt(match[1], 10);
+    let minutes = match[2] !== undefined ? parseInt(match[2], 10) : 0;
+    if (isNaN(hours)) return value;
+    if (isNaN(minutes)) minutes = 0;
+    hours = Math.min(Math.max(hours, 0), 23);
+    minutes = Math.min(Math.max(minutes, 0), 59);
+    return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
+  }
+
   try {
     const { bookingId, answers } = req.body;
     if (!bookingId) {
@@ -13,7 +26,7 @@ export default async function handler(req, res) {
 
     // Map intake answers to contract-relevant fields
     const venueAddress = answers.q_address || null;
-    const startTime = answers.q_start_time || null;
+    const startTime = normalizeTime(answers.q_start_time);
 
     // Save answers and mapped fields to booking record
     await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${bookingId}`, {
