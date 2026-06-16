@@ -24,12 +24,10 @@ export default async function handler(req, res) {
     // Extract readable text from raw email if body is empty
     let emailBody = body || '';
     if (!emailBody && rawEmail) {
-      // Try to extract plain text from raw email
       const textMatch = rawEmail.match(/Content-Type: text\/plain[\s\S]*?\r?\n\r?\n([\s\S]*?)(?:\r?\n--|\r?\n\r?\nContent-Type)/);
       if (textMatch) {
         emailBody = textMatch[1].trim();
       } else {
-        // Just use everything after the headers
         const headerEnd = rawEmail.indexOf('\r\n\r\n') || rawEmail.indexOf('\n\n');
         if (headerEnd > -1) {
           emailBody = rawEmail.substring(headerEnd).trim().substring(0, 1000);
@@ -41,28 +39,67 @@ export default async function handler(req, res) {
       emailBody = `Client sent an email with subject: ${subject}`;
     }
 
-    const SYSTEM_PROMPT = `You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic show performer in Texas.
+    // Look up client in Supabase by email
+    let client = null;
+    const fromEmail = from.match(/<(.+)>/)?.[1] || from;
+    const clientRes = await fetch(
+      `${process.env.SUPABASE_URL}/rest/v1/clients?email=eq.${encodeURIComponent(fromEmail)}&order=created_at.desc&limit=1`,
+      {
+        headers: {
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+        }
+      }
+    );
+    const clients = await clientRes.json();
+    client = clients[0] || null;
 
-Shine performs 45-60 minute interactive mentalism and magic shows.
-Pricing: Private events (birthdays, bachelorette, celebrations) start at $400. Corporate events start at $800.
-Payment: Cash, Zelle (2020shine@gmail.com), Venmo (@Shine-Thankappan), PayPal (shine_e_thankappan@yahoo.com)
-Website: www.texasmentalist.com
-Phone: +1 (612) 865-7681
+    // Build pricing context
+    let pricingContext = '';
+    if (client) {
+      const isCorporate = (client.event_type || '').toLowerCase().includes('corporate');
+      const prices = client.pricing_type === 'custom' ? {
+        deluxe: client.custom_price_deluxe || (isCorporate ? 1000 : 400),
+        signature: client.custom_price_signature || (isCorporate ? 1200 : 500),
+        premium: client.custom_price_premium || (isCorporate ? 1500 : 600)
+      } : {
+        deluxe: isCorporate ? 1000 : 400,
+        signature: isCorporate ? 1200 : 500,
+        premium: isCorporate ? 1500 : 600
+      };
+      pricingContext = `
+Client: ${client.name}
+Event type: ${client.event_type}
+Pricing packages:
+- Deluxe: $${prices.deluxe}
+- Signature: $${prices.signature}
+- Premium: $${prices.premium}`;
+    }
 
-You are handling email conversations with potential clients. Be warm, professional, and helpful.
+    const SYSTEM_PROMPT = `You are Shine Thankappan, The Mentalist — writing emails personally as yourself in first person.
+
+IMPORTANT: Always write as "I" — never say "Shine will" or refer to yourself in third person. Never say "Shine offers" — say "I offer".
+${pricingContext}
+
+About me:
+- I perform 45-60 minute interactive mentalism and magic shows in Texas
+- Payment: Cash, Zelle (2020shine@gmail.com), Venmo (@Shine-Thankappan), PayPal (shine_e_thankappan@yahoo.com)
+- Website: www.texasmentalist.com
+- Phone: +1 (612) 865-7681
 
 Rules:
-- Answer pricing questions honestly
-- If asked about availability, say you will check and confirm shortly
-- Keep responses concise — 2-3 short paragraphs max
-- Do NOT ask about date or number of guests
-- If the client says something like "yes lets book", "I want to book", "lets confirm", "send the contract" — reply saying you will send over the contract shortly, then add [BOOKING_INTENT] at the very end
-- Always sign off with:
-  Shine, The Mentalist
-  +1 (612) 865-7681
-  www.texasmentalist.com`;
+- Write in first person always
+- Be warm and conversational, not salesy
+- Keep replies concise — 2-3 short paragraphs
+- If asked about pricing, mention the three packages briefly and say: "I can send you the full package details — just let me know if you prefer email or WhatsApp!" then add [PRICING_REQUESTED] at the very end
+- If client says "yes lets book", "I want to book", "send the contract" — reply saying you will send over the contract shortly, then add [BOOKING_INTENT] at the very end
+- Never make up availability
 
-    // Call Claude
+Signature:
+Shine, The Mentalist
++1 (612) 865-7681
+www.texasmentalist.com`;
+
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -86,10 +123,11 @@ Rules:
 
     const replyText = claudeData.content[0].text;
     const bookingIntent = replyText.includes('[BOOKING_INTENT]');
-    const cleanReply = replyText.replace('[BOOKING_INTENT]', '').trim();
+    const pricingRequested = replyText.includes('[PRICING_REQUESTED]');
+    const cleanReply = replyText.replace('[BOOKING_INTENT]', '').replace('[PRICING_REQUESTED]', '').trim();
 
-    // Send reply email via Resend
-    const resendReply = await fetch('https://api.resend.com/emails', {
+    // Send reply email
+    await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -97,16 +135,56 @@ Rules:
       },
       body: JSON.stringify({
         from: 'Shine, The Mentalist <shine@texasmentalist.com>',
-        to: from,
+        to: fromEmail,
         subject: subject?.startsWith('Re:') ? subject : `Re: ${subject || 'Your inquiry'}`,
         text: cleanReply
       })
     });
 
-    const resendData = await resendReply.json();
+    // Update client status in Supabase
+    if (client) {
+      let newStatus = 'chatting';
+      if (pricingRequested) newStatus = 'pricing_requested';
+      if (bookingIntent) newStatus = 'booked';
 
-    // If booking intent — notify you
-    if (bookingIntent) {
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          last_activity: new Date().toISOString()
+        })
+      });
+
+      // Save messages
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+        },
+        body: JSON.stringify([
+          { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received' },
+          { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: 'sent' }
+        ])
+      });
+    }
+
+    // Notify you if pricing requested or booking intent
+    if (pricingRequested || bookingIntent) {
+      const notifSubject = bookingIntent
+        ? `🎯 ${client?.name || fromEmail} wants to book!`
+        : `💰 ${client?.name || fromEmail} is asking about pricing`;
+
+      const notifText = bookingIntent
+        ? `Client is ready to book!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\n\nLog in to send the contract:\nshine-booking.vercel.app`
+        : `Client is asking about pricing!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\nPricing type: ${client?.pricing_type}\n\nLog in to send the pricing link:\nshine-booking.vercel.app`;
+
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -116,18 +194,13 @@ Rules:
         body: JSON.stringify({
           from: 'Shine Booking Assistant <shine@texasmentalist.com>',
           to: '2020shine@gmail.com',
-          subject: `🎯 Booking intent from ${from}`,
-          text: `A client wants to book!\n\nFrom: ${from}\nSubject: ${subject}\n\nTheir message:\n${emailBody}\n\nYour reply:\n${cleanReply}\n\nLog in to send the contract:\nshine-booking.vercel.app`
+          subject: notifSubject,
+          text: notifText
         })
       });
     }
 
-    res.status(200).json({ 
-      received: true, 
-      replied: true, 
-      bookingIntent,
-      resendId: resendData.id 
-    });
+    res.status(200).json({ received: true, replied: true, bookingIntent, pricingRequested });
 
   } catch(e) {
     console.error('Email reply error:', e);
