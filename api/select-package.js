@@ -5,13 +5,14 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   try {
-    const { clientId, name, contact, category, tier, label, price } = req.body;
+    const { clientId, name, contact, category, tier, label, price, readyToBook } = req.body;
 
     const selectionNote = `Selected package: ${category === 'corporate' ? 'Corporate' : 'Private'} — ${label} ($${price})`;
     let finalClientId = clientId || null;
     let finalClientName = name;
     let finalClientEmail = null;
     let finalEventType = category === 'corporate' ? 'Corporate event' : 'Private celebration';
+    let finalEventDate = null;
 
     // If we have a clientId, update that client record and fetch its details
     if (clientId) {
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
           'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
         },
         body: JSON.stringify({
-          status: 'package_selected',
+          status: readyToBook ? 'booked' : 'package_selected',
           selected_package: label,
           selected_category: category,
           selected_price: price,
@@ -45,6 +46,7 @@ export default async function handler(req, res) {
         finalClientName = client.name;
         finalClientEmail = client.email;
         finalEventType = client.event_type || finalEventType;
+        finalEventDate = client.event_date || null;
       }
     } else {
       // No clientId in URL — create a new lead from this selection
@@ -62,7 +64,7 @@ export default async function handler(req, res) {
           email: isEmail ? contact : null,
           phone: isEmail ? null : contact,
           event_type: finalEventType,
-          status: 'package_selected',
+          status: readyToBook ? 'booked' : 'package_selected',
           selected_package: label,
           selected_category: category,
           selected_price: price,
@@ -91,10 +93,68 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from: 'Shine Booking Assistant <shine@texasmentalist.com>',
         to: 'shinethementalist@gmail.com',
-        subject: `🎯 ${notifyName} selected the ${label} package!`,
-        text: `Great news!\n\n${notifyName} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}\n\nContact: ${notifyContact}\n\nThey haven't confirmed they want to book yet — once they do (via chat reply), I'll automatically send the questionnaire. You can also send it manually from the dashboard if needed.`
+        subject: readyToBook ? `🎯 ${notifyName} is ready to book!` : `${notifyName} selected the ${label} package`,
+        text: readyToBook
+          ? `Great news!\n\n${notifyName} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}\n\nContact: ${notifyContact}\n\nThey confirmed they're ready to book — a thank-you note with the intake questionnaire is being sent automatically.`
+          : `${notifyName} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}\n\nContact: ${notifyContact}\n\nThey chose "I need more time" — not ready to confirm yet. No questionnaire was sent.`
       })
     });
+
+    // If they confirmed they're ready to book, send the thank-you + intake questionnaire now
+    if (readyToBook && finalClientEmail) {
+      try {
+        const bookingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.SUPABASE_SECRET_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            client_id: finalClientId,
+            client_name: finalClientName,
+            client_email: finalClientEmail,
+            event_type: finalEventType,
+            event_date: finalEventDate,
+            fee: price || null,
+            contract_status: 'not_sent',
+            intake_status: 'sent'
+          })
+        });
+        const bookingRows = await bookingRes.json();
+        const booking = Array.isArray(bookingRows) ? bookingRows[0] : null;
+
+        if (booking) {
+          const intakeLink = `https://shine-booking.vercel.app/intake.html?bid=${booking.id}`;
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+            body: JSON.stringify({
+              from: 'Shine, The Mentalist <shine@texasmentalist.com>',
+              to: finalClientEmail,
+              subject: 'Thank you for booking! Quick questionnaire inside',
+              text: `Hi ${finalClientName ? finalClientName.split(' ')[0] : 'there'},\n\nThank you so much for booking — I'm really looking forward to your event!\n\nTo get everything set up, including your performance agreement, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`
+            })
+          });
+
+          if (finalClientId) {
+            await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${finalClientId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+              body: JSON.stringify({
+                status: 'intake_sent',
+                booking_id: booking.id,
+                last_activity: new Date().toISOString(),
+                notes: `Intake form sent: ${intakeLink}`
+              })
+            });
+          }
+        }
+      } catch (intakeErr) {
+        console.error('Send intake on readyToBook failed:', intakeErr);
+      }
+    }
 
     res.status(200).json({ success: true });
 
