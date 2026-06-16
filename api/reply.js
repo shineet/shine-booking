@@ -112,7 +112,7 @@ Rules:
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
           body: JSON.stringify([
-            { client_id: client.id, channel: 'sms', direction: 'inbound', content: Body, status: 'received' },
+            { client_id: client.id, channel: 'sms', direction: 'inbound', content: Body, status: 'received', to_address: null },
             { client_id: client.id, channel: 'sms', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: From }
           ])
         });
