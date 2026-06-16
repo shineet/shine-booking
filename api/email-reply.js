@@ -72,6 +72,7 @@ export default async function handler(req, res) {
 
 About me:
 - I perform 45-60 minute interactive mentalism and magic shows in Texas
+- I also do strolling/walk-around magic — up-close magic that moves through a crowd (great for cocktail hours at weddings and corporate events), either on its own or paired with a short stage finale
 - Payment: Cash, Zelle (2020shine@gmail.com), Venmo (@Shine-Thankappan), PayPal (shine_e_thankappan@yahoo.com)
 - Website: www.texasmentalist.com
 - Phone: +1 (612) 865-7681
@@ -92,6 +93,8 @@ Critical — sounding repetitive kills trust:
 
 Rules:
 - If asked about pricing, respond warmly that I have a few packages depending on what they're looking for and I'll send the details right over. Do NOT include any link or prices. Then add [PRICING_REQUESTED] at the very end
+- If the client mentions a wedding, corporate event, cocktail hour, or specifically asks about strolling/walk-around/close-up magic, mention briefly that I offer that style of magic too (in addition to the stage show) before adding [PRICING_REQUESTED]
+- Never claim I only do one format (stage show) if asked about strolling — I do both, and which one fits is something we figure out together
 - If client says "yes lets book", "I want to book", "send the contract" — thank them for booking (in a way I haven't already phrased earlier in this thread) and mention I'll send a quick questionnaire to get everything set up, then add [BOOKING_INTENT] at the very end
 - Never make up availability
 
@@ -230,6 +233,10 @@ www.texasmentalist.com`;
     // Notify you if pricing requested or booking intent
     if (pricingRequested || bookingIntent) {
       try {
+        const eventTypeLower = (client?.event_type || '').toLowerCase();
+        const strollingHint = (eventTypeLower.includes('corporate') || eventTypeLower.includes('wedding'))
+          ? '\n\nThis looks like a corporate/wedding event — consider whether strolling magic (on its own or with a stage finale) might fit better than a full stage show.'
+          : '';
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
@@ -239,7 +246,7 @@ www.texasmentalist.com`;
             subject: bookingIntent ? `🎯 ${client?.name || fromEmail} wants to book!` : `💰 ${client?.name || fromEmail} is asking about pricing`,
             text: bookingIntent
               ? `Client is ready to book!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\n\nA thank-you note with the intake questionnaire was sent automatically.\n\nshine-booking.vercel.app`
-              : `Client is asking about pricing!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\n\nOpen the app to send their pricing:\nshine-booking.vercel.app`
+              : `Client is asking about pricing!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\n\nOpen the app to send their pricing:\nshine-booking.vercel.app${strollingHint}`
           })
         });
       } catch(e) {
