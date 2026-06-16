@@ -406,6 +406,13 @@
         text-decoration: none
     }
 
+    .lead-selected-package {
+        font-size: 12px;
+        color: #1a7a3a;
+        margin-top: 4px;
+        font-weight: 600
+    }
+
     .empty-state {
         text-align: center;
         padding: 40px 20px;
@@ -838,6 +845,9 @@
                 var pricingLinkHtml = (c.notes && c.notes.indexOf('Pricing link sent:') > -1)
                 ? '<div class="lead-pricing-link">View pricing sent: <a href="' + c.notes.replace('Pricing link sent: ', '') + '" target="_blank">open link</a></div>'
                 : '';
+                var selectedPkgHtml = c.selected_package
+                ? '<div class="lead-selected-package">Selected: ' + (c.selected_category === 'corporate' ? 'Corporate' : 'Private') + ' — ' + c.selected_package + ' ($' + c.selected_price + ')</div>'
+                : '';
                 var pricingBtn = (c.status === 'pricing_requested')
                 ? '<button class="action-btn pricing" onclick="openPricingModal(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.phone || '') + '\',\'' + (c.email || '') + '\',\'' + (c.last_channel || 'email') + '\')">Send pricing</button>'
                 : '';
@@ -848,6 +858,7 @@
                 '</div>' +
                 '<div class="lead-detail">' + (c.event_type || 'Unknown event') + ' · ' + (c.venue || 'Venue TBD') + '</div>' +
                 pricingLinkHtml +
+                selectedPkgHtml +
                 '<div class="lead-time">' + timeAgo + '</div>' +
                 '<div class="lead-actions">' + pricingBtn +
                 '<button class="action-btn delete" onclick="deleteClient(\'' + c.id + '\',\'' + c.name + '\')">Delete</button>' +
@@ -934,19 +945,19 @@
 
         var pricingLink = '';
         if (selectedPricingOption === 'private-standard') {
-            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=private';
+            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=private&cid=' + currentClientId;
         } else if (selectedPricingOption === 'corporate-standard') {
-            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=corporate';
+            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=corporate&cid=' + currentClientId;
         } else if (selectedPricingOption === 'private-custom') {
             var d1 = document.getElementById('pc-d1').value || 400;
             var d2 = document.getElementById('pc-d2').value || 500;
             var d3 = document.getElementById('pc-d3').value || 600;
-            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=private&d1=' + d1 + '&d2=' + d2 + '&d3=' + d3;
+            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=private&cid=' + currentClientId + '&d1=' + d1 + '&d2=' + d2 + '&d3=' + d3;
         } else if (selectedPricingOption === 'corporate-custom') {
             var c1 = document.getElementById('pc-c1').value || 1000;
             var c2 = document.getElementById('pc-c2').value || 1200;
             var c3 = document.getElementById('pc-c3').value || 1500;
-            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=corporate&d1=' + c1 + '&d2=' + c2 + '&d3=' + c3;
+            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=corporate&cid=' + currentClientId + '&d1=' + c1 + '&d2=' + c2 + '&d3=' + c3;
         }
 
         fetch('/api/send-pricing', {
