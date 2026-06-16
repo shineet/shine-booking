@@ -295,6 +295,10 @@
         border-left-color: #34c759
     }
 
+    .lead-card.status-contract_sent {
+        border-left-color: #0071e3
+    }
+
     .lead-card.status-lost {
         border-left-color: #e0e0e5
     }
@@ -345,6 +349,11 @@
         color: #1a7a3a
     }
 
+    .lead-status.status-contract_sent {
+        background: #e8f1fd;
+        color: #0071e3
+    }
+
     .lead-status.status-lost {
         background: #f5f5f7;
         color: #6e6e73
@@ -384,6 +393,15 @@
 
     .action-btn.pricing:hover {
         background: #ffe0b2
+    }
+
+    .action-btn.contract {
+        background: #e8f1fd;
+        color: #0071e3
+    }
+
+    .action-btn.contract:hover {
+        background: #d0e4fb
     }
 
     .action-btn.delete {
@@ -789,6 +807,49 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="contract-modal">
+        <div class="modal">
+            <h2>Send contract</h2>
+            <p id="contract-modal-client-name">Fill in the event details</p>
+            <div class="field">
+                <label>Event title</label>
+                <input type="text" id="ct-title" placeholder="e.g. Sarah's 30th Birthday">
+            </div>
+            <div class="field">
+                <label>Venue address</label>
+                <input type="text" id="ct-address" placeholder="Full address">
+            </div>
+            <div class="three-col">
+                <div class="price-field">
+                    <label>Event date</label>
+                    <input type="date" id="ct-date">
+                </div>
+                <div class="price-field">
+                    <label>Start time</label>
+                    <input type="time" id="ct-start">
+                </div>
+                <div class="price-field">
+                    <label>End time</label>
+                    <input type="time" id="ct-end">
+                </div>
+            </div>
+            <div class="two-col" style="margin-top:14px">
+                <div class="price-field">
+                    <label>Duration</label>
+                    <input type="text" id="ct-duration" placeholder="e.g. 45 minutes">
+                </div>
+                <div class="price-field">
+                    <label>Fee ($)</label>
+                    <input type="number" id="ct-fee">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-cancel" onclick="closeContractModal()">Cancel</button>
+                <button class="modal-send" id="contract-send-btn" onclick="sendContract()">Send contract</button>
+            </div>
+        </div>
+    </div>
+
     <script>
     var SUPABASE_URL = 'https://nkhwttlmtidtippylbzs.supabase.co';
     var SUPABASE_KEY = 'sb_publishable_jvudqPYcwnnqjO8w7DQd2g_SSyb-HJl';
@@ -802,6 +863,7 @@
         pricing_requested: 'Pricing requested',
         pricing_sent: 'Pricing sent',
         booked: 'Booked',
+        contract_sent: 'Contract sent',
         lost: 'Lost'
     };
 
@@ -880,6 +942,9 @@
                 var pricingBtn = (c.status === 'pricing_requested')
                 ? '<button class="action-btn pricing" onclick="openPricingModal(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.phone || '') + '\',\'' + (c.email || '') + '\',\'' + (c.last_channel || 'email') + '\')">Send pricing</button>'
                 : '';
+                var contractBtn = (c.status === 'booked')
+                ? '<button class="action-btn contract" onclick="openContractModal(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.email || '') + '\',\'' + (c.event_type || '') + '\',\'' + (c.venue || '') + '\',\'' + (c.event_date || '') + '\',' + (c.selected_price || 0) + ')">Send contract</button>'
+                : '';
                 return '<div class="lead-card status-' + c.status + '">' +
                 '<div class="lead-top">' +
                 '<div class="lead-name">' + c.name + '</div>' +
@@ -889,7 +954,7 @@
                 pricingLinkHtml +
                 selectedPkgHtml +
                 '<div class="lead-time">' + timeAgo + '</div>' +
-                '<div class="lead-actions">' + pricingBtn +
+                '<div class="lead-actions">' + pricingBtn + contractBtn +
                 '<button class="action-btn delete" onclick="deleteClient(\'' + c.id + '\',\'' + c.name + '\')">Delete</button>' +
                 '</div></div>';
             }).join('');
@@ -948,6 +1013,80 @@
         document.getElementById('pricing-modal').classList.remove('show');
         currentClientId = null;
         selectedPricingOption = null;
+    }
+
+    var contractClient = {};
+
+    function openContractModal(id, name, email, eventType, venue, eventDate, price) {
+        contractClient = {
+            id: id,
+            name: name,
+            email: email,
+            eventType: eventType,
+            price: price
+        };
+        document.getElementById('contract-modal-client-name').textContent = 'Sending to ' + name;
+        document.getElementById('ct-title').value = name + "'s " + (eventType || 'Event');
+        document.getElementById('ct-address').value = venue || '';
+        document.getElementById('ct-date').value = eventDate || '';
+        document.getElementById('ct-start').value = '';
+        document.getElementById('ct-end').value = '';
+        document.getElementById('ct-duration').value = '45 minutes';
+        document.getElementById('ct-fee').value = price || '';
+        document.getElementById('contract-modal').classList.add('show');
+    }
+
+    function closeContractModal() {
+        document.getElementById('contract-modal').classList.remove('show');
+    }
+
+    function sendContract() {
+        if (!contractClient.email) {
+            alert('This client has no email on file — contract needs an email to send.');
+            return;
+        }
+        var btn = document.getElementById('contract-send-btn');
+        btn.disabled = true;
+        btn.textContent = 'Sending...';
+
+        var startTime = document.getElementById('ct-start').value;
+        var endTime = document.getElementById('ct-end').value;
+
+        fetch('/api/send-contract', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                clientId: contractClient.id,
+                clientName: contractClient.name,
+                clientEmail: contractClient.email,
+                eventType: contractClient.eventType,
+                eventTitle: document.getElementById('ct-title').value,
+                venueAddress: document.getElementById('ct-address').value,
+                eventDate: document.getElementById('ct-date').value,
+                startTime: startTime,
+                endTime: endTime,
+                duration: document.getElementById('ct-duration').value,
+                fee: document.getElementById('ct-fee').value
+            })
+        })
+        .then(function(r) {
+            return r.json();
+        })
+        .then(function(data) {
+            if (data.error)
+                throw new Error(data.error);
+            closeContractModal();
+            loadDashboard();
+        })
+        .catch(function(e) {
+            alert('Error sending contract: ' + e.message);
+        })
+        .finally(function() {
+            btn.disabled = false;
+            btn.textContent = 'Send contract';
+        });
     }
 
     function selectPricingOption(option) {
@@ -1196,6 +1335,11 @@
     document.getElementById('pricing-modal').addEventListener('click', function(e) {
         if (e.target === this)
             closeModal();
+    });
+
+    document.getElementById('contract-modal').addEventListener('click', function(e) {
+        if (e.target === this)
+            closeContractModal();
     });
 
     showTab('dashboard');
