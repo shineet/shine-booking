@@ -1099,7 +1099,7 @@
             return;
         }
 
-        fetch('/api/get-booking-for-contract?bid=' + bookingId)
+        fetch('/api/get-booking?mode=contract&bid=' + bookingId)
         .then(function(r) {
             return r.json();
         })
