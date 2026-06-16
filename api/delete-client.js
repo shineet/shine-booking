@@ -11,7 +11,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    // Delete messages first (foreign key)
+    // Delete messages first (foreign key on client_id)
     await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${clientId}`, {
       method: 'DELETE',
       headers: {
@@ -20,14 +20,31 @@ export default async function handler(req, res) {
       }
     });
 
-    // Delete client
-    await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
+    // Delete bookings too (foreign key on client_id)
+    await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?client_id=eq.${clientId}`, {
       method: 'DELETE',
       headers: {
         'apikey': process.env.SUPABASE_SECRET_KEY,
         'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
       }
     });
+
+    // Delete client
+    const delRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': process.env.SUPABASE_SECRET_KEY,
+        'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+        'Prefer': 'return=representation'
+      }
+    });
+
+    if (!delRes.ok) {
+      const errText = await delRes.text();
+      console.error('Client delete failed:', errText);
+      res.status(500).json({ error: 'Failed to delete client: ' + errText });
+      return;
+    }
 
     res.status(200).json({ deleted: true });
 
