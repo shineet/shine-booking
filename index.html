@@ -963,7 +963,10 @@
                         <option value="">Select event type</option>
                         <option value="Birthday party">Birthday party</option>
                         <option value="Bachelorette party">Bachelorette party</option>
+                        <option value="Bachelor party">Bachelor party</option>
                         <option value="Corporate event">Corporate event</option>
+                        <option value="Graduation">Graduation</option>
+                        <option value="Baby Shower">Baby Shower</option>
                         <option value="Private celebration">Private celebration</option>
                         <option value="Anniversary">Anniversary</option>
                         <option value="Other">Other</option>
@@ -1258,7 +1261,10 @@
                         <option value="">Not specified</option>
                         <option value="Birthday party">Birthday party</option>
                         <option value="Bachelorette party">Bachelorette party</option>
+                        <option value="Bachelor party">Bachelor party</option>
                         <option value="Corporate event">Corporate event</option>
+                        <option value="Graduation">Graduation</option>
+                        <option value="Baby Shower">Baby Shower</option>
                         <option value="Private celebration">Private celebration</option>
                         <option value="Anniversary">Anniversary</option>
                         <option value="Other">Other</option>
@@ -1746,7 +1752,21 @@
         q_other_entertainment: 'Other entertainment before/after',
         q_inside_jokes: 'Inside jokes / fun facts',
         q_anything_else: 'Anything else to know',
-        q_trivia: 'Other trivia',
+        q_trivia: 'Guest of honor trivia',
+        q_trivia_bride: 'About the bride',
+        q_trivia_groom: 'About the groom',
+        q_trivia_spouse1: 'About spouse 1',
+        q_trivia_spouse2: 'About spouse 2',
+        q_photo_honoree: 'Photo link (guest of honor)',
+        q_photo_bride: 'Photo link (bride)',
+        q_photo_groom: 'Photo link (groom)',
+        q_photo_spouse1: 'Photo link (spouse 1)',
+        q_photo_spouse2: 'Photo link (spouse 2)',
+        q_spouse1_name: "Spouse 1's name",
+        q_spouse2_name: "Spouse 2's name",
+        q_baby_name: "Baby's name",
+        q_due_date: 'Due date',
+        q_gender_revealed: 'Gender already revealed?',
         q_theme: 'Company name / event theme',
         q_occasion: 'Occasion being celebrated',
         q_special_day: "Someone's special day",
@@ -1759,7 +1779,7 @@
     function formatAnswerValue(key, value) {
         if (!value)
             return value;
-        if (key.indexOf('_dob') !== -1 || key === 'q_event_date' || key === 'q_marriage_date') {
+        if (key.indexOf('_dob') !== -1 || key === 'q_event_date' || key === 'q_marriage_date' || key === 'q_due_date') {
             var d = new Date(value + 'T00:00:00');
             if (!isNaN(d))
                 return d.toLocaleDateString('en-US', {
@@ -1768,7 +1788,11 @@
                     year: 'numeric'
                 });
         }
-        return value;
+        if (key.indexOf('q_photo_') === 0 && /^https?:\/\//i.test(value)) {
+            var safeUrl = escapeHtml(value);
+            return '<a href="' + safeUrl + '" target="_blank" rel="noopener noreferrer">' + safeUrl + '</a>';
+        }
+        return escapeHtml(value);
     }
 
     function openAnswersModal(bookingId) {
