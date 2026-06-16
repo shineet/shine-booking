@@ -376,14 +376,10 @@
         // Section 2: Event-specific questions
         html += '<div class="section"><div class="section-title">🎉 About your event</div>';
 
-        if (eventType.includes('bachelorette') || eventType.includes('bachelor')) {
+        if (eventType.includes('bachelorette')) {
             html += `
-      <div class="field"><label>Name of guest of honor</label><input type="text" id="q_honoree" placeholder="Bride's name"></div>
-      <div class="two-col">
-        <div class="field"><label>Bride's date of birth</label><input type="date" id="q_bride_dob"></div>
-        <div class="field"><label>Groom's date of birth</label><input type="date" id="q_groom_dob"></div>
-      </div>
-      <div class="field"><label>Date of marriage</label><input type="date" id="q_marriage_date"></div>
+      <div class="field"><label>Bride's full name</label><input type="text" id="q_honoree"></div>
+      <div class="field"><label>Bride's date of birth</label><input type="date" id="q_honoree_dob"></div>
       <div class="field"><label>Any VIPs or special people attending?</label><input type="text" id="q_vips"></div>
       <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
       <div class="field"><label>What kind of vibe are you looking for?</label>
@@ -392,6 +388,27 @@
 
 
 
+            radioGroup('q_vibe', ['Clean elegant & classy', 'Light adult humor', 'Slightly edgy / flirty', 'Bold & edgy'])}</div>
+      </div>
+      <div class="field"><label>Any other entertainment before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
+      <div class="field"><label>Tell me about the bride <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know — I'll use this to personalize the show and a few custom touches)</span></label><textarea id="q_trivia_bride"></textarea></div>
+      <div class="field"><label>Link to a photo of the bride <span class="hint">(Google Drive, Dropbox, or any shareable link)</span></label><input type="text" id="q_photo_bride" placeholder="https://..."></div>
+      <div class="field"><label>Anything else I should know? <span class="hint">(how they met, the proposal story, etc.)</span></label><textarea id="q_anything_else"></textarea></div>
+    `
+
+
+
+
+
+            ;
+        } else if (eventType.includes('bachelor')) {
+            html += `
+      <div class="field"><label>Groom's full name</label><input type="text" id="q_honoree"></div>
+      <div class="field"><label>Groom's date of birth</label><input type="date" id="q_honoree_dob"></div>
+      <div class="field"><label>Any VIPs or special people attending?</label><input type="text" id="q_vips"></div>
+      <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
+      <div class="field"><label>What kind of vibe are you looking for?</label>
+        <div class="radio-group">${
 
 
 
@@ -399,9 +416,11 @@
             radioGroup('q_vibe', ['Clean elegant & classy', 'Light adult humor', 'Slightly edgy / flirty', 'Bold & edgy'])}</div>
       </div>
       <div class="field"><label>Any other entertainment before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
-      <div class="field"><label>Inside jokes, themes, or fun facts about the bride and groom?</label><textarea id="q_inside_jokes"></textarea></div>
+      <div class="field"><label>Tell me about the groom <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know — I'll use this to personalize the show and a few custom touches)</span></label><textarea id="q_trivia_groom"></textarea></div>
+      <div class="field"><label>Link to a photo of the groom <span class="hint">(Google Drive, Dropbox, or any shareable link)</span></label><input type="text" id="q_photo_groom" placeholder="https://..."></div>
       <div class="field"><label>Anything else I should know? <span class="hint">(how they met, the proposal story, etc.)</span></label><textarea id="q_anything_else"></textarea></div>
     `
+
 
 
 
@@ -426,9 +445,42 @@
 
             radioGroup('q_vibe', ['Clean elegant & classy', 'Family friendly', 'Light adult humor', 'Slightly edgy / flirty', 'Bold & edgy'])}</div>
       </div>
-      <div class="field"><label>Inside jokes, themes, or fun facts I can use?</label><textarea id="q_inside_jokes"></textarea></div>
-      <div class="field"><label>Any other interesting trivia about the birthday person?</label><textarea id="q_trivia"></textarea></div>
+      <div class="field"><label>Tell me about the birthday person <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know — I'll use this to personalize the show and a few custom touches)</span></label><textarea id="q_trivia"></textarea></div>
+      <div class="field"><label>Link to a photo of the birthday person <span class="hint">(Google Drive, Dropbox, or any shareable link)</span></label><input type="text" id="q_photo_honoree" placeholder="https://..."></div>
     `
+
+
+
+            ;
+        } else if (eventType.includes('anniversary')) {
+            html += `
+      <div class="two-col">
+        <div class="field"><label>Spouse 1's full name</label><input type="text" id="q_spouse1_name"></div>
+        <div class="field"><label>Spouse 2's full name</label><input type="text" id="q_spouse2_name"></div>
+      </div>
+      <div class="field"><label>Date of marriage</label><input type="date" id="q_marriage_date"></div>
+      <div class="field"><label>Any VIPs or special people attending?</label><input type="text" id="q_vips"></div>
+      <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
+      <div class="field"><label>What kind of vibe are you looking for?</label>
+        <div class="radio-group">${
+
+
+
+
+
+
+
+            radioGroup('q_vibe', ['Clean elegant & classy', 'Family friendly', 'Light adult humor', 'Slightly edgy / flirty', 'Bold & edgy'])}</div>
+      </div>
+      <div class="field"><label>Tell me about spouse 1 <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know)</span></label><textarea id="q_trivia_spouse1"></textarea></div>
+      <div class="field"><label>Link to a photo of spouse 1</label><input type="text" id="q_photo_spouse1" placeholder="https://..."></div>
+      <div class="field"><label>Tell me about spouse 2 <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know)</span></label><textarea id="q_trivia_spouse2"></textarea></div>
+      <div class="field"><label>Link to a photo of spouse 2</label><input type="text" id="q_photo_spouse2" placeholder="https://..."></div>
+      <div class="field"><label>Anything else I should know? <span class="hint">(how they met, favorite memories, etc.)</span></label><textarea id="q_anything_else"></textarea></div>
+    `
+
+
+
 
 
 
@@ -475,7 +527,42 @@
             radioGroup('q_vibe', ['Clean elegant & classy', 'Family friendly', 'Light adult humor', 'Slightly edgy / flirty', 'Bold & edgy'])}</div>
       </div>
       <div class="field"><label>Any other entertainment before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
-      <div class="field"><label>Inside jokes, themes, or fun facts I can use?</label><textarea id="q_inside_jokes"></textarea></div>
+      <div class="field"><label>Tell me about the graduate <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know — I'll use this to personalize the show and a few custom touches)</span></label><textarea id="q_trivia"></textarea></div>
+      <div class="field"><label>Link to a photo of the graduate <span class="hint">(Google Drive, Dropbox, or any shareable link)</span></label><input type="text" id="q_photo_honoree" placeholder="https://..."></div>
+    `
+
+
+
+
+            ;
+        } else if (eventType.includes('baby shower') || eventType.includes('baby')) {
+            html += `
+      <div class="field"><label>Type of crowd</label>
+        <div class="radio-group">${
+            radioGroup('q_crowd', ['All adults', 'Family crowd'])}</div>
+      </div>
+      <div class="field"><label>Name(s) of the parent(s)-to-be</label><input type="text" id="q_honoree"></div>
+      <div class="field"><label>Baby's name <span class="hint">(if already decided)</span></label><input type="text" id="q_baby_name"></div>
+      <div class="field"><label>Due date</label><input type="date" id="q_due_date"></div>
+      <div class="field"><label>Has the gender already been revealed?</label>
+        <div class="radio-group">${
+
+
+
+
+            radioGroup('q_gender_revealed', ['Yes', 'No — this IS the reveal', 'Not sharing / surprise'])}</div>
+      </div>
+      <div class="field"><label>Any VIPs or special people attending?</label><input type="text" id="q_vips"></div>
+      <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
+      <div class="field"><label>What kind of vibe are you looking for?</label>
+        <div class="radio-group">${
+
+
+
+            radioGroup('q_vibe', ['Clean elegant & classy', 'Family friendly', 'Light adult humor'])}</div>
+      </div>
+      <div class="field"><label>Tell me about the parent(s)-to-be <span class="hint">(personality, hobbies, a funny story, anything most people don't know)</span></label><textarea id="q_trivia"></textarea></div>
+      <div class="field"><label>Link to a photo of the parent(s)-to-be <span class="hint">(Google Drive, Dropbox, or any shareable link)</span></label><input type="text" id="q_photo_honoree" placeholder="https://..."></div>
     `
 
 
@@ -505,8 +592,10 @@
             radioGroup('q_vibe', ['Clean elegant & classy', 'Family friendly', 'Light adult humor', 'Slightly edgy / flirty', 'Bold & edgy'])}</div>
       </div>
       <div class="field"><label>Any other entertainment before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
-      <div class="field"><label>Inside jokes, themes, or fun facts I can use?</label><textarea id="q_inside_jokes"></textarea></div>
+      <div class="field"><label>If there's a guest of honor, tell me about them <span class="hint">(personality, hobbies, a funny story, anything most people don't know — optional)</span></label><textarea id="q_trivia"></textarea></div>
+      <div class="field"><label>Link to a photo of the guest of honor <span class="hint">(optional — Google Drive, Dropbox, or any shareable link)</span></label><input type="text" id="q_photo_honoree" placeholder="https://..."></div>
     `
+
 
 
 
