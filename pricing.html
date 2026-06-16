@@ -484,9 +484,59 @@
         pickedTier = tier;
         pickedLabel = label;
         pickedPrice = price;
+
+        const params = getParams();
+
+        // If we already know who this is (cid present), skip asking for name/contact again
+        if (params.clientId) {
+            submitSelectionDirect();
+            return;
+        }
+
+        // No client id — this link was shared without identifying info, so we still need to ask
         document.getElementById('picked-summary').innerHTML =
         `<strong>${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}</strong><br>$${price.toLocaleString()} per show`;
         document.getElementById('confirm-modal').classList.add('show');
+    }
+
+    function submitSelectionDirect() {
+        const params = getParams();
+
+        // Disable all select buttons while submitting
+        document.querySelectorAll('.select-btn').forEach(b => {
+            b.disabled = true;
+            b.style.opacity = '0.6';
+        });
+
+        fetch('/api/select-package', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                clientId: params.clientId,
+                name: '',
+                contact: '',
+                category: pickedCategory,
+                tier: pickedTier,
+                label: pickedLabel,
+                price: pickedPrice
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('main-page').style.display = 'none';
+            document.getElementById('success-text').textContent =
+            `You selected the ${pickedLabel} package ($${pickedPrice.toLocaleString()}). I'll follow up shortly to confirm everything!`;
+            document.getElementById('success-page').style.display = 'block';
+        })
+        .catch(e => {
+            alert('Something went wrong — please try again or text me directly!');
+            document.querySelectorAll('.select-btn').forEach(b => {
+                b.disabled = false;
+                b.style.opacity = '1';
+            });
+        });
     }
 
     function closeConfirmModal() {
