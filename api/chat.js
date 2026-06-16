@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   try {
-    const { toPhone, toEmail, clientName, eventType, venue, otherEntertainment, pricingType, prices, smsOverride, emailOverride, ...claudeBody } = req.body;
+    const { toPhone, toEmail, clientName, eventType, venue, otherEntertainment, pricingType, prices, leadSource, eventDate, guests, smsOverride, emailOverride, ...claudeBody } = req.body;
 
     // Step 1: Claude writes SMS (or use override)
     let smsMessage = smsOverride;
@@ -133,6 +133,9 @@ Rules:
           event_type: eventType,
           venue: venue || null,
           other_entertainment: otherEntertainment || null,
+          lead_source: leadSource || null,
+          event_date: eventDate || null,
+          guests: guests || null,
           pricing_type: pricingType || 'standard',
           custom_price_deluxe: prices?.deluxe || null,
           custom_price_signature: prices?.signature || null,
