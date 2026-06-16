@@ -328,7 +328,9 @@
         html += `
     <div class="field">
       <label>Event date</label>
-      <input type="date" id="q_event_date">
+      <input type="date" id="q_event_date" value="${
+
+        d.eventDate || ''}">
     </div>
     <div class="two-col">
       <div class="field">
@@ -347,9 +349,6 @@
     <div class="field">
       <label>Indoor or outdoor event?</label>
       <div class="radio-group">${
-
-
-
 
 
 
