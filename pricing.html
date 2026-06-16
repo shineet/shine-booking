@@ -524,6 +524,7 @@
         })
         .then(r => r.json())
         .then(data => {
+            document.getElementById('confirm-modal').classList.remove('show');
             document.getElementById('main-page').style.display = 'none';
             document.getElementById('success-text').textContent =
             `You selected the ${pickedLabel} package ($${pickedPrice.toLocaleString()}). I'll follow up shortly to confirm everything!`;
