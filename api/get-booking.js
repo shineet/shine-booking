@@ -60,7 +60,6 @@ export default async function handler(req, res) {
       eventTitle: booking.event_title,
       eventDate: eventDateFormatted,
       startTime: booking.start_time,
-      endTime: booking.end_time,
       duration: booking.duration,
       fee: booking.fee,
       todayDate: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
