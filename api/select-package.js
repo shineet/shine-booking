@@ -1,3 +1,61 @@
+async function createBookingAndSendIntake(clientId, clientName, clientEmail, eventType, fee) {
+  if (!clientEmail) return null;
+
+  const bookingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': process.env.SUPABASE_SECRET_KEY,
+      'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+      'Prefer': 'return=representation'
+    },
+    body: JSON.stringify({
+      client_id: clientId || null,
+      client_name: clientName,
+      client_email: clientEmail,
+      event_type: eventType || '',
+      fee: fee || null,
+      contract_status: 'not_sent',
+      intake_status: 'sent'
+    })
+  });
+  const bookingRows = await bookingRes.json();
+  const booking = Array.isArray(bookingRows) ? bookingRows[0] : null;
+  if (!booking) throw new Error('Failed to create booking record');
+
+  const intakeLink = `https://shine-booking.vercel.app/intake.html?bid=${booking.id}`;
+
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+    body: JSON.stringify({
+      from: 'Shine, The Mentalist <shine@texasmentalist.com>',
+      to: clientEmail,
+      subject: 'Quick questionnaire for your upcoming show',
+      text: `Hi ${clientName.split(' ')[0]},\n\nSo excited to be part of your event! To get everything set up — including your performance agreement — could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`
+    })
+  });
+
+  if (clientId) {
+    await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': process.env.SUPABASE_SECRET_KEY,
+        'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+      },
+      body: JSON.stringify({
+        status: 'intake_sent',
+        booking_id: booking.id,
+        last_activity: new Date().toISOString(),
+        notes: `Intake form sent: ${intakeLink}`
+      })
+    });
+  }
+
+  return { bookingId: booking.id, intakeLink };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -8,8 +66,12 @@ export default async function handler(req, res) {
     const { clientId, name, contact, category, tier, label, price } = req.body;
 
     const selectionNote = `Selected package: ${category === 'corporate' ? 'Corporate' : 'Private'} — ${label} ($${price})`;
+    let finalClientId = clientId || null;
+    let finalClientName = name;
+    let finalClientEmail = null;
+    let finalEventType = category === 'corporate' ? 'Corporate event' : 'Private celebration';
 
-    // If we have a clientId, update that client record
+    // If we have a clientId, update that client record and fetch its details
     if (clientId) {
       await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
         method: 'PATCH',
@@ -27,21 +89,37 @@ export default async function handler(req, res) {
           last_activity: new Date().toISOString()
         })
       });
+
+      // Fetch full client record so we have email/event_type for the intake send
+      const clientRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}&limit=1`, {
+        headers: {
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+        }
+      });
+      const clientRows = await clientRes.json();
+      const client = Array.isArray(clientRows) ? clientRows[0] : null;
+      if (client) {
+        finalClientName = client.name;
+        finalClientEmail = client.email;
+        finalEventType = client.event_type || finalEventType;
+      }
     } else {
       // No clientId in URL — create a new lead from this selection
       const isEmail = contact.includes('@');
-      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
+      const newClientRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'apikey': process.env.SUPABASE_SECRET_KEY,
-          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+          'Prefer': 'return=representation'
         },
         body: JSON.stringify({
           name: name || 'Unknown (from pricing page)',
           email: isEmail ? contact : null,
           phone: isEmail ? null : contact,
-          event_type: category === 'corporate' ? 'Corporate event' : 'Private celebration',
+          event_type: finalEventType,
           status: 'booked',
           selected_package: label,
           selected_category: category,
@@ -50,6 +128,13 @@ export default async function handler(req, res) {
           last_activity: new Date().toISOString()
         })
       });
+      const newClientRows = await newClientRes.json();
+      const newClient = Array.isArray(newClientRows) ? newClientRows[0] : null;
+      if (newClient) {
+        finalClientId = newClient.id;
+        finalClientName = newClient.name;
+        finalClientEmail = newClient.email;
+      }
     }
 
     // Notify you immediately
@@ -63,9 +148,19 @@ export default async function handler(req, res) {
         from: 'Shine Booking Assistant <shine@texasmentalist.com>',
         to: 'shinethementalist@gmail.com',
         subject: `🎯 ${name || 'A client'} selected the ${label} package!`,
-        text: `Great news!\n\n${name || 'A client'} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}\n\nContact: ${contact}\n\nLog in to follow up and send the contract:\nshine-booking.vercel.app`
+        text: `Great news!\n\n${name || 'A client'} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}\n\nContact: ${contact}\n\nThe intake questionnaire is being sent to them automatically now.`
       })
     });
+
+    // Immediately send the intake form now that the client is booked
+    if (finalClientEmail) {
+      try {
+        await createBookingAndSendIntake(finalClientId, finalClientName, finalClientEmail, finalEventType, price);
+      } catch (intakeErr) {
+        console.error('Auto-send intake failed:', intakeErr);
+        // Don't fail the whole request just because intake send failed — booking itself succeeded
+      }
+    }
 
     res.status(200).json({ success: true });
 
