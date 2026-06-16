@@ -108,7 +108,7 @@ Rules:
           body: JSON.stringify({ status: newStatus, last_activity: new Date().toISOString(), last_channel: 'sms' })
         });
 
-        await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+        const messagesRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
           body: JSON.stringify([
@@ -116,6 +116,10 @@ Rules:
             { client_id: client.id, channel: 'sms', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: From }
           ])
         });
+        if (!messagesRes.ok) {
+          const errBody = await messagesRes.text();
+          console.error('Messages insert failed:', messagesRes.status, errBody);
+        }
 
         if (reviewMode) {
           try {
