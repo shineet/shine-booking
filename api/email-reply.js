@@ -34,6 +34,8 @@ export default async function handler(req, res) {
     if (!emailBody) emailBody = `Client sent an email with subject: ${subject}`;
 
     const fromEmail = from.match(/<(.+)>/)?.[1] || from;
+    const fromNameMatch = from.match(/^"?([^"<]+)"?\s*<.+>$/);
+    const fromName = fromNameMatch ? fromNameMatch[1].trim() : '';
 
     // Look up client in Supabase — failure safe
     let client = null;
@@ -103,6 +105,14 @@ Shine, The Mentalist
 +1 (612) 865-7681
 www.texasmentalist.com`;
 
+    const EXTRACTION_INSTRUCTION = `
+
+This person is not yet in my client records — they're a brand new inquiry. After writing your reply, on a new line at the very end, output an extraction block in this exact format (after any [PRICING_REQUESTED] or [BOOKING_INTENT] tags, as the last thing in your response):
+[LEAD_INFO]{"name":"their name if mentioned or inferable from the email, else null","eventType":"one of: Birthday party, Bachelorette party, Corporate event, Private celebration, Anniversary, Other, or null if unclear","eventDate":"YYYY-MM-DD if a specific date is mentioned, else null","guests":"a short string like '25-50' or a number if mentioned, else null"}[/LEAD_INFO]
+Only include this block once. Do not mention this block or its contents in the visible reply text — it's purely structured data for internal use.`;
+
+    const systemPrompt = client ? SYSTEM_PROMPT : SYSTEM_PROMPT + EXTRACTION_INSTRUCTION;
+
     // Build the full message list, then defensively collapse any consecutive
     // same-role messages (e.g. if a prior reply failed to save) since the API
     // requires strict user/assistant alternation
@@ -125,7 +135,7 @@ www.texasmentalist.com`;
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 500,
-        system: SYSTEM_PROMPT,
+        system: systemPrompt,
         messages: messages
       })
     });
@@ -136,7 +146,23 @@ www.texasmentalist.com`;
     const replyText = claudeData.content[0].text;
     const bookingIntent = replyText.includes('[BOOKING_INTENT]');
     const pricingRequested = replyText.includes('[PRICING_REQUESTED]');
-    const cleanReply = replyText.replace('[BOOKING_INTENT]', '').replace('[PRICING_REQUESTED]', '').trim();
+
+    // Extract structured lead info if present, without ever letting it leak into the visible reply
+    let extractedLead = null;
+    const leadInfoMatch = replyText.match(/\[LEAD_INFO\]([\s\S]*?)\[\/LEAD_INFO\]/);
+    if (leadInfoMatch) {
+      try {
+        extractedLead = JSON.parse(leadInfoMatch[1].trim());
+      } catch(e) {
+        console.error('Failed to parse LEAD_INFO block:', e.message, leadInfoMatch[1]);
+      }
+    }
+
+    const cleanReply = replyText
+      .replace('[BOOKING_INTENT]', '')
+      .replace('[PRICING_REQUESTED]', '')
+      .replace(/\[LEAD_INFO\][\s\S]*?\[\/LEAD_INFO\]/, '')
+      .trim();
 
     // Check global review-mode setting
     let reviewMode = false;
@@ -264,6 +290,70 @@ www.texasmentalist.com`;
         }
       } catch(e) {
         console.error('Supabase update failed:', e.message);
+      }
+    } else {
+      // No existing client matches this email — auto-create a new lead from the inbound inquiry
+      try {
+        const leadName = (extractedLead && extractedLead.name) || fromName || fromEmail.split('@')[0];
+        const leadEventType = (extractedLead && extractedLead.eventType) || '';
+        const leadEventDate = (extractedLead && extractedLead.eventDate) || null;
+        const leadGuests = (extractedLead && extractedLead.guests) || null;
+
+        const newClientRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.SUPABASE_SECRET_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            name: leadName,
+            email: fromEmail,
+            event_type: leadEventType,
+            event_date: leadEventDate,
+            guests: leadGuests,
+            status: pricingRequested ? 'pricing_requested' : 'chatting',
+            lead_source: 'Website',
+            last_channel: 'email',
+            last_activity: new Date().toISOString(),
+            notes: `Auto-added from inbound email inquiry`
+          })
+        });
+        const newClientRows = await newClientRes.json();
+        const newClient = Array.isArray(newClientRows) ? newClientRows[0] : null;
+
+        if (newClient) {
+          const messagesRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+            body: JSON.stringify([
+              { client_id: newClient.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null },
+              { client_id: newClient.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject }
+            ])
+          });
+          if (!messagesRes.ok) {
+            const errBody = await messagesRes.text();
+            console.error('Messages insert failed for new lead:', messagesRes.status, errBody);
+          }
+
+          try {
+            await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+              body: JSON.stringify({
+                from: 'Shine Booking Assistant <shine@texasmentalist.com>',
+                to: 'shinethementalist@gmail.com',
+                subject: `✨ New lead auto-added: ${leadName}`,
+                text: `A new inquiry came in from ${fromEmail} and wasn't already in your client list, so I added them automatically.\n\nName: ${leadName}\nEvent type: ${leadEventType || 'not specified'}\nEvent date: ${leadEventDate || 'not specified'}\nGuests: ${leadGuests || 'not specified'}\n\nTheir message:\n"${emailBody}"\n\n${reviewMode ? "The reply is waiting for your review on the dashboard." : "A reply was sent automatically."}\n\nCheck the dashboard to fill in any missing details:\nshine-booking.vercel.app`
+              })
+            });
+          } catch(notifyErr) {
+            console.error('New-lead notification failed:', notifyErr.message);
+          }
+        }
+      } catch(e) {
+        console.error('Auto-create new lead failed:', e.message);
       }
     }
 
