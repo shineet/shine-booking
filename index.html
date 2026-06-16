@@ -619,6 +619,42 @@
         font-family: inherit
     }
 
+    .format-toggle {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+        background: #f5f5f7;
+        padding: 4px;
+        border-radius: 12px
+    }
+
+    .format-toggle-btn {
+        flex: 1;
+        padding: 10px;
+        border: none;
+        background: transparent;
+        border-radius: 9px;
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #6e6e73;
+        cursor: pointer;
+        font-family: inherit
+    }
+
+    .format-toggle-btn.active {
+        background: #fff;
+        color: #0071e3;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)
+    }
+
+    .format-section {
+        display: none
+    }
+
+    .format-section.show {
+        display: block
+    }
+
     .modal-actions {
         display: flex;
         gap: 10px;
@@ -822,66 +858,131 @@
             <h2>Send pricing</h2>
             <p id="modal-client-name">Choose which packages to send</p>
 
-            <div class="pricing-option" onclick="selectPricingOption('private-standard')" id="opt-private-standard">
-                <div class="pricing-option-icon">&#127874;</div>
-                <div class="pricing-option-text">
-                    <div class="pricing-option-title">Private — Standard</div>
-                    <div class="pricing-option-desc">Deluxe $400 · Signature $500 · Premium $600</div>
+            <div class="format-toggle">
+                <button class="format-toggle-btn active" id="format-btn-stage" onclick="switchFormat('stage')">Stage Show</button>
+                <button class="format-toggle-btn" id="format-btn-strolling" onclick="switchFormat('strolling')">Strolling</button>
+            </div>
+
+            <div class="format-section show" id="format-section-stage">
+                <div class="pricing-option" onclick="selectPricingOption('private-standard')" id="opt-private-standard">
+                    <div class="pricing-option-icon">&#127874;</div>
+                    <div class="pricing-option-text">
+                        <div class="pricing-option-title">Private — Standard</div>
+                        <div class="pricing-option-desc">Deluxe $400 · Signature $500 · Premium $600</div>
+                    </div>
+                </div>
+
+                <div class="pricing-option" onclick="selectPricingOption('private-custom')" id="opt-private-custom">
+                    <div class="pricing-option-icon">&#10024;</div>
+                    <div class="pricing-option-text">
+                        <div class="pricing-option-title">Private — Custom pricing</div>
+                        <div class="pricing-option-desc">Set your own prices for this client</div>
+                    </div>
+                </div>
+                <div class="custom-price-inputs" id="private-custom-inputs">
+                    <div class="three-col">
+                        <div class="price-field">
+                            <label>Deluxe</label>
+                            <input type="number" id="pc-d1" placeholder="400">
+                        </div>
+                        <div class="price-field">
+                            <label>Signature</label>
+                            <input type="number" id="pc-d2" placeholder="500">
+                        </div>
+                        <div class="price-field">
+                            <label>Premium</label>
+                            <input type="number" id="pc-d3" placeholder="600">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pricing-option" onclick="selectPricingOption('corporate-standard')" id="opt-corporate-standard">
+                    <div class="pricing-option-icon">&#127970;</div>
+                    <div class="pricing-option-text">
+                        <div class="pricing-option-title">Corporate — Standard</div>
+                        <div class="pricing-option-desc">Deluxe $1,000 · Signature $1,200 · Premium $1,500</div>
+                    </div>
+                </div>
+
+                <div class="pricing-option" onclick="selectPricingOption('corporate-custom')" id="opt-corporate-custom">
+                    <div class="pricing-option-icon">&#128188;</div>
+                    <div class="pricing-option-text">
+                        <div class="pricing-option-title">Corporate — Custom pricing</div>
+                        <div class="pricing-option-desc">Set your own prices for this client</div>
+                    </div>
+                </div>
+                <div class="custom-price-inputs" id="corporate-custom-inputs">
+                    <div class="three-col">
+                        <div class="price-field">
+                            <label>Deluxe</label>
+                            <input type="number" id="pc-c1" placeholder="1000">
+                        </div>
+                        <div class="price-field">
+                            <label>Signature</label>
+                            <input type="number" id="pc-c2" placeholder="1200">
+                        </div>
+                        <div class="price-field">
+                            <label>Premium</label>
+                            <input type="number" id="pc-c3" placeholder="1500">
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="pricing-option" onclick="selectPricingOption('private-custom')" id="opt-private-custom">
-                <div class="pricing-option-icon">&#10024;</div>
-                <div class="pricing-option-text">
-                    <div class="pricing-option-title">Private — Custom pricing</div>
-                    <div class="pricing-option-desc">Set your own prices for this client</div>
-                </div>
-            </div>
-            <div class="custom-price-inputs" id="private-custom-inputs">
-                <div class="three-col">
-                    <div class="price-field">
-                        <label>Deluxe</label>
-                        <input type="number" id="pc-d1" placeholder="400">
-                    </div>
-                    <div class="price-field">
-                        <label>Signature</label>
-                        <input type="number" id="pc-d2" placeholder="500">
-                    </div>
-                    <div class="price-field">
-                        <label>Premium</label>
-                        <input type="number" id="pc-d3" placeholder="600">
+            <div class="format-section" id="format-section-strolling">
+                <div class="pricing-option" onclick="selectPricingOption('strolling-private-standard')" id="opt-strolling-private-standard">
+                    <div class="pricing-option-icon">&#127874;</div>
+                    <div class="pricing-option-text">
+                        <div class="pricing-option-title">Private — Standard</div>
+                        <div class="pricing-option-desc">$400/hr · +$200 add-on for Grand Finale</div>
                     </div>
                 </div>
-            </div>
 
-            <div class="pricing-option" onclick="selectPricingOption('corporate-standard')" id="opt-corporate-standard">
-                <div class="pricing-option-icon">&#127970;</div>
-                <div class="pricing-option-text">
-                    <div class="pricing-option-title">Corporate — Standard</div>
-                    <div class="pricing-option-desc">Deluxe $1,000 · Signature $1,200 · Premium $1,500</div>
+                <div class="pricing-option" onclick="selectPricingOption('strolling-private-custom')" id="opt-strolling-private-custom">
+                    <div class="pricing-option-icon">&#10024;</div>
+                    <div class="pricing-option-text">
+                        <div class="pricing-option-title">Private — Custom pricing</div>
+                        <div class="pricing-option-desc">Set your own strolling rates for this client</div>
+                    </div>
                 </div>
-            </div>
+                <div class="custom-price-inputs" id="strolling-private-custom-inputs">
+                    <div class="two-col">
+                        <div class="price-field">
+                            <label>Rate per hour</label>
+                            <input type="number" id="ps-rate" placeholder="400">
+                        </div>
+                        <div class="price-field">
+                            <label>Grand Finale add-on</label>
+                            <input type="number" id="ps-finale" placeholder="200">
+                        </div>
+                    </div>
+                </div>
 
-            <div class="pricing-option" onclick="selectPricingOption('corporate-custom')" id="opt-corporate-custom">
-                <div class="pricing-option-icon">&#128188;</div>
-                <div class="pricing-option-text">
-                    <div class="pricing-option-title">Corporate — Custom pricing</div>
-                    <div class="pricing-option-desc">Set your own prices for this client</div>
+                <div class="pricing-option" onclick="selectPricingOption('strolling-corporate-standard')" id="opt-strolling-corporate-standard">
+                    <div class="pricing-option-icon">&#127970;</div>
+                    <div class="pricing-option-text">
+                        <div class="pricing-option-title">Corporate — Standard</div>
+                        <div class="pricing-option-desc">$1,000/hr · +$300 add-on for Grand Finale</div>
+                    </div>
                 </div>
-            </div>
-            <div class="custom-price-inputs" id="corporate-custom-inputs">
-                <div class="three-col">
-                    <div class="price-field">
-                        <label>Deluxe</label>
-                        <input type="number" id="pc-c1" placeholder="1000">
+
+                <div class="pricing-option" onclick="selectPricingOption('strolling-corporate-custom')" id="opt-strolling-corporate-custom">
+                    <div class="pricing-option-icon">&#128188;</div>
+                    <div class="pricing-option-text">
+                        <div class="pricing-option-title">Corporate — Custom pricing</div>
+                        <div class="pricing-option-desc">Set your own strolling rates for this client</div>
                     </div>
-                    <div class="price-field">
-                        <label>Signature</label>
-                        <input type="number" id="pc-c2" placeholder="1200">
-                    </div>
-                    <div class="price-field">
-                        <label>Premium</label>
-                        <input type="number" id="pc-c3" placeholder="1500">
+                </div>
+                <div class="custom-price-inputs" id="strolling-corporate-custom-inputs">
+                    <div class="two-col">
+                        <div class="price-field">
+                            <label>Rate per hour</label>
+                            <input type="number" id="ps-c-rate" placeholder="1000">
+                        </div>
+                        <div class="price-field">
+                            <label>Grand Finale add-on</label>
+                            <input type="number" id="ps-c-finale" placeholder="300">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1109,9 +1210,11 @@
         document.querySelectorAll('.pricing-option').forEach(function(o) {
             o.classList.remove('selected');
         });
-        document.getElementById('private-custom-inputs').classList.remove('show');
-        document.getElementById('corporate-custom-inputs').classList.remove('show');
+        document.querySelectorAll('.custom-price-inputs').forEach(function(el) {
+            el.classList.remove('show');
+        });
         document.getElementById('modal-send-btn').disabled = true;
+        switchFormat('stage');
         document.getElementById('pricing-modal').classList.add('show');
     }
 
@@ -1325,18 +1428,41 @@
         });
     }
 
+    var currentFormat = 'stage';
+
+    function switchFormat(format) {
+        currentFormat = format;
+        document.getElementById('format-btn-stage').classList.toggle('active', format === 'stage');
+        document.getElementById('format-btn-strolling').classList.toggle('active', format === 'strolling');
+        document.getElementById('format-section-stage').classList.toggle('show', format === 'stage');
+        document.getElementById('format-section-strolling').classList.toggle('show', format === 'strolling');
+        selectedPricingOption = null;
+        document.querySelectorAll('.pricing-option').forEach(function(o) {
+            o.classList.remove('selected');
+        });
+        document.querySelectorAll('.custom-price-inputs').forEach(function(el) {
+            el.classList.remove('show');
+        });
+        document.getElementById('modal-send-btn').disabled = true;
+    }
+
     function selectPricingOption(option) {
         selectedPricingOption = option;
         document.querySelectorAll('.pricing-option').forEach(function(o) {
             o.classList.remove('selected');
         });
         document.getElementById('opt-' + option).classList.add('selected');
-        document.getElementById('private-custom-inputs').classList.remove('show');
-        document.getElementById('corporate-custom-inputs').classList.remove('show');
+        document.querySelectorAll('.custom-price-inputs').forEach(function(el) {
+            el.classList.remove('show');
+        });
         if (option === 'private-custom')
             document.getElementById('private-custom-inputs').classList.add('show');
         if (option === 'corporate-custom')
             document.getElementById('corporate-custom-inputs').classList.add('show');
+        if (option === 'strolling-private-custom')
+            document.getElementById('strolling-private-custom-inputs').classList.add('show');
+        if (option === 'strolling-corporate-custom')
+            document.getElementById('strolling-corporate-custom-inputs').classList.add('show');
         document.getElementById('modal-send-btn').disabled = false;
     }
 
@@ -1362,6 +1488,18 @@
             var c2 = document.getElementById('pc-c2').value || 1200;
             var c3 = document.getElementById('pc-c3').value || 1500;
             pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=corporate&cid=' + currentClientId + '&d1=' + c1 + '&d2=' + c2 + '&d3=' + c3;
+        } else if (selectedPricingOption === 'strolling-private-standard') {
+            pricingLink = 'https://shine-booking.vercel.app/pricing.html?format=strolling&type=private&cid=' + currentClientId;
+        } else if (selectedPricingOption === 'strolling-corporate-standard') {
+            pricingLink = 'https://shine-booking.vercel.app/pricing.html?format=strolling&type=corporate&cid=' + currentClientId;
+        } else if (selectedPricingOption === 'strolling-private-custom') {
+            var sr = document.getElementById('ps-rate').value || 400;
+            var sf = document.getElementById('ps-finale').value || 200;
+            pricingLink = 'https://shine-booking.vercel.app/pricing.html?format=strolling&type=private&cid=' + currentClientId + '&sr=' + sr + '&sf=' + sf;
+        } else if (selectedPricingOption === 'strolling-corporate-custom') {
+            var scr = document.getElementById('ps-c-rate').value || 1000;
+            var scf = document.getElementById('ps-c-finale').value || 300;
+            pricingLink = 'https://shine-booking.vercel.app/pricing.html?format=strolling&type=corporate&cid=' + currentClientId + '&sr=' + scr + '&sf=' + scf;
         }
 
         fetch('/api/send-pricing', {
