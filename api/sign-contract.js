@@ -151,7 +151,7 @@ export default async function handler(req, res) {
           from: 'Shine, The Mentalist <shine@texasmentalist.com>',
           to: booking.client_email,
           subject: 'Your signed performance agreement',
-          text: `Hi ${booking.client_name},\n\nThank you for signing the performance agreement! A copy is attached for your records.\n\nI'll follow up shortly with a short questionnaire to help personalize your event.\n\nLooking forward to it!\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`,
+          text: `Hi ${booking.client_name},\n\nThank you for signing the performance agreement! A copy is attached for your records.\n\nEverything is all set for your event. Looking forward to it!\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`,
           attachments: [{ filename: 'Performance_Agreement_Signed.pdf', content: pdfBase64 }]
         })
       });
@@ -165,7 +165,7 @@ export default async function handler(req, res) {
         from: 'Shine Booking Assistant <shine@texasmentalist.com>',
         to: 'shinethementalist@gmail.com',
         subject: `Signed: ${booking.client_name}'s performance agreement`,
-        text: `${booking.client_name} just signed the performance agreement for ${booking.event_title} on ${eventDateFormatted}.\n\nSigned PDF attached. Intake questionnaire link will be sent to the client next.`,
+        text: `${booking.client_name} just signed the performance agreement for ${booking.event_title} on ${eventDateFormatted}.\n\nSigned PDF attached.`,
         attachments: [{ filename: 'Performance_Agreement_Signed.pdf', content: pdfBase64 }]
       })
     });
@@ -185,17 +185,18 @@ export default async function handler(req, res) {
       })
     });
 
-    // Send intake questionnaire link to client
-    if (booking.client_email) {
-      const intakeLink = `https://shine-booking.vercel.app/intake.html?bid=${bookingId}`;
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+    // Update client status too
+    if (booking.client_id) {
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${booking.client_id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+        },
         body: JSON.stringify({
-          from: 'Shine, The Mentalist <shine@texasmentalist.com>',
-          to: booking.client_email,
-          subject: 'Quick questionnaire for your upcoming show',
-          text: `Hi ${booking.client_name},\n\nThanks again for booking! To help me personalize your show, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and really helps me make the show special for you and your guests.\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`
+          status: 'contract_signed',
+          last_activity: new Date().toISOString()
         })
       });
     }
