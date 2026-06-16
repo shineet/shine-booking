@@ -49,6 +49,17 @@ export default async function handler(req, res) {
       return;
     }
 
+    // mode=answers -> for dashboard "View answers" modal
+    if (mode === 'answers') {
+      res.status(200).json({
+        clientName: booking.client_name,
+        eventType: booking.event_type,
+        intakeCompletedAt: booking.intake_completed_at,
+        answers: answers
+      });
+      return;
+    }
+
     // default mode -> for contract.html signing page
     const eventDateFormatted = booking.event_date
       ? new Date(booking.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
