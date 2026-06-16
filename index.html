@@ -479,6 +479,17 @@
         margin-bottom: 12px
     }
 
+    .lead-pricing-link {
+        font-size: 12px;
+        color: #0071e3;
+        margin-top: 4px
+    }
+
+    .lead-pricing-link a {
+        color: #0071e3;
+        text-decoration: none
+    }
+
     .pricing-badge {
         display: inline-block;
         background: #fff3e0;
@@ -702,8 +713,11 @@
                 const statusLabel = STATUS_LABELS[c.status] || c.status;
                 const timeAgo = getTimeAgo(c.last_activity);
                 const pricingBadge = c.pricing_type === 'custom' ? '<span class="pricing-badge">Custom $</span>' : '';
+                const pricingLinkHtml = c.notes && c.notes.includes('Pricing link sent:')
+                ? `<div class="lead-pricing-link">📋 <a href="${c.notes.replace('Pricing link sent: ', '')}" target="_blank">View pricing sent</a></div>`
+                : '';
                 return `
-        <div class="lead-card status-${c.status}" onclick="openClient('${c.id}')">
+        <div class="lead-card status-${c.status}">
           <div class="lead-top">
             <div class="lead-name">${
                 c.name} ${pricingBadge}</div>
@@ -711,6 +725,7 @@
           </div>
           <div class="lead-detail">${
                 c.event_type || 'Event type unknown'} · ${c.venue || 'Venue TBD'}</div>
+          ${pricingLinkHtml}
           <div class="lead-time">${timeAgo}</div>
         </div>
       `
