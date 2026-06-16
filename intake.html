@@ -211,7 +211,7 @@
     let bookingData = null;
 
     function loadBooking() {
-        fetch('/api/get-booking-full?bid=' + getBookingId())
+        fetch('/api/get-booking?mode=full&bid=' + getBookingId())
         .then(r => r.json())
         .then(data => {
             if (data.error)
