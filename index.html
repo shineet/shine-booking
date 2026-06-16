@@ -295,8 +295,20 @@
         border-left-color: #34c759
     }
 
+    .lead-card.status-intake_sent {
+        border-left-color: #5856d6
+    }
+
+    .lead-card.status-intake_completed {
+        border-left-color: #ff9500
+    }
+
     .lead-card.status-contract_sent {
         border-left-color: #0071e3
+    }
+
+    .lead-card.status-contract_signed {
+        border-left-color: #34c759
     }
 
     .lead-card.status-lost {
@@ -349,9 +361,24 @@
         color: #1a7a3a
     }
 
+    .lead-status.status-intake_sent {
+        background: #ede8fd;
+        color: #3a3296
+    }
+
+    .lead-status.status-intake_completed {
+        background: #fff3e0;
+        color: #b35900
+    }
+
     .lead-status.status-contract_sent {
         background: #e8f1fd;
         color: #0071e3
+    }
+
+    .lead-status.status-contract_signed {
+        background: #e8faf0;
+        color: #1a7a3a
     }
 
     .lead-status.status-lost {
@@ -863,7 +890,10 @@
         pricing_requested: 'Pricing requested',
         pricing_sent: 'Pricing sent',
         booked: 'Booked',
+        intake_sent: 'Intake sent',
+        intake_completed: 'Ready for contract',
         contract_sent: 'Contract sent',
+        contract_signed: 'Contract signed',
         lost: 'Lost'
     };
 
@@ -942,8 +972,11 @@
                 var pricingBtn = (c.status === 'pricing_requested')
                 ? '<button class="action-btn pricing" onclick="openPricingModal(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.phone || '') + '\',\'' + (c.email || '') + '\',\'' + (c.last_channel || 'email') + '\')">Send pricing</button>'
                 : '';
-                var contractBtn = (c.status === 'booked')
-                ? '<button class="action-btn contract" onclick="openContractModal(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.email || '') + '\',\'' + (c.event_type || '') + '\',\'' + (c.venue || '') + '\',\'' + (c.event_date || '') + '\',' + (c.selected_price || 0) + ')">Send contract</button>'
+                var intakeBtn = (c.status === 'booked')
+                ? '<button class="action-btn contract" onclick="sendIntakeForm(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.email || '') + '\',\'' + (c.selected_category || '') + '\',' + (c.selected_price || 0) + ')">Send intake form</button>'
+                : '';
+                var contractBtn = (c.status === 'intake_completed')
+                ? '<button class="action-btn contract" onclick="openContractModal(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.email || '') + '\',\'' + (c.booking_id || '') + '\')">Review and send contract</button>'
                 : '';
                 return '<div class="lead-card status-' + c.status + '">' +
                 '<div class="lead-top">' +
@@ -954,7 +987,7 @@
                 pricingLinkHtml +
                 selectedPkgHtml +
                 '<div class="lead-time">' + timeAgo + '</div>' +
-                '<div class="lead-actions">' + pricingBtn + contractBtn +
+                '<div class="lead-actions">' + pricingBtn + intakeBtn + contractBtn +
                 '<button class="action-btn delete" onclick="deleteClient(\'' + c.id + '\',\'' + c.name + '\')">Delete</button>' +
                 '</div></div>';
             }).join('');
@@ -1017,23 +1050,70 @@
 
     var contractClient = {};
 
-    function openContractModal(id, name, email, eventType, venue, eventDate, price) {
+    function sendIntakeForm(id, name, email, eventType, price) {
+        if (!email) {
+            alert('This client has no email on file — intake form needs an email to send.');
+            return;
+        }
+        if (!confirm('Send intake questionnaire to ' + name + '?'))
+            return;
+
+        fetch('/api/send-intake', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                clientId: id,
+                clientName: name,
+                clientEmail: email,
+                eventType: eventType,
+                fee: price || null
+            })
+        })
+        .then(function(r) {
+            return r.json();
+        })
+        .then(function(data) {
+            if (data.error)
+                throw new Error(data.error);
+            loadDashboard();
+        })
+        .catch(function(e) {
+            alert('Error sending intake form: ' + e.message);
+        });
+    }
+
+    function openContractModal(id, name, email, bookingId) {
         contractClient = {
             id: id,
             name: name,
             email: email,
-            eventType: eventType,
-            price: price
+            bookingId: bookingId
         };
         document.getElementById('contract-modal-client-name').textContent = 'Sending to ' + name;
-        document.getElementById('ct-title').value = name + "'s " + (eventType || 'Event');
-        document.getElementById('ct-address').value = venue || '';
-        document.getElementById('ct-date').value = eventDate || '';
-        document.getElementById('ct-start').value = '';
-        document.getElementById('ct-end').value = '';
-        document.getElementById('ct-duration').value = '45 minutes';
-        document.getElementById('ct-fee').value = price || '';
         document.getElementById('contract-modal').classList.add('show');
+
+        if (!bookingId) {
+            document.getElementById('ct-title').value = name + "'s Event";
+            return;
+        }
+
+        fetch('/api/get-booking-for-contract?bid=' + bookingId)
+        .then(function(r) {
+            return r.json();
+        })
+        .then(function(data) {
+            if (data.error)
+                return;
+            document.getElementById('ct-title').value = name + "'s " + (data.eventType || 'Event');
+            document.getElementById('ct-address').value = data.venueAddress || '';
+            document.getElementById('ct-date').value = data.eventDate || '';
+            document.getElementById('ct-start').value = data.startTime || '';
+            document.getElementById('ct-end').value = '';
+            document.getElementById('ct-duration').value = '45 minutes';
+            document.getElementById('ct-fee').value = data.fee || '';
+        });
     }
 
     function closeContractModal() {
@@ -1058,10 +1138,10 @@
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
+                bookingId: contractClient.bookingId,
                 clientId: contractClient.id,
                 clientName: contractClient.name,
                 clientEmail: contractClient.email,
-                eventType: contractClient.eventType,
                 eventTitle: document.getElementById('ct-title').value,
                 venueAddress: document.getElementById('ct-address').value,
                 eventDate: document.getElementById('ct-date').value,
