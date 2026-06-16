@@ -622,6 +622,20 @@
                         <input type="email" id="email" placeholder="abigail@gmail.com">
                     </div>
                 </div>
+                <div class="field">
+                    <label>Lead source</label>
+                    <select id="lead_source" onchange="toggleOtherSource()">
+                        <option value="Bark">Bark</option>
+                        <option value="GigSalad">GigSalad</option>
+                        <option value="TheBash">TheBash</option>
+                        <option value="Referral">Referral</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="field" id="other-source-field" style="display:none">
+                    <label>Source name</label>
+                    <input type="text" id="other_source_name" placeholder="e.g. Instagram, Facebook, friend...">
+                </div>
             </div>
 
             <div class="card">
@@ -848,6 +862,21 @@
                 var selectedPkgHtml = c.selected_package
                 ? '<div class="lead-selected-package">Selected: ' + (c.selected_category === 'corporate' ? 'Corporate' : 'Private') + ' — ' + c.selected_package + ' ($' + c.selected_price + ')</div>'
                 : '';
+                var eventDateStr = c.event_date ? new Date(c.event_date + 'T00:00:00').toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                }) : null;
+                var metaParts = [];
+                if (c.event_type)
+                    metaParts.push(c.event_type);
+                if (eventDateStr)
+                    metaParts.push(eventDateStr);
+                if (c.venue)
+                    metaParts.push(c.venue);
+                if (c.lead_source)
+                    metaParts.push('via ' + c.lead_source);
+                var metaHtml = metaParts.length ? '<div class="lead-detail">' + metaParts.join(' · ') + '</div>' : '<div class="lead-detail">Unknown event</div>';
                 var pricingBtn = (c.status === 'pricing_requested')
                 ? '<button class="action-btn pricing" onclick="openPricingModal(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.phone || '') + '\',\'' + (c.email || '') + '\',\'' + (c.last_channel || 'email') + '\')">Send pricing</button>'
                 : '';
@@ -856,7 +885,7 @@
                 '<div class="lead-name">' + c.name + '</div>' +
                 '<div class="lead-status status-' + c.status + '">' + statusLabel + '</div>' +
                 '</div>' +
-                '<div class="lead-detail">' + (c.event_type || 'Unknown event') + ' · ' + (c.venue || 'Venue TBD') + '</div>' +
+                metaHtml +
                 pricingLinkHtml +
                 selectedPkgHtml +
                 '<div class="lead-time">' + timeAgo + '</div>' +
@@ -1006,11 +1035,23 @@
         });
     }
 
+    function toggleOtherSource() {
+        var src = document.getElementById('lead_source').value;
+        document.getElementById('other-source-field').style.display = src === 'Other' ? 'block' : 'none';
+    }
+
     function getFormData() {
+        var leadSource = document.getElementById('lead_source').value;
+        if (leadSource === 'Other') {
+            var otherName = document.getElementById('other_source_name').value.trim();
+            if (otherName)
+                leadSource = otherName;
+        }
         return {
             name: document.getElementById('name').value.trim(),
             phone: document.getElementById('phone').value.trim(),
             email: document.getElementById('email').value.trim(),
+            leadSource: leadSource,
             eventType: document.getElementById('event_type').value,
             date: document.getElementById('date').value,
             guests: document.getElementById('guests').value,
@@ -1123,6 +1164,9 @@
                 eventType: d.eventType,
                 venue: d.venue,
                 otherEntertainment: d.otherEntertainment,
+                leadSource: d.leadSource,
+                eventDate: d.date,
+                guests: d.guests,
                 smsOverride: smsText,
                 emailOverride: 'Subject: ' + emailSubject + '\n\n' + emailBody
             })
