@@ -780,352 +780,271 @@
     let selectedPricingOption = null;
 
     const STATUS_LABELS = {
-        new: '🆕 New',
-        chatting: '💬 Chatting',
-        pricing_requested: '💰 Pricing requested',
-        pricing_sent: '📋 Pricing sent',
-        booked: '✅ Booked',
-        lost: '❌ Lost'
+      new: '🆕 New',
+      chatting: '💬 Chatting',
+      pricing_requested: '💰 Pricing requested',
+      pricing_sent: '📋 Pricing sent',
+      booked: '✅ Booked',
+      lost: '❌ Lost'
     };
 
     function showTab(tab) {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.getElementById('dashboard-view').style.display = 'none';
-        document.getElementById('new-lead-view').style.display = 'none';
-        if (tab === 'dashboard') {
-            document.querySelectorAll('.tab')[0].classList.add('active');
-            document.getElementById('dashboard-view').style.display = 'block';
-            loadDashboard();
-        } else {
-            document.querySelectorAll('.tab')[1].classList.add('active');
-            document.getElementById('new-lead-view').style.display = 'block';
-        }
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('dashboard-view').style.display = 'none';
+      document.getElementById('new-lead-view').style.display = 'none';
+      if (tab === 'dashboard') {
+        document.querySelectorAll('.tab')[0].classList.add('active');
+        document.getElementById('dashboard-view').style.display = 'block';
+        loadDashboard();
+      } else {
+        document.querySelectorAll('.tab')[1].classList.add('active');
+        document.getElementById('new-lead-view').style.display = 'block';
+      }
     }
 
     async function loadDashboard() {
-        const list = document.getElementById('leads-list');
-        list.innerHTML = '<div class="empty-state"><p>Loading...</p></div>';
-        try {
-            const r = await fetch(`${SUPABASE_URL}/rest/v1/clients?select=*&order=last_activity.desc`, {
-                headers: {
-                    'apikey': SUPABASE_KEY,
-                    'Authorization': `Bearer ${SUPABASE_KEY}`
-                }
-            });
-            const clients = await r.json();
-            if (!clients.length) {
-                list.innerHTML = '<div class="empty-state"><p>No leads yet</p><small>Tap "+ New Lead" to add your first</small></div>';
-                return;
-            }
-            list.innerHTML = clients.map(c => {
-                const statusLabel = STATUS_LABELS[c.status] || c.status;
-                const timeAgo = getTimeAgo(c.last_activity);
-                const pricingLinkHtml = c.notes && c.notes.includes('Pricing link sent:')
-                ? `<div class="lead-pricing-link">📋 <a href="${c.notes.replace('Pricing link sent: ', '')}" target="_blank">View pricing sent</a></div>`
-                : '';
-                const pricingBtn = c.status === 'pricing_requested'
-                ? `<button class="action-btn pricing" onclick="openPricingModal('${c.id}','${c.name}','${c.phone || ''}','${c.email || ''}','${c.last_channel || ''}')">💰 Send pricing</button>`
-                : '';
-                return `
-        <div class="lead-card status-${c.status}">
-          <div class="lead-top">
-            <div class="lead-name">${
-                c.name}</div>
-            <div class="lead-status status-${c.status}">${statusLabel}</div>
-          </div>
-          <div class="lead-detail">${
-                c.event_type || 'Unknown event'} · ${c.venue || 'Venue TBD'}</div>
-          ${pricingLinkHtml}
-          <div class="lead-time">${timeAgo}</div>
-          <div class="lead-actions">
-            ${
-                pricingBtn}
-            <button class="action-btn delete" onclick="deleteClient('${c.id}','${c.name}')">🗑 Delete</button>
-          </div>
-        </div>`
-
-                ;
-            }).join('');
-        } catch (e) {
-            list.innerHTML = `<div class="empty-state"><p>Error: ${e.message}</p></div>`;
+      const list = document.getElementById('leads-list');
+      list.innerHTML = '<div class="empty-state"><p>Loading...</p></div>';
+      try {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/clients?select=*&order=last_activity.desc`, {
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+        });
+        const clients = await r.json();
+        if (!clients.length) {
+          list.innerHTML = '<div class="empty-state"><p>No leads yet</p><small>Tap "+ New Lead" to add your first</small></div>';
+          return;
         }
+        list.innerHTML = clients.map(c => {
+          const statusLabel = STATUS_LABELS[c.status] || c.status;
+          const timeAgo = getTimeAgo(c.last_activity);
+          const pricingLinkHtml = c.notes && c.notes.includes('Pricing link sent:')
+            ? `<div class="lead-pricing-link">📋 <a href="${c.notes.replace('Pricing link sent: ','')}" target="_blank">View pricing sent</a></div>`
+            : '';
+          const pricingBtn = c.status === 'pricing_requested'
+            ? `<button class="action-btn pricing" onclick="openPricingModal('${c.id}','${c.name}','${c.phone||''}','${c.email||''}','${c.last_channel||''}')">💰 Send pricing</button>`
+            : '';
+          return `
+            <div class="lead-card status-${c.status}">
+              <div class="lead-top">
+                <div class="lead-name">${c.name}</div>
+                <div class="lead-status status-${c.status}">${statusLabel}</div>
+              </div>
+              <div class="lead-detail">${c.event_type||'Unknown event'} · ${c.venue||'Venue TBD'}</div>
+              ${pricingLinkHtml}
+              <div class="lead-time">${timeAgo}</div>
+              <div class="lead-actions">
+                ${pricingBtn}
+                <button class="action-btn delete" onclick="deleteClient('${c.id}','${c.name}')">🗑 Delete</button>
+              </div>
+            </div>`;
+        }).join('');
+      } catch(e) {
+        list.innerHTML = `<div class="empty-state"><p>Error: ${e.message}</p></div>`;
+      }
     }
 
     function getTimeAgo(ts) {
-        if (!ts)
-            return '';
-        const diff = Date.now() - new Date(ts).getTime();
-        const mins = Math.floor(diff / 60000);
-        if (mins < 1)
-            return 'Just now';
-        if (mins < 60)
-            return `${mins} min ago`;
-        const hrs = Math.floor(mins / 60);
-        if (hrs < 24)
-            return `${hrs}h ago`;
-        return `${Math.floor(hrs / 24)}d ago`;
+      if (!ts) return '';
+      const diff = Date.now() - new Date(ts).getTime();
+      const mins = Math.floor(diff/60000);
+      if (mins < 1) return 'Just now';
+      if (mins < 60) return `${mins} min ago`;
+      const hrs = Math.floor(mins/60);
+      if (hrs < 24) return `${hrs}h ago`;
+      return `${Math.floor(hrs/24)}d ago`;
     }
 
     async function deleteClient(id, name) {
-        if (!confirm(`Delete ${name}? This cannot be undone.`))
-            return;
-        try {
-            await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${id}`, {
-                method: 'DELETE',
-                headers: {
-                    'apikey': SUPABASE_KEY,
-                    'Authorization': `Bearer ${SUPABASE_KEY}`
-                }
-            });
-            loadDashboard();
-        } catch (e) {
-            alert('Error deleting: ' + e.message);
-        }
+      if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
+      try {
+        const r = await fetch("/api/delete-client", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientId: id })
+        });
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+        loadDashboard();
+      } catch(e) {
+        alert("Error deleting: " + e.message);
+      }
+    }
     }
 
     // Pricing modal
     let modalClient = {};
 
     function openPricingModal(id, name, phone, email, lastChannel) {
-        currentClientId = id;
-        modalClient = {
-            id,
-            name,
-            phone,
-            email,
-            lastChannel
-        };
-        selectedPricingOption = null;
-        document.getElementById('modal-client-name').textContent = `Sending to ${name}`;
-        document.querySelectorAll('.pricing-option').forEach(o => o.classList.remove('selected'));
-        document.getElementById('private-custom-inputs').classList.remove('show');
-        document.getElementById('corporate-custom-inputs').classList.remove('show');
-        document.getElementById('modal-send-btn').disabled = true;
-        document.getElementById('pricing-modal').classList.add('show');
+      currentClientId = id;
+      modalClient = { id, name, phone, email, lastChannel };
+      selectedPricingOption = null;
+      document.getElementById('modal-client-name').textContent = `Sending to ${name}`;
+      document.querySelectorAll('.pricing-option').forEach(o => o.classList.remove('selected'));
+      document.getElementById('private-custom-inputs').classList.remove('show');
+      document.getElementById('corporate-custom-inputs').classList.remove('show');
+      document.getElementById('modal-send-btn').disabled = true;
+      document.getElementById('pricing-modal').classList.add('show');
     }
 
     function closeModal() {
-        document.getElementById('pricing-modal').classList.remove('show');
-        currentClientId = null;
-        selectedPricingOption = null;
+      document.getElementById('pricing-modal').classList.remove('show');
+      currentClientId = null;
+      selectedPricingOption = null;
     }
 
     function selectPricingOption(option) {
-        selectedPricingOption = option;
-        document.querySelectorAll('.pricing-option').forEach(o => o.classList.remove('selected'));
-        document.getElementById(`opt-${option}`).classList.add('selected');
-        document.getElementById('private-custom-inputs').classList.remove('show');
-        document.getElementById('corporate-custom-inputs').classList.remove('show');
-        if (option === 'private-custom')
-            document.getElementById('private-custom-inputs').classList.add('show');
-        if (option === 'corporate-custom')
-            document.getElementById('corporate-custom-inputs').classList.add('show');
-        document.getElementById('modal-send-btn').disabled = false;
+      selectedPricingOption = option;
+      document.querySelectorAll('.pricing-option').forEach(o => o.classList.remove('selected'));
+      document.getElementById(`opt-${option}`).classList.add('selected');
+      document.getElementById('private-custom-inputs').classList.remove('show');
+      document.getElementById('corporate-custom-inputs').classList.remove('show');
+      if (option === 'private-custom') document.getElementById('private-custom-inputs').classList.add('show');
+      if (option === 'corporate-custom') document.getElementById('corporate-custom-inputs').classList.add('show');
+      document.getElementById('modal-send-btn').disabled = false;
     }
 
     async function sendPricing() {
-        if (!selectedPricingOption || !currentClientId)
-            return;
+      if (!selectedPricingOption || !currentClientId) return;
 
-        const btn = document.getElementById('modal-send-btn');
-        btn.disabled = true;
-        btn.textContent = 'Sending...';
+      const btn = document.getElementById('modal-send-btn');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
 
-        // Build pricing link
-        let pricingLink = '';
-        if (selectedPricingOption === 'private-standard') {
-            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=private';
-        } else if (selectedPricingOption === 'corporate-standard') {
-            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=corporate';
-        } else if (selectedPricingOption === 'private-custom') {
-            const d1 = document.getElementById('pc-d1').value || 400;
-            const d2 = document.getElementById('pc-d2').value || 500;
-            const d3 = document.getElementById('pc-d3').value || 600;
-            pricingLink = `https://shine-booking.vercel.app/pricing.html?type=private&d1=${d1}&d2=${d2}&d3=${d3}`;
-        } else if (selectedPricingOption === 'corporate-custom') {
-            const c1 = document.getElementById('pc-c1').value || 1000;
-            const c2 = document.getElementById('pc-c2').value || 1200;
-            const c3 = document.getElementById('pc-c3').value || 1500;
-            pricingLink = `https://shine-booking.vercel.app/pricing.html?type=corporate&d1=${c1}&d2=${c2}&d3=${c3}`;
-        }
+      // Build pricing link
+      let pricingLink = '';
+      if (selectedPricingOption === 'private-standard') {
+        pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=private';
+      } else if (selectedPricingOption === 'corporate-standard') {
+        pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=corporate';
+      } else if (selectedPricingOption === 'private-custom') {
+        const d1 = document.getElementById('pc-d1').value || 400;
+        const d2 = document.getElementById('pc-d2').value || 500;
+        const d3 = document.getElementById('pc-d3').value || 600;
+        pricingLink = `https://shine-booking.vercel.app/pricing.html?type=private&d1=${d1}&d2=${d2}&d3=${d3}`;
+      } else if (selectedPricingOption === 'corporate-custom') {
+        const c1 = document.getElementById('pc-c1').value || 1000;
+        const c2 = document.getElementById('pc-c2').value || 1200;
+        const c3 = document.getElementById('pc-c3').value || 1500;
+        pricingLink = `https://shine-booking.vercel.app/pricing.html?type=corporate&d1=${c1}&d2=${c2}&d3=${c3}`;
+      }
 
-        try {
-            const r = await fetch('/api/send-pricing', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    clientId: currentClientId,
-                    clientName: modalClient.name,
-                    phone: modalClient.phone,
-                    email: modalClient.email,
-                    lastChannel: modalClient.lastChannel,
-                    pricingLink
-                })
-            });
-            const data = await r.json();
-            if (data.error)
-                throw new Error(data.error);
-            closeModal();
-            loadDashboard();
-        } catch (e) {
-            alert('Error sending pricing: ' + e.message);
-        }
+      try {
+        const r = await fetch('/api/send-pricing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientId: currentClientId,
+            clientName: modalClient.name,
+            phone: modalClient.phone,
+            email: modalClient.email,
+            lastChannel: modalClient.lastChannel,
+            pricingLink
+          })
+        });
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+        closeModal();
+        loadDashboard();
+      } catch(e) {
+        alert('Error sending pricing: ' + e.message);
+      }
 
-        btn.disabled = false;
-        btn.textContent = 'Send pricing';
+      btn.disabled = false;
+      btn.textContent = 'Send pricing';
     }
 
     // New lead form
     const SYSTEM_PROMPT = `You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic show performer in Texas. Performs 45-60 min interactive shows. Write a warm, personalized first contact SMS to a potential client from a Bark lead. Rules: under 160 characters total, use client first name, mention the event type naturally, sign off as "- Shine, The Mentalist", do NOT mention pricing, ask ONE natural question about their venue or plans. Return ONLY the SMS text, nothing else.`;
 
     function formatDate(d) {
-        if (!d)
-            return 'not specified';
-        const dt = new Date(d + 'T00:00:00');
-        return dt.toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric'
-        });
+      if (!d) return 'not specified';
+      const dt = new Date(d+'T00:00:00');
+      return dt.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
     }
 
     function getFormData() {
-        return {
-            name: document.getElementById('name').value.trim(),
-            phone: document.getElementById('phone').value.trim(),
-            email: document.getElementById('email').value.trim(),
-            eventType: document.getElementById('event_type').value,
-            date: document.getElementById('date').value,
-            guests: document.getElementById('guests').value,
-            venue: document.getElementById('venue').value.trim(),
-            otherEntertainment: document.getElementById('other_entertainment').value.trim(),
-            notes: document.getElementById('notes').value.trim()
-        };
+      return {
+        name: document.getElementById('name').value.trim(),
+        phone: document.getElementById('phone').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        eventType: document.getElementById('event_type').value,
+        date: document.getElementById('date').value,
+        guests: document.getElementById('guests').value,
+        venue: document.getElementById('venue').value.trim(),
+        otherEntertainment: document.getElementById('other_entertainment').value.trim(),
+        notes: document.getElementById('notes').value.trim()
+      };
     }
 
     function buildPrompt(d) {
-        return `Bark lead:\nName: ${d.name}\nEvent: ${d.eventType || 'not specified'}\nDate: ${formatDate(d.date)}\nGuests: ${d.guests || 'not specified'}\nVenue: ${d.venue || 'not specified'}\nOther entertainment: ${d.otherEntertainment || 'not specified'}\nNotes: ${d.notes || 'none'}`;
+      return `Bark lead:\nName: ${d.name}\nEvent: ${d.eventType||'not specified'}\nDate: ${formatDate(d.date)}\nGuests: ${d.guests||'not specified'}\nVenue: ${d.venue||'not specified'}\nOther entertainment: ${d.otherEntertainment||'not specified'}\nNotes: ${d.notes||'none'}`;
     }
 
     function updateCharCount() {
-        const txt = document.getElementById('sms-text').value;
-        const el = document.getElementById('char-count');
-        el.textContent = `${txt.length} / 160 characters`;
-        el.className = txt.length > 160 ? 'char-count over' : 'char-count';
+      const txt = document.getElementById('sms-text').value;
+      const el = document.getElementById('char-count');
+      el.textContent = `${txt.length} / 160 characters`;
+      el.className = txt.length > 160 ? 'char-count over' : 'char-count';
     }
 
     async function generateMessages() {
-        const d = getFormData();
-        if (!d.name || !d.eventType) {
-            showStatus('Please fill in client name and event type first.', 'error');
-            return;
-        }
-        const btn = document.getElementById('gen-btn');
-        btn.disabled = true;
-        btn.textContent = 'Writing messages...';
-        showStatus('Claude is writing personalized SMS and email...', 'loading');
-        try {
-            const r = await fetch('/api/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: 'claude-sonnet-4-6',
-                    max_tokens: 200,
-                    system: SYSTEM_PROMPT,
-                    messages: [{
-                        role: 'user',
-                        content: buildPrompt(d)
-                    }],
-                    clientName: d.name,
-                    eventType: d.eventType
-                })
-            });
-            const data = await r.json();
-            if (data.error)
-                throw new Error(data.error.message);
-            document.getElementById('sms-text').value = data.smsMessage;
-            document.getElementById('email-subject').value = data.emailSubject;
-            document.getElementById('email-body').value = data.emailBody;
-            document.getElementById('messages-area').style.display = 'block';
-            document.getElementById('send-btn').disabled = false;
-            updateCharCount();
-            showStatus('Messages ready — review and edit if needed, then hit Send.', 'success');
-        } catch (e) {
-            showStatus('Error: ' + e.message, 'error');
-        }
-        btn.disabled = false;
-        btn.textContent = 'Regenerate messages';
+      const d = getFormData();
+      if (!d.name || !d.eventType) { showStatus('Please fill in client name and event type first.','error'); return; }
+      const btn = document.getElementById('gen-btn');
+      btn.disabled = true; btn.textContent = 'Writing messages...';
+      showStatus('Claude is writing personalized SMS and email...','loading');
+      try {
+        const r = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:200, system:SYSTEM_PROMPT, messages:[{role:'user',content:buildPrompt(d)}], clientName:d.name, eventType:d.eventType })
+        });
+        const data = await r.json();
+        if (data.error) throw new Error(data.error.message);
+        document.getElementById('sms-text').value = data.smsMessage;
+        document.getElementById('email-subject').value = data.emailSubject;
+        document.getElementById('email-body').value = data.emailBody;
+        document.getElementById('messages-area').style.display = 'block';
+        document.getElementById('send-btn').disabled = false;
+        updateCharCount();
+        showStatus('Messages ready — review and edit if needed, then hit Send.','success');
+      } catch(e) { showStatus('Error: '+e.message,'error'); }
+      btn.disabled = false; btn.textContent = 'Regenerate messages';
     }
 
     async function sendMessages() {
-        const d = getFormData();
-        if (!d.name || !d.phone || !d.eventType) {
-            showStatus('Please fill in client name, phone, and event type.', 'error');
-            return;
-        }
-        const smsText = document.getElementById('sms-text').value.trim();
-        const emailSubject = document.getElementById('email-subject').value.trim();
-        const emailBody = document.getElementById('email-body').value.trim();
-        if (!smsText) {
-            showStatus('Please generate messages first.', 'error');
-            return;
-        }
-        const btn = document.getElementById('send-btn');
-        btn.disabled = true;
-        btn.textContent = 'Sending...';
-        showStatus('Sending messages...', 'loading');
-        try {
-            const r = await fetch('/api/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: 'claude-sonnet-4-6',
-                    max_tokens: 200,
-                    system: SYSTEM_PROMPT,
-                    messages: [{
-                        role: 'user',
-                        content: buildPrompt(d)
-                    }],
-                    toPhone: d.phone || null,
-                    toEmail: d.email || null,
-                    clientName: d.name,
-                    eventType: d.eventType,
-                    venue: d.venue,
-                    otherEntertainment: d.otherEntertainment,
-                    smsOverride: smsText,
-                    emailOverride: `Subject: ${emailSubject}\n\n${emailBody}`
-                })
-            });
-            const data = await r.json();
-            if (data.error)
-                throw new Error(data.error.message);
-            showStatus(`${data.smsSent ? '✓ SMS sent to ' + d.phone : '⚠ SMS pending A2P approval'}<br>${data.emailSent ? '✓ Email sent to ' + d.email : d.email ? '⚠ Email not sent' : ''}<br><br>${document.getElementById('followup').checked ? '✓ Follow-up scheduled in 24 hours if no reply.' : ''}`, 'success');
-            if (data.smsSent || data.emailSent)
-                setTimeout(() => showTab('dashboard'), 2000);
-        } catch (e) {
-            showStatus('Error: ' + e.message, 'error');
-        }
-        btn.disabled = false;
-        btn.textContent = 'Send messages';
+      const d = getFormData();
+      if (!d.name||!d.phone||!d.eventType) { showStatus('Please fill in client name, phone, and event type.','error'); return; }
+      const smsText = document.getElementById('sms-text').value.trim();
+      const emailSubject = document.getElementById('email-subject').value.trim();
+      const emailBody = document.getElementById('email-body').value.trim();
+      if (!smsText) { showStatus('Please generate messages first.','error'); return; }
+      const btn = document.getElementById('send-btn');
+      btn.disabled = true; btn.textContent = 'Sending...';
+      showStatus('Sending messages...','loading');
+      try {
+        const r = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:200, system:SYSTEM_PROMPT, messages:[{role:'user',content:buildPrompt(d)}], toPhone:d.phone||null, toEmail:d.email||null, clientName:d.name, eventType:d.eventType, venue:d.venue, otherEntertainment:d.otherEntertainment, smsOverride:smsText, emailOverride:`Subject: ${emailSubject}\n\n${emailBody}` })
+        });
+        const data = await r.json();
+        if (data.error) throw new Error(data.error.message);
+        showStatus(`${data.smsSent?'✓ SMS sent to '+d.phone:'⚠ SMS pending A2P approval'}<br>${data.emailSent?'✓ Email sent to '+d.email:d.email?'⚠ Email not sent':''}<br><br>${document.getElementById('followup').checked?'✓ Follow-up scheduled in 24 hours if no reply.':''}`, 'success');
+        if (data.smsSent||data.emailSent) setTimeout(()=>showTab('dashboard'),2000);
+      } catch(e) { showStatus('Error: '+e.message,'error'); }
+      btn.disabled = false; btn.textContent = 'Send messages';
     }
 
-    function showStatus(msg, type) {
-        const el = document.getElementById('status');
-        el.className = 'status ' + type;
-        el.innerHTML = msg;
+    function showStatus(msg,type) {
+      const el = document.getElementById('status');
+      el.className = 'status '+type;
+      el.innerHTML = msg;
     }
 
     // Close modal when clicking overlay
     document.getElementById('pricing-modal').addEventListener('click', function(e) {
-        if (e.target === this)
-            closeModal();
+      if (e.target === this) closeModal();
     });
 
     showTab('dashboard');
