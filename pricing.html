@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shine, The Mentalist — Packages & Pricing</title>
+    <style>
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #0a0a0a;
+        color: #f5f5f7;
+        min-height: 100vh;
+        padding: 24px 16px
+    }
+
+    .page {
+        max-width: 480px;
+        margin: 0 auto
+    }
+
+    .header {
+        text-align: center;
+        padding: 32px 0 8px
+    }
+
+    .header .star {
+        font-size: 28px;
+        margin-bottom: 12px
+    }
+
+    .header h1 {
+        font-size: 26px;
+        font-weight: 600;
+        letter-spacing: -0.02em
+    }
+
+    .header p {
+        font-size: 14px;
+        color: #888;
+        margin-top: 6px
+    }
+
+    .section-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin: 28px 0 12px
+    }
+
+    .cards {
+        display: flex;
+        flex-direction: column;
+        gap: 12px
+    }
+
+    .card {
+        background: #1a1a1a;
+        border: 0.5px solid #333;
+        border-radius: 16px;
+        padding: 20px
+    }
+
+    .card.featured {
+        border-color: #555;
+        background: #1e1e1e
+    }
+
+    .badge {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 20px;
+        background: #2a2a2a;
+        color: #888;
+        margin-bottom: 10px
+    }
+
+    .card.featured .badge {
+        background: #2d2d1a;
+        color: #c8a400
+    }
+
+    .tier {
+        font-size: 12px;
+        font-weight: 600;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 4px
+    }
+
+    .price {
+        font-size: 34px;
+        font-weight: 600;
+        color: #f5f5f7;
+        line-height: 1
+    }
+
+    .price span {
+        font-size: 15px;
+        color: #888;
+        font-weight: 400
+    }
+
+    .tagline {
+        font-size: 13px;
+        color: #888;
+        margin: 10px 0 12px;
+        line-height: 1.5;
+        padding-bottom: 12px;
+        border-bottom: 0.5px solid #2a2a2a
+    }
+
+    .feature {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 13px;
+        color: #aaa;
+        line-height: 1.5;
+        margin-bottom: 8px
+    }
+
+    .feature:last-child {
+        margin-bottom: 0
+    }
+
+    .check {
+        color: #34c759;
+        font-size: 14px;
+        margin-top: 1px;
+        flex-shrink: 0
+    }
+
+    .cta {
+        text-align: center;
+        margin-top: 32px;
+        padding: 24px 0 16px
+    }
+
+    .cta p {
+        font-size: 14px;
+        color: #888;
+        margin-bottom: 16px;
+        line-height: 1.6
+    }
+
+    .cta a {
+        display: block;
+        padding: 14px;
+        background: #f5f5f7;
+        color: #0a0a0a;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 600;
+        text-decoration: none;
+        text-align: center
+    }
+
+    .cta a:active {
+        opacity: 0.85
+    }
+
+    .footer {
+        text-align: center;
+        padding: 24px 0;
+        font-size: 12px;
+        color: #555
+    }
+
+    .footer a {
+        color: #888;
+        text-decoration: none
+    }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="header">
+            <div class="star">✦</div>
+            <h1>Shine, The Mentalist</h1>
+            <p id="subtitle">Interactive mentalism & magic shows · Texas</p>
+        </div>
+
+        <div id="private-section" style="display:none">
+            <div class="section-title">Private events</div>
+            <div class="cards" id="private-cards"></div>
+        </div>
+
+        <div id="corporate-section" style="display:none">
+            <div class="section-title">Corporate events</div>
+            <div class="cards" id="corporate-cards"></div>
+        </div>
+
+        <div class="cta">
+            <p>
+                Ready to make your event unforgettable?
+                <br>
+                Let's talk about what works best for you.
+            </p>
+            <a href="sms:+17372715308">Text me to book ›</a>
+        </div>
+
+        <div class="footer">
+            <a href="https://www.texasmentalist.com">www.texasmentalist.com</a>
+            <br>
+            <br>
+
+                +1 (612) 865-7681
+              
+        </div>
+    </div>
+
+    <script>
+    const PRIVATE_FEATURES = {
+        deluxe: [
+        '45-min interactive show',
+        'Mind reading & thought prediction',
+        'Mind-blowing card magic',
+        'Psychological influence & suggestion',
+        'Sealed envelope predictions',
+        'Audience participation throughout'
+        ],
+        signature: [
+        '60-min interactive show',
+        'All Deluxe effects included',
+        'Visual magic & impossible illusions',
+        'Personalized custom effects',
+        'Connection between 2 people',
+        'Grand finale with guest of honor in focus'
+        ],
+        premium: [
+        '60-min show',
+        'All Signature effects included',
+        'Mind-bending visual surprises',
+        'Audience member reading minds',
+        'Fully custom effects built for your event',
+        'Exclusive grand finale — all eyes on the guest of honor'
+        ]
+    };
+
+    const CORPORATE_FEATURES = {
+        deluxe: [
+        '45-min stage show',
+        'Mind reading & prediction reveals',
+        'Mind-blowing card magic',
+        'Psychological influence demonstrations',
+        'Sealed envelope predictions',
+        'Interactive audience participation'
+        ],
+        signature: [
+        '60-min show',
+        'All Deluxe effects included',
+        'Visual magic & impossible illusions',
+        'Personalized custom effects',
+        'Connection between 2 people',
+        'VIP / executive spotlight moments',
+        'Grand finale with guest of honor in focus'
+        ],
+        premium: [
+        '60–75 min show',
+        'All Signature effects included',
+        'Mind-bending visual surprises',
+        'Audience member reading minds',
+        'Fully custom effects tied to your brand',
+        'Keynote-style narrative arc',
+        'Exclusive grand finale — all eyes on your VIP'
+        ]
+    };
+
+    function getParams() {
+        const p = new URLSearchParams(window.location.search);
+        return {
+            type: p.get('type') || 'both',
+            d1: parseInt(p.get('d1')) || null,
+            d2: parseInt(p.get('d2')) || null,
+            d3: parseInt(p.get('d3')) || null,
+            c1: parseInt(p.get('c1')) || null,
+            c2: parseInt(p.get('c2')) || null,
+            c3: parseInt(p.get('c3')) || null
+        };
+    }
+
+    function makeCard(tier, label, price, tagline, features, featured) {
+        const badgeHtml = featured ? `<div class="badge">⭐ Most popular</div>` : '';
+        const featuresHtml = features.map(f => `<div class="feature"><span class="check">✓</span>${f}</div>`).join('');
+        return `
+    <div class="card${featured ? ' featured' : ''}">
+      ${badgeHtml}
+      <div class="tier">${label}</div>
+      <div class="price">$${price.toLocaleString()} <span>/ show</span></div>
+      <div class="tagline">${tagline}</div>
+      ${featuresHtml}
+    </div>
+  `
+
+        ;
+    }
+
+    function render() {
+        const p = getParams();
+        const isCorporate = p.type === 'corporate';
+        const isPrivate = p.type === 'private';
+        const showBoth = p.type === 'both' || (!isCorporate && !isPrivate);
+
+        // Private prices
+        const pd = p.d1 || 400;
+        const ps = p.d2 || 500;
+        const pp = p.d3 || 600;
+
+        // Corporate prices
+        const cd = p.c1 || 1000;
+        const cs = p.c2 || 1200;
+        const cp = p.c3 || 1500;
+
+        const privateTaglines = {
+            deluxe: 'A captivating mentalism show that leaves your guests questioning reality.',
+            signature: 'Everything in Deluxe, elevated with visual magic and personalized custom effects.',
+            premium: 'The ultimate experience — a fully bespoke show built around your special occasion.'
+        };
+
+        const corporateTaglines = {
+            deluxe: 'High-impact mentalism that energizes and unites any corporate crowd.',
+            signature: 'Mentalism meets visual magic — with personalized effects for your team.',
+            premium: 'A bespoke performance designed around your brand, message, and people.'
+        };
+
+        if (isPrivate || showBoth) {
+            document.getElementById('private-section').style.display = 'block';
+            document.getElementById('private-cards').innerHTML =
+            makeCard('deluxe', 'Deluxe', pd, privateTaglines.deluxe, PRIVATE_FEATURES.deluxe, false) +
+            makeCard('signature', 'Signature', ps, privateTaglines.signature, PRIVATE_FEATURES.signature, true) +
+            makeCard('premium', 'Premium', pp, privateTaglines.premium, PRIVATE_FEATURES.premium, false);
+        }
+
+        if (isCorporate || showBoth) {
+            document.getElementById('corporate-section').style.display = 'block';
+            document.getElementById('corporate-cards').innerHTML =
+            makeCard('deluxe', 'Deluxe', cd, corporateTaglines.deluxe, CORPORATE_FEATURES.deluxe, false) +
+            makeCard('signature', 'Signature', cs, corporateTaglines.signature, CORPORATE_FEATURES.signature, true) +
+            makeCard('premium', 'Premium', cp, corporateTaglines.premium, CORPORATE_FEATURES.premium, false);
+        }
+
+        if (isPrivate)
+            document.getElementById('subtitle').textContent = 'Birthdays, bachelorettes & celebrations · Texas';
+        if (isCorporate)
+            document.getElementById('subtitle').textContent = 'Corporate events & conferences · Texas';
+    }
+
+    render();
+    </script>
+</body>
+</html>
