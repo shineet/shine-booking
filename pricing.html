@@ -63,14 +63,21 @@
 
     .card {
         background: #1a1a1a;
-        border: 0.5px solid #333;
+        border: 1px solid #333;
         border-radius: 16px;
-        padding: 20px
+        padding: 20px;
+        cursor: pointer;
+        transition: border-color 0.15s
     }
 
     .card.featured {
         border-color: #555;
         background: #1e1e1e
+    }
+
+    .card.picked {
+        border-color: #34c759;
+        background: #16241a
     }
 
     .badge {
@@ -131,7 +138,7 @@
     }
 
     .feature:last-child {
-        margin-bottom: 0
+        margin-bottom: 16px
     }
 
     .check {
@@ -141,33 +148,43 @@
         flex-shrink: 0
     }
 
+    .select-btn {
+        width: 100%;
+        padding: 12px;
+        background: #2a2a2a;
+        color: #f5f5f7;
+        border: none;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit
+    }
+
+    .select-btn:hover {
+        background: #333
+    }
+
+    .card.featured .select-btn {
+        background: #3a3210;
+        color: #e8c468
+    }
+
+    .card.featured .select-btn:hover {
+        background: #473c10
+    }
+
+    .card.picked .select-btn {
+        background: #1f3a26;
+        color: #34c759
+    }
+
     .cta {
         text-align: center;
-        margin-top: 32px;
-        padding: 24px 0 16px
-    }
-
-    .cta p {
+        padding: 24px 0 16px;
         font-size: 14px;
         color: #888;
-        margin-bottom: 16px;
         line-height: 1.6
-    }
-
-    .cta a {
-        display: block;
-        padding: 14px;
-        background: #f5f5f7;
-        color: #0a0a0a;
-        border-radius: 12px;
-        font-size: 16px;
-        font-weight: 600;
-        text-decoration: none;
-        text-align: center
-    }
-
-    .cta a:active {
-        opacity: 0.85
     }
 
     .footer {
@@ -180,11 +197,146 @@
     .footer a {
         color: #888;
         text-decoration: none
+    }/* Confirm modal */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 100;
+        align-items: center;
+        justify-content: center;
+        padding: 16px
+    }
+
+    .modal-overlay.show {
+        display: flex
+    }
+
+    .modal {
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 16px;
+        padding: 24px;
+        width: 100%;
+        max-width: 380px
+    }
+
+    .modal h2 {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 6px
+    }
+
+    .modal .picked-summary {
+        font-size: 14px;
+        color: #aaa;
+        margin-bottom: 18px;
+        padding: 14px;
+        background: #222;
+        border-radius: 10px
+    }
+
+    .modal .picked-summary strong {
+        color: #f5f5f7
+    }
+
+    .modal label {
+        display: block;
+        font-size: 12px;
+        color: #888;
+        margin-bottom: 5px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.04em
+    }
+
+    .modal input {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 15px;
+        border: 1px solid #333;
+        border-radius: 10px;
+        background: #0a0a0a;
+        color: #f5f5f7;
+        font-family: inherit;
+        margin-bottom: 14px
+    }
+
+    .modal input:focus {
+        outline: none;
+        border-color: #555
+    }
+
+    .modal-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 6px
+    }
+
+    .modal-cancel {
+        flex: 1;
+        padding: 12px;
+        background: #2a2a2a;
+        border: none;
+        border-radius: 10px;
+        font-size: 15px;
+        cursor: pointer;
+        font-family: inherit;
+        color: #aaa
+    }
+
+    .modal-confirm {
+        flex: 2;
+        padding: 12px;
+        background: #f5f5f7;
+        color: #0a0a0a;
+        border: none;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit
+    }
+
+    .modal-confirm:disabled {
+        opacity: 0.5;
+        cursor: not-allowed
+    }
+
+    .success-screen {
+        display: none;
+        text-align: center;
+        padding: 48px 16px
+    }
+
+    .success-screen.show {
+        display: block
+    }
+
+    .success-screen .check-icon {
+        font-size: 48px;
+        margin-bottom: 16px
+    }
+
+    .success-screen h2 {
+        font-size: 20px;
+        font-weight: 600;
+        margin-bottom: 8px
+    }
+
+    .success-screen p {
+        font-size: 14px;
+        color: #888;
+        line-height: 1.6
     }
     </style>
 </head>
 <body>
-    <div class="page">
+    <div class="page" id="main-page">
         <div class="header">
             <div class="star">✦</div>
             <h1>Shine, The Mentalist</h1>
@@ -201,14 +353,7 @@
             <div class="cards" id="corporate-cards"></div>
         </div>
 
-        <div class="cta">
-            <p>
-                Ready to make your event unforgettable?
-                <br>
-                Let's talk about what works best for you.
-            </p>
-            <a href="sms:+17372715308">Text me to book ›</a>
-        </div>
+        <div class="cta">Tap a package above to select it — I'll follow up to confirm the details!</div>
 
         <div class="footer">
             <a href="https://www.texasmentalist.com">www.texasmentalist.com</a>
@@ -220,86 +365,68 @@
         </div>
     </div>
 
+    <div class="page" id="success-page" style="display:none">
+        <div class="success-screen show">
+            <div class="check-icon">✦</div>
+            <h2 id="success-title">Got it!</h2>
+            <p id="success-text">Thanks for selecting your package. I'll be in touch shortly to confirm the details.</p>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="confirm-modal">
+        <div class="modal">
+            <h2>Confirm your selection</h2>
+            <div class="picked-summary" id="picked-summary"></div>
+            <label>Your name</label>
+            <input type="text" id="confirm-name" placeholder="Your name">
+            <label>Email or phone</label>
+            <input type="text" id="confirm-contact" placeholder="email@example.com or phone number">
+            <div class="modal-actions">
+                <button class="modal-cancel" onclick="closeConfirmModal()">Cancel</button>
+                <button class="modal-confirm" id="confirm-btn" onclick="submitSelection()">Confirm selection</button>
+            </div>
+        </div>
+    </div>
+
     <script>
     const PRIVATE_FEATURES = {
-        deluxe: [
-        '45-min interactive show',
-        'Mind reading & thought prediction',
-        'Mind-blowing card magic',
-        'Psychological influence & suggestion',
-        'Sealed envelope predictions',
-        'Audience participation throughout'
-        ],
-        signature: [
-        '60-min interactive show',
-        'All Deluxe effects included',
-        'Visual magic & impossible illusions',
-        'Personalized custom effects',
-        'Connection between 2 people',
-        'Grand finale with guest of honor in focus'
-        ],
-        premium: [
-        '60-min show',
-        'All Signature effects included',
-        'Mind-bending visual surprises',
-        'Audience member reading minds',
-        'Fully custom effects built for your event',
-        'Exclusive grand finale — all eyes on the guest of honor'
-        ]
+        deluxe: ['45-min interactive show', 'Mind reading & thought prediction', 'Mind-blowing card magic', 'Psychological influence & suggestion', 'Sealed envelope predictions', 'Audience participation throughout'],
+        signature: ['60-min interactive show', 'All Deluxe effects included', 'Visual magic & impossible illusions', 'Personalized custom effects', 'Connection between 2 people', 'Grand finale with guest of honor in focus'],
+        premium: ['60-min show', 'All Signature effects included', 'Mind-bending visual surprises', 'Audience member reading minds', 'Fully custom effects built for your event', 'Exclusive grand finale — all eyes on the guest of honor']
+    };
+    const CORPORATE_FEATURES = {
+        deluxe: ['45-min stage show', 'Mind reading & prediction reveals', 'Mind-blowing card magic', 'Psychological influence demonstrations', 'Sealed envelope predictions', 'Interactive audience participation'],
+        signature: ['60-min show', 'All Deluxe effects included', 'Visual magic & impossible illusions', 'Personalized custom effects', 'Connection between 2 people', 'VIP / executive spotlight moments', 'Grand finale with guest of honor in focus'],
+        premium: ['60–75 min show', 'All Signature effects included', 'Mind-bending visual surprises', 'Audience member reading minds', 'Fully custom effects tied to your brand', 'Keynote-style narrative arc', 'Exclusive grand finale — all eyes on your VIP']
     };
 
-    const CORPORATE_FEATURES = {
-        deluxe: [
-        '45-min stage show',
-        'Mind reading & prediction reveals',
-        'Mind-blowing card magic',
-        'Psychological influence demonstrations',
-        'Sealed envelope predictions',
-        'Interactive audience participation'
-        ],
-        signature: [
-        '60-min show',
-        'All Deluxe effects included',
-        'Visual magic & impossible illusions',
-        'Personalized custom effects',
-        'Connection between 2 people',
-        'VIP / executive spotlight moments',
-        'Grand finale with guest of honor in focus'
-        ],
-        premium: [
-        '60–75 min show',
-        'All Signature effects included',
-        'Mind-bending visual surprises',
-        'Audience member reading minds',
-        'Fully custom effects tied to your brand',
-        'Keynote-style narrative arc',
-        'Exclusive grand finale — all eyes on your VIP'
-        ]
-    };
+    let pickedTier = null;
+    let pickedLabel = null;
+    let pickedPrice = null;
+    let pickedCategory = null;
 
     function getParams() {
         const p = new URLSearchParams(window.location.search);
         return {
             type: p.get('type') || 'both',
+            clientId: p.get('cid') || '',
             d1: parseInt(p.get('d1')) || null,
             d2: parseInt(p.get('d2')) || null,
-            d3: parseInt(p.get('d3')) || null,
-            c1: parseInt(p.get('c1')) || null,
-            c2: parseInt(p.get('c2')) || null,
-            c3: parseInt(p.get('c3')) || null
+            d3: parseInt(p.get('d3')) || null
         };
     }
 
-    function makeCard(tier, label, price, tagline, features, featured) {
-        const badgeHtml = featured ? `<div class="badge">⭐ Most popular</div>` : '';
+    function makeCard(category, tier, label, price, tagline, features, featured) {
+        const badgeHtml = featured ? '<div class="badge">Most popular</div>' : '';
         const featuresHtml = features.map(f => `<div class="feature"><span class="check">✓</span>${f}</div>`).join('');
         return `
-    <div class="card${featured ? ' featured' : ''}">
+    <div class="card${featured ? ' featured' : ''}" id="card-${category}-${tier}">
       ${badgeHtml}
       <div class="tier">${label}</div>
       <div class="price">$${price.toLocaleString()} <span>/ show</span></div>
       <div class="tagline">${tagline}</div>
       ${featuresHtml}
+      <button class="select-btn" onclick="pickPackage('${category}','${tier}','${label}',${price})">Select this package</button>
     </div>
   `
 
@@ -312,22 +439,18 @@
         const isPrivate = p.type === 'private';
         const showBoth = p.type === 'both' || (!isCorporate && !isPrivate);
 
-        // Private prices
-        const pd = p.d1 || 400;
-        const ps = p.d2 || 500;
-        const pp = p.d3 || 600;
-
-        // Corporate prices
-        const cd = p.c1 || 1000;
-        const cs = p.c2 || 1200;
-        const cp = p.c3 || 1500;
+        const pd = p.d1 || 400,
+            ps = p.d2 || 500,
+            pp = p.d3 || 600;
+        const cd = p.d1 || 1000,
+            cs = p.d2 || 1200,
+            cp = p.d3 || 1500;
 
         const privateTaglines = {
             deluxe: 'A captivating mentalism show that leaves your guests questioning reality.',
             signature: 'Everything in Deluxe, elevated with visual magic and personalized custom effects.',
             premium: 'The ultimate experience — a fully bespoke show built around your special occasion.'
         };
-
         const corporateTaglines = {
             deluxe: 'High-impact mentalism that energizes and unites any corporate crowd.',
             signature: 'Mentalism meets visual magic — with personalized effects for your team.',
@@ -337,17 +460,17 @@
         if (isPrivate || showBoth) {
             document.getElementById('private-section').style.display = 'block';
             document.getElementById('private-cards').innerHTML =
-            makeCard('deluxe', 'Deluxe', pd, privateTaglines.deluxe, PRIVATE_FEATURES.deluxe, false) +
-            makeCard('signature', 'Signature', ps, privateTaglines.signature, PRIVATE_FEATURES.signature, true) +
-            makeCard('premium', 'Premium', pp, privateTaglines.premium, PRIVATE_FEATURES.premium, false);
+            makeCard('private', 'deluxe', 'Deluxe', pd, privateTaglines.deluxe, PRIVATE_FEATURES.deluxe, false) +
+            makeCard('private', 'signature', 'Signature', ps, privateTaglines.signature, PRIVATE_FEATURES.signature, true) +
+            makeCard('private', 'premium', 'Premium', pp, privateTaglines.premium, PRIVATE_FEATURES.premium, false);
         }
 
         if (isCorporate || showBoth) {
             document.getElementById('corporate-section').style.display = 'block';
             document.getElementById('corporate-cards').innerHTML =
-            makeCard('deluxe', 'Deluxe', cd, corporateTaglines.deluxe, CORPORATE_FEATURES.deluxe, false) +
-            makeCard('signature', 'Signature', cs, corporateTaglines.signature, CORPORATE_FEATURES.signature, true) +
-            makeCard('premium', 'Premium', cp, corporateTaglines.premium, CORPORATE_FEATURES.premium, false);
+            makeCard('corporate', 'deluxe', 'Deluxe', cd, corporateTaglines.deluxe, CORPORATE_FEATURES.deluxe, false) +
+            makeCard('corporate', 'signature', 'Signature', cs, corporateTaglines.signature, CORPORATE_FEATURES.signature, true) +
+            makeCard('corporate', 'premium', 'Premium', cp, corporateTaglines.premium, CORPORATE_FEATURES.premium, false);
         }
 
         if (isPrivate)
@@ -355,6 +478,68 @@
         if (isCorporate)
             document.getElementById('subtitle').textContent = 'Corporate events & conferences · Texas';
     }
+
+    function pickPackage(category, tier, label, price) {
+        pickedCategory = category;
+        pickedTier = tier;
+        pickedLabel = label;
+        pickedPrice = price;
+        document.getElementById('picked-summary').innerHTML =
+        `<strong>${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}</strong><br>$${price.toLocaleString()} per show`;
+        document.getElementById('confirm-modal').classList.add('show');
+    }
+
+    function closeConfirmModal() {
+        document.getElementById('confirm-modal').classList.remove('show');
+    }
+
+    function submitSelection() {
+        const name = document.getElementById('confirm-name').value.trim();
+        const contact = document.getElementById('confirm-contact').value.trim();
+        if (!contact) {
+            alert('Please enter your email or phone so Shine can follow up!');
+            return;
+        }
+
+        const btn = document.getElementById('confirm-btn');
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+
+        const params = getParams();
+
+        fetch('/api/select-package', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                clientId: params.clientId,
+                name: name,
+                contact: contact,
+                category: pickedCategory,
+                tier: pickedTier,
+                label: pickedLabel,
+                price: pickedPrice
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('main-page').style.display = 'none';
+            document.getElementById('success-text').textContent =
+            `You selected the ${pickedLabel} package ($${pickedPrice.toLocaleString()}). I'll follow up shortly to confirm everything!`;
+            document.getElementById('success-page').style.display = 'block';
+        })
+        .catch(e => {
+            alert('Something went wrong — please try again or text me directly!');
+            btn.disabled = false;
+            btn.textContent = 'Confirm selection';
+        });
+    }
+
+    document.getElementById('confirm-modal').addEventListener('click', function(e) {
+        if (e.target === this)
+            closeConfirmModal();
+    });
 
     render();
     </script>
