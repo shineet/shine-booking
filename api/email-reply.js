@@ -39,24 +39,29 @@ export default async function handler(req, res) {
       emailBody = `Client sent an email with subject: ${subject}`;
     }
 
-    // Look up client in Supabase by email
-    let client = null;
     const fromEmail = from.match(/<(.+)>/)?.[1] || from;
-    const clientRes = await fetch(
-      `${process.env.SUPABASE_URL}/rest/v1/clients?email=eq.${encodeURIComponent(fromEmail)}&order=created_at.desc&limit=1`,
-      {
-        headers: {
-          'apikey': process.env.SUPABASE_SECRET_KEY,
-          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
-        }
-      }
-    );
-    const clients = await clientRes.json();
-    client = clients[0] || null;
 
-    // Build pricing info and link
+    // Look up client in Supabase — failure safe
+    let client = null;
+    try {
+      const clientRes = await fetch(
+        `${process.env.SUPABASE_URL}/rest/v1/clients?email=eq.${encodeURIComponent(fromEmail)}&order=created_at.desc&limit=1`,
+        {
+          headers: {
+            'apikey': process.env.SUPABASE_SECRET_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+          }
+        }
+      );
+      const clients = await clientRes.json();
+      client = Array.isArray(clients) ? (clients[0] || null) : null;
+    } catch(e) {
+      console.error('Supabase lookup failed:', e.message);
+    }
+
+    // Build pricing link
+    let pricingLink = 'https://shine-booking.vercel.app/pricing.html';
     let pricingContext = '';
-    let pricingLink = '';
     if (client) {
       const isCorporate = (client.event_type || '').toLowerCase().includes('corporate');
       const eventTypeParam = isCorporate ? 'corporate' : 'private';
@@ -70,7 +75,6 @@ export default async function handler(req, res) {
         premium: isCorporate ? 1500 : 600
       };
 
-      // Build pricing link with correct params
       if (client.pricing_type === 'custom') {
         pricingLink = `https://shine-booking.vercel.app/pricing.html?type=${eventTypeParam}&d1=${prices.deluxe}&d2=${prices.signature}&d3=${prices.premium}`;
       } else {
@@ -85,14 +89,11 @@ Pricing packages:
 - Signature: $${prices.signature}
 - Premium: $${prices.premium}
 Pricing link: ${pricingLink}`;
-    } else {
-      // Unknown client â€” send generic link
-      pricingLink = 'https://shine-booking.vercel.app/pricing.html';
     }
 
-    const SYSTEM_PROMPT = `You are Shine Thankappan, The Mentalist â€” writing emails personally as yourself in first person.
+    const SYSTEM_PROMPT = `You are Shine Thankappan, The Mentalist — writing emails personally as yourself in first person.
 
-IMPORTANT: Always write as "I" â€” never say "Shine will" or refer to yourself in third person. Never say "Shine offers" â€” say "I offer".
+IMPORTANT: Always write as "I" — never say "Shine will" or refer to yourself in third person. Never say "Shine offers" — say "I offer".
 ${pricingContext}
 
 About me:
@@ -104,11 +105,11 @@ About me:
 Rules:
 - Write in first person always
 - Be warm and conversational, not salesy
-- Keep replies concise â€” 2-3 short paragraphs
-- If asked about pricing, write a warm reply and include the pricing link EXACTLY as provided: ${pricingLink}
-  Say something like "Here's a link to my packages and pricing: ${pricingLink}" â€” include the full URL
-  Then add [PRICING_SENT] at the very end of your reply
-- If client says "yes lets book", "I want to book", "send the contract" â€” reply saying you will send over the contract shortly, then add [BOOKING_INTENT] at the very end
+- Keep replies concise — 2-3 short paragraphs
+- If asked about pricing, write a warm reply and include the pricing link EXACTLY: ${pricingLink}
+  Say something like "Here's a link to my packages and pricing: ${pricingLink}"
+  Then add [PRICING_SENT] at the very end
+- If client says "yes lets book", "I want to book", "send the contract" — reply saying you will send over the contract shortly, then add [BOOKING_INTENT] at the very end
 - Never make up availability
 
 Signature:
@@ -116,6 +117,7 @@ Shine, The Mentalist
 +1 (612) 865-7681
 www.texasmentalist.com`;
 
+    // Call Claude
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -157,70 +159,76 @@ www.texasmentalist.com`;
       })
     });
 
-    // Update client status in Supabase
+    // Update Supabase — failure safe
     if (client) {
-      let newStatus = 'chatting';
-      if (pricingSent) newStatus = 'pricing_sent';
-      if (bookingIntent) newStatus = 'booked';
+      try {
+        let newStatus = 'chatting';
+        if (pricingSent) newStatus = 'pricing_sent';
+        if (bookingIntent) newStatus = 'booked';
 
-      const updateData = {
-        status: newStatus,
-        last_activity: new Date().toISOString()
-      };
-      // Save the pricing link sent so dashboard can show it
-      if (pricingSent) updateData.notes = `Pricing link sent: ${pricingLink}`;
+        const updateData = {
+          status: newStatus,
+          last_activity: new Date().toISOString()
+        };
+        if (pricingSent) updateData.notes = `Pricing link sent: ${pricingLink}`;
 
-      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': process.env.SUPABASE_SECRET_KEY,
-          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
-        },
-        body: JSON.stringify(updateData)
-      });
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.SUPABASE_SECRET_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+          },
+          body: JSON.stringify(updateData)
+        });
 
-      // Save messages
-      await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': process.env.SUPABASE_SECRET_KEY,
-          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
-        },
-        body: JSON.stringify([
-          { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received' },
-          { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: 'sent' }
-        ])
-      });
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.SUPABASE_SECRET_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+          },
+          body: JSON.stringify([
+            { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received' },
+            { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: 'sent' }
+          ])
+        });
+      } catch(e) {
+        console.error('Supabase update failed:', e.message);
+      }
     }
 
     // Notify you if pricing sent or booking intent
     if (pricingSent || bookingIntent) {
-      const notifSubject = bookingIntent
-        ? `ðŸŽ¯ ${client?.name || fromEmail} wants to book!`
-        : `ðŸ“‹ Pricing sent to ${client?.name || fromEmail}`;
+      try {
+        const notifSubject = bookingIntent
+          ? `🎯 ${client?.name || fromEmail} wants to book!`
+          : `📋 Pricing sent to ${client?.name || fromEmail}`;
 
-      const notifText = bookingIntent
-        ? `Client is ready to book!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\n\nLog in to send the contract:\nshine-booking.vercel.app`
-        : `Pricing link was sent to client!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\nPricing type: ${client?.pricing_type}\n\nLink sent: ${pricingLink}\n\nshine-booking.vercel.app`;
+        const notifText = bookingIntent
+          ? `Client is ready to book!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\n\nLog in to send the contract:\nshine-booking.vercel.app`
+          : `Pricing link was sent!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\n\nLink sent: ${pricingLink}\n\nshine-booking.vercel.app`;
 
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.RESEND_KEY}`
-        },
-        body: JSON.stringify({
-          from: 'Shine Booking Assistant <shine@texasmentalist.com>',
-          to: '2020shine@gmail.com',
-          subject: notifSubject,
-          text: notifText
-        })
-      });
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.RESEND_KEY}`
+          },
+          body: JSON.stringify({
+            from: 'Shine Booking Assistant <shine@texasmentalist.com>',
+            to: '2020shine@gmail.com',
+            subject: notifSubject,
+            text: notifText
+          })
+        });
+      } catch(e) {
+        console.error('Notification email failed:', e.message);
+      }
     }
 
-    res.status(200).json({ received: true, replied: true, bookingIntent, pricingSent, pricingLink });
+    res.status(200).json({ received: true, replied: true, bookingIntent, pricingSent });
 
   } catch(e) {
     console.error('Email reply error:', e);
