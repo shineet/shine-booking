@@ -11,7 +11,11 @@ export default async function handler(req, res) {
       return;
     }
 
-    // Save answers to booking record
+    // Map intake answers to contract-relevant fields
+    const venueAddress = answers.q_address || null;
+    const startTime = answers.q_start_time || null;
+
+    // Save answers and mapped fields to booking record
     await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${bookingId}`, {
       method: 'PATCH',
       headers: {
@@ -22,11 +26,13 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         intake_status: 'completed',
         intake_answers: answers,
-        intake_completed_at: new Date().toISOString()
+        intake_completed_at: new Date().toISOString(),
+        venue_address: venueAddress,
+        start_time: startTime
       })
     });
 
-    // Get booking details for notification
+    // Get booking details for notification and client update
     const bookingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${bookingId}&limit=1`, {
       headers: {
         'apikey': process.env.SUPABASE_SECRET_KEY,
@@ -35,6 +41,22 @@ export default async function handler(req, res) {
     });
     const bookingRows = await bookingRes.json();
     const booking = Array.isArray(bookingRows) ? bookingRows[0] : null;
+
+    // Update client status so dashboard shows "Send contract" button next
+    if (booking?.client_id) {
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${booking.client_id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+        },
+        body: JSON.stringify({
+          status: 'intake_completed',
+          last_activity: new Date().toISOString()
+        })
+      });
+    }
 
     // Notify Shine
     const answersText = Object.entries(answers)
@@ -48,8 +70,8 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from: 'Shine Booking Assistant <shine@texasmentalist.com>',
         to: 'shinethementalist@gmail.com',
-        subject: `Questionnaire completed: ${booking?.client_name || 'A client'}`,
-        text: `${booking?.client_name || 'A client'} completed their event questionnaire!\n\n${answersText}\n\nView full booking in the app:\nshine-booking.vercel.app`
+        subject: `Questionnaire completed: ${booking?.client_name || 'A client'} — ready for contract`,
+        text: `${booking?.client_name || 'A client'} completed their event questionnaire!\n\n${answersText}\n\nThe contract is now ready to send with these details pre-filled — open the app to review and send.\n\nshine-booking.vercel.app`
       })
     });
 
