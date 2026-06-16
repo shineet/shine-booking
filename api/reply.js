@@ -1,70 +1,83 @@
+const conversations = {};
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
+    res.setHeader('Content-Type', 'text/xml');
+    res.status(200).send('<Response></Response>');
     return;
   }
 
   try {
-    const payload = req.body;
-    const data = payload.data || payload;
+    const { From, Body } = req.body;
 
-    const fromEmail = data.from || '';
-    const subject = data.subject || 'Your inquiry';
-    const emailId = data.email_id || '';
-    let body = data.text || data.html?.replace(/<[^>]*>/g, '') || '';
-
-    if (!fromEmail) {
-      res.status(200).json({ received: true });
+    if (!From || !Body) {
+      res.setHeader('Content-Type', 'text/xml');
+      res.status(200).send('<Response></Response>');
       return;
     }
 
-    // Don't reply to your own emails
-    if (fromEmail.includes('texasmentalist.com') ||
-        fromEmail.includes('2020shine@gmail.com') ||
-        fromEmail.includes('resend.com')) {
-      res.status(200).json({ received: true, skipped: 'own email' });
-      return;
-    }
-
-    // If no body, fetch full email from Resend API
-    if (!body && emailId) {
-      const emailResponse = await fetch(`https://api.resend.com/emails/${emailId}`, {
+    // Look up client in Supabase by phone number
+    const clientRes = await fetch(
+      `${process.env.SUPABASE_URL}/rest/v1/clients?phone=eq.${encodeURIComponent(From)}&order=created_at.desc&limit=1`,
+      {
         headers: {
-          'Authorization': `Bearer ${process.env.RESEND_KEY}`
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
         }
-      });
-      const emailData = await emailResponse.json();
-      body = emailData.text || emailData.html?.replace(/<[^>]*>/g, '') || '';
+      }
+    );
+    const clients = await clientRes.json();
+    const client = clients[0] || null;
+
+    // Build pricing context for Claude
+    let pricingContext = '';
+    if (client) {
+      const isCorporate = (client.event_type || '').toLowerCase().includes('corporate');
+      const prices = client.pricing_type === 'custom' ? {
+        deluxe: client.custom_price_deluxe || (isCorporate ? 1000 : 400),
+        signature: client.custom_price_signature || (isCorporate ? 1200 : 500),
+        premium: client.custom_price_premium || (isCorporate ? 1500 : 600)
+      } : {
+        deluxe: isCorporate ? 1000 : 400,
+        signature: isCorporate ? 1200 : 500,
+        premium: isCorporate ? 1500 : 600
+      };
+      pricingContext = `
+Client: ${client.name}
+Event type: ${client.event_type}
+Pricing packages:
+- Deluxe: $${prices.deluxe}
+- Signature: $${prices.signature}
+- Premium: $${prices.premium}`;
     }
 
-    // If still no body use subject as context
-    if (!body) {
-      body = `Client sent an email with subject: ${subject}`;
-    }
+    const SYSTEM_PROMPT = `You are Shine Thankappan, The Mentalist — writing SMS messages personally as yourself in first person.
 
-    const SYSTEM_PROMPT = `You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic show performer in Texas.
+IMPORTANT: Always write as "I" — never say "Shine will" or refer to yourself in third person.
 
-Shine performs 45-60 minute interactive mentalism and magic shows.
-Pricing: Private events (birthdays, bachelorette, celebrations) start at $400. Corporate events start at $800.
-Payment: Cash, Zelle (2020shine@gmail.com), Venmo (@Shine-Thankappan), PayPal (shine_e_thankappan@yahoo.com)
-Website: www.texasmentalist.com
-Phone: +1 (612) 865-7681
-
-You are handling email conversations with potential clients. Be warm, professional, and helpful.
+About me:
+- I perform 45-60 minute interactive mentalism and magic shows in Texas
+- Payment: Cash, Zelle (2020shine@gmail.com), Venmo (@Shine-Thankappan), PayPal (shine_e_thankappan@yahoo.com)
+- Website: www.texasmentalist.com
+- Phone: +1 (612) 865-7681
+${pricingContext}
 
 Rules:
-- Answer pricing questions honestly
-- If asked about availability, say you will check and confirm shortly
-- Keep responses concise — 2-3 short paragraphs max
-- Do NOT ask about date or number of guests
-- If the client says something like "yes lets book", "I want to book", "lets confirm", "send the contract" — reply saying you will send over the contract shortly, then add [BOOKING_INTENT] at the very end
-- Always sign off with:
-  Shine, The Mentalist
-  +1 (612) 865-7681
-  www.texasmentalist.com`;
+- Keep replies under 160 characters — this is SMS
+- Be warm, conversational, not salesy
+- If asked about pricing, give a brief teaser: "I have three packages from $X to $Z — want me to send the full breakdown to your email or WhatsApp?"
+- If they ask for pricing details: reply with teaser and add [PRICING_REQUESTED] at the very end
+- If client says "yes lets book", "I want to book", "send the contract" — reply saying you will send over the contract shortly, then add [BOOKING_INTENT] at the very end
+- Never make up availability`;
 
-    // Call Claude
-    const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+    if (!conversations[From]) conversations[From] = [];
+
+    conversations[From].push({ role: 'user', content: Body });
+    if (conversations[From].length > 10) {
+      conversations[From] = conversations[From].slice(-10);
+    }
+
+    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -73,41 +86,80 @@ Rules:
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 500,
+        max_tokens: 200,
         system: SYSTEM_PROMPT,
-        messages: [{
-          role: 'user',
-          content: `Client email:\nFrom: ${fromEmail}\nSubject: ${subject}\n\n${body}`
-        }]
+        messages: conversations[From]
       })
     });
 
-    const claudeData = await claudeResponse.json();
-    if (claudeData.error) throw new Error(claudeData.error.message);
-
+    const claudeData = await claudeRes.json();
     const replyText = claudeData.content[0].text;
     const bookingIntent = replyText.includes('[BOOKING_INTENT]');
-    const cleanReply = replyText.replace('[BOOKING_INTENT]', '').trim();
+    const pricingRequested = replyText.includes('[PRICING_REQUESTED]');
+    const cleanReply = replyText.replace('[BOOKING_INTENT]', '').replace('[PRICING_REQUESTED]', '').trim();
 
-    // Send reply email
-    const resendReply = await fetch('https://api.resend.com/emails', {
+    conversations[From].push({ role: 'assistant', content: cleanReply });
+
+    // Send SMS reply via Twilio
+    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
+    const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+    await fetch(twilioUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.RESEND_KEY}`
+        'Authorization': `Basic ${twilioAuth}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: JSON.stringify({
-        from: 'Shine, The Mentalist <shine@texasmentalist.com>',
-        to: fromEmail,
-        subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
-        text: cleanReply
-      })
+      body: new URLSearchParams({
+        From: process.env.TWILIO_FROM,
+        To: From,
+        Body: cleanReply
+      }).toString()
     });
 
-    const resendData = await resendReply.json();
+    // Update client status in Supabase
+    if (client) {
+      let newStatus = 'chatting';
+      if (pricingRequested) newStatus = 'pricing_requested';
+      if (bookingIntent) newStatus = 'booked';
 
-    // If booking intent — notify you
-    if (bookingIntent) {
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          last_activity: new Date().toISOString()
+        })
+      });
+
+      // Save messages to Supabase
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+        },
+        body: JSON.stringify([
+          { client_id: client.id, channel: 'sms', direction: 'inbound', content: Body, status: 'received' },
+          { client_id: client.id, channel: 'sms', direction: 'outbound', content: cleanReply, status: 'sent' }
+        ])
+      });
+    }
+
+    // Notify you if pricing requested or booking intent
+    if (pricingRequested || bookingIntent) {
+      const subject = bookingIntent
+        ? `🎯 ${client?.name || From} wants to book!`
+        : `💰 ${client?.name || From} is asking about pricing`;
+
+      const text = bookingIntent
+        ? `Client is ready to book!\n\nPhone: ${From}\nName: ${client?.name}\nEvent: ${client?.event_type}\n\nLog in to send the contract:\nshine-booking.vercel.app`
+        : `Client is asking about pricing!\n\nPhone: ${From}\nName: ${client?.name}\nEvent: ${client?.event_type}\nPricing type: ${client?.pricing_type}\n\nLog in to send the pricing link:\nshine-booking.vercel.app`;
+
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -117,16 +169,18 @@ Rules:
         body: JSON.stringify({
           from: 'Shine Booking Assistant <shine@texasmentalist.com>',
           to: '2020shine@gmail.com',
-          subject: `🎯 Booking intent from ${fromEmail}`,
-          text: `A client wants to book!\n\nFrom: ${fromEmail}\nSubject: ${subject}\n\nTheir message:\n${body}\n\nYour reply:\n${cleanReply}\n\nLog in to send the contract:\nshine-booking.vercel.app`
+          subject,
+          text
         })
       });
     }
 
-    res.status(200).json({ received: true, replied: true, bookingIntent, resendId: resendData.id });
+    res.setHeader('Content-Type', 'text/xml');
+    res.status(200).send('<Response></Response>');
 
   } catch(e) {
-    console.error('Email reply error:', e);
-    res.status(200).json({ received: true, error: e.message });
+    console.error('Reply handler error:', e);
+    res.setHeader('Content-Type', 'text/xml');
+    res.status(200).send('<Response></Response>');
   }
 }
