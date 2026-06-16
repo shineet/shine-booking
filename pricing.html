@@ -158,7 +158,8 @@
         font-size: 14px;
         font-weight: 600;
         cursor: pointer;
-        font-family: inherit
+        font-family: inherit;
+        transition: background 0.15s, color 0.15s
     }
 
     .select-btn:hover {
@@ -189,7 +190,7 @@
 
     .footer {
         text-align: center;
-        padding: 24px 0;
+        padding: 24px 0 100px;
         font-size: 12px;
         color: #555
     }
@@ -197,6 +198,63 @@
     .footer a {
         color: #888;
         text-decoration: none
+    }/* Sticky confirm bar */
+    .confirm-bar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: #141414;
+        border-top: 1px solid #2a2a2a;
+        padding: 14px 16px;
+        display: none;
+        align-items: center;
+        gap: 12px;
+        z-index: 50;
+        box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4)
+    }
+
+    .confirm-bar.show {
+        display: flex
+    }
+
+    .confirm-bar .summary {
+        flex: 1;
+        min-width: 0
+    }
+
+    .confirm-bar .summary .label {
+        font-size: 11px;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.04em
+    }
+
+    .confirm-bar .summary .value {
+        font-size: 15px;
+        font-weight: 600;
+        color: #f5f5f7;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    .confirm-bar .confirm-btn {
+        flex-shrink: 0;
+        padding: 13px 22px;
+        background: #34c759;
+        color: #0a0a0a;
+        border: none;
+        border-radius: 12px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit
+    }
+
+    .confirm-bar .confirm-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed
     }/* Confirm modal */
     .modal-overlay {
         display: none;
@@ -353,7 +411,7 @@
             <div class="cards" id="corporate-cards"></div>
         </div>
 
-        <div class="cta">Tap a package above to select it — I'll follow up to confirm the details!</div>
+        <div class="cta">Tap a package to select it — you can change your mind before confirming.</div>
 
         <div class="footer">
             <a href="https://www.texasmentalist.com">www.texasmentalist.com</a>
@@ -363,6 +421,14 @@
                 +1 (612) 865-7681
               
         </div>
+    </div>
+
+    <div class="confirm-bar" id="confirm-bar">
+        <div class="summary">
+            <div class="label">Selected package</div>
+            <div class="value" id="confirm-bar-summary">—</div>
+        </div>
+        <button class="confirm-btn" id="confirm-bar-btn" onclick="onConfirmBarClick()">Confirm</button>
     </div>
 
     <div class="page" id="success-page" style="display:none">
@@ -426,7 +492,7 @@
       <div class="price">$${price.toLocaleString()} <span>/ show</span></div>
       <div class="tagline">${tagline}</div>
       ${featuresHtml}
-      <button class="select-btn" onclick="pickPackage('${category}','${tier}','${label}',${price})">Select this package</button>
+      <button class="select-btn" id="btn-${category}-${tier}" onclick="pickPackage('${category}','${tier}','${label}',${price})">Select this package</button>
     </div>
   `
 
@@ -480,14 +546,37 @@
     }
 
     function pickPackage(category, tier, label, price) {
+        // Clear previous selection's visual state
+        if (pickedCategory && pickedTier) {
+            const prevCard = document.getElementById(`card-${pickedCategory}-${pickedTier}`);
+            const prevBtn = document.getElementById(`btn-${pickedCategory}-${pickedTier}`);
+            if (prevCard)
+                prevCard.classList.remove('picked');
+            if (prevBtn)
+                prevBtn.textContent = 'Select this package';
+        }
+
         pickedCategory = category;
         pickedTier = tier;
         pickedLabel = label;
         pickedPrice = price;
 
+        const card = document.getElementById(`card-${category}-${tier}`);
+        const btn = document.getElementById(`btn-${category}-${tier}`);
+        if (card)
+            card.classList.add('picked');
+        if (btn)
+            btn.textContent = 'Selected ✓';
+
+        document.getElementById('confirm-bar-summary').textContent =
+        `${category === 'corporate' ? 'Corporate' : 'Private'} — ${label} · $${price.toLocaleString()}`;
+        document.getElementById('confirm-bar').classList.add('show');
+    }
+
+    function onConfirmBarClick() {
         const params = getParams();
 
-        // If we already know who this is (cid present), skip asking for name/contact again
+        // If we already know who this is (cid present), submit directly
         if (params.clientId) {
             submitSelectionDirect();
             return;
@@ -495,18 +584,16 @@
 
         // No client id — this link was shared without identifying info, so we still need to ask
         document.getElementById('picked-summary').innerHTML =
-        `<strong>${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}</strong><br>$${price.toLocaleString()} per show`;
+        `<strong>${pickedCategory === 'corporate' ? 'Corporate' : 'Private'} — ${pickedLabel}</strong><br>$${pickedPrice.toLocaleString()} per show`;
         document.getElementById('confirm-modal').classList.add('show');
     }
 
     function submitSelectionDirect() {
         const params = getParams();
 
-        // Disable all select buttons while submitting
-        document.querySelectorAll('.select-btn').forEach(b => {
-            b.disabled = true;
-            b.style.opacity = '0.6';
-        });
+        const confirmBtn = document.getElementById('confirm-bar-btn');
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Confirming...';
 
         fetch('/api/select-package', {
             method: 'POST',
@@ -525,6 +612,7 @@
         })
         .then(r => r.json())
         .then(data => {
+            document.getElementById('confirm-bar').classList.remove('show');
             document.getElementById('main-page').style.display = 'none';
             document.getElementById('success-text').textContent =
             `You selected the ${pickedLabel} package ($${pickedPrice.toLocaleString()}). I'll follow up shortly to confirm everything!`;
@@ -532,10 +620,8 @@
         })
         .catch(e => {
             alert('Something went wrong — please try again or text me directly!');
-            document.querySelectorAll('.select-btn').forEach(b => {
-                b.disabled = false;
-                b.style.opacity = '1';
-            });
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Confirm';
         });
     }
 
@@ -575,6 +661,7 @@
         .then(r => r.json())
         .then(data => {
             document.getElementById('confirm-modal').classList.remove('show');
+            document.getElementById('confirm-bar').classList.remove('show');
             document.getElementById('main-page').style.display = 'none';
             document.getElementById('success-text').textContent =
             `You selected the ${pickedLabel} package ($${pickedPrice.toLocaleString()}). I'll follow up shortly to confirm everything!`;
