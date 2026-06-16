@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     if (client) {
       try {
         const historyRes = await fetch(
-          `${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${client.id}&channel=eq.email&order=created_at.asc&limit=20`,
+          `${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${client.id}&channel=eq.email&status=not.in.(pending_review,discarded)&order=created_at.asc&limit=20`,
           { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
         );
         const historyRows = await historyRes.json();
@@ -138,17 +138,33 @@ www.texasmentalist.com`;
     const pricingRequested = replyText.includes('[PRICING_REQUESTED]');
     const cleanReply = replyText.replace('[BOOKING_INTENT]', '').replace('[PRICING_REQUESTED]', '').trim();
 
-    // Send reply email
-    await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
-      body: JSON.stringify({
-        from: 'Shine, The Mentalist <shine@texasmentalist.com>',
-        to: fromEmail,
-        subject: subject?.startsWith('Re:') ? subject : `Re: ${subject || 'Your inquiry'}`,
-        text: cleanReply
-      })
-    });
+    // Check global review-mode setting
+    let reviewMode = false;
+    try {
+      const settingsRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1&limit=1`, {
+        headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` }
+      });
+      const settingsRows = await settingsRes.json();
+      reviewMode = Array.isArray(settingsRows) && settingsRows[0] ? !!settingsRows[0].review_mode : false;
+    } catch(e) {
+      console.error('Settings lookup failed, defaulting to auto-send:', e.message);
+    }
+
+    const replySubject = subject?.startsWith('Re:') ? subject : `Re: ${subject || 'Your inquiry'}`;
+
+    if (!reviewMode) {
+      // Send reply email immediately
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+        body: JSON.stringify({
+          from: 'Shine, The Mentalist <shine@texasmentalist.com>',
+          to: fromEmail,
+          subject: replySubject,
+          text: cleanReply
+        })
+      });
+    }
 
     // Update Supabase — failure safe
     if (client) {
@@ -168,9 +184,26 @@ www.texasmentalist.com`;
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
           body: JSON.stringify([
             { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received' },
-            { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: 'sent' }
+            { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject }
           ])
         });
+
+        if (reviewMode) {
+          try {
+            await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+              body: JSON.stringify({
+                from: 'Shine Booking Assistant <shine@texasmentalist.com>',
+                to: 'shinethementalist@gmail.com',
+                subject: `📝 Reply pending review — ${client.name || fromEmail}`,
+                text: `${client.name || fromEmail} emailed:\n"${emailBody}"\n\nAI drafted this reply:\n"${cleanReply}"\n\nReview and send it from the dashboard:\nshine-booking.vercel.app`
+              })
+            });
+          } catch(notifyErr) {
+            console.error('Pending-review notification failed:', notifyErr.message);
+          }
+        }
 
         // Client confirmed booking intent — send thank-you + intake questionnaire
         if (bookingIntent) {
