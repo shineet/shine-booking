@@ -5,9 +5,12 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   try {
-    const { clientId, name, contact, category, tier, label, price, readyToBook } = req.body;
+    const { clientId, name, contact, category, tier, label, price, readyToBook, format, strollingDurationMinutes } = req.body;
 
-    const selectionNote = `Selected package: ${category === 'corporate' ? 'Corporate' : 'Private'} — ${label} ($${price})`;
+    const formatNote = format === 'strolling'
+      ? ` (Strolling, ${strollingDurationMinutes ? (strollingDurationMinutes / 60) + 'hr' : ''})`
+      : '';
+    const selectionNote = `Selected package: ${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}${formatNote} ($${price})`;
     let finalClientId = clientId || null;
     let finalClientName = name;
     let finalClientEmail = null;
@@ -84,6 +87,9 @@ export default async function handler(req, res) {
     // Notify you immediately
     const notifyName = finalClientName || name || 'A client';
     const notifyContact = finalClientEmail || contact || 'on file';
+    const formatLine = format === 'strolling' && strollingDurationMinutes
+      ? `\nDuration: ${strollingDurationMinutes / 60} hour${strollingDurationMinutes > 60 ? 's' : ''} of strolling`
+      : '';
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -95,8 +101,8 @@ export default async function handler(req, res) {
         to: 'shinethementalist@gmail.com',
         subject: readyToBook ? `🎯 ${notifyName} is ready to book!` : `${notifyName} selected the ${label} package`,
         text: readyToBook
-          ? `Great news!\n\n${notifyName} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}\n\nContact: ${notifyContact}\n\nThey confirmed they're ready to book — a thank-you note with the intake questionnaire is being sent automatically.`
-          : `${notifyName} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}\n\nContact: ${notifyContact}\n\nThey chose "I need more time" — not ready to confirm yet. No questionnaire was sent.`
+          ? `Great news!\n\n${notifyName} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}${formatLine}\n\nContact: ${notifyContact}\n\nThey confirmed they're ready to book — a thank-you note with the intake questionnaire is being sent automatically.`
+          : `${notifyName} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}${formatLine}\n\nContact: ${notifyContact}\n\nThey chose "I need more time" — not ready to confirm yet. No questionnaire was sent.`
       })
     });
 
@@ -118,6 +124,7 @@ export default async function handler(req, res) {
             event_type: finalEventType,
             event_date: finalEventDate,
             fee: price || null,
+            duration: strollingDurationMinutes ? `${strollingDurationMinutes / 60} hour${strollingDurationMinutes > 60 ? 's' : ''} strolling` : null,
             contract_status: 'not_sent',
             intake_status: 'sent'
           })
