@@ -291,6 +291,10 @@
         border-left-color: #5856d6
     }
 
+    .lead-card.status-package_selected {
+        border-left-color: #5856d6
+    }
+
     .lead-card.status-booked {
         border-left-color: #34c759
     }
@@ -354,6 +358,11 @@
     .lead-status.status-pricing_sent {
         background: #ede8fd;
         color: #3a3296
+    }
+
+    .lead-status.status-package_selected {
+        background: #f0eefc;
+        color: #5856d6
     }
 
     .lead-status.status-booked {
@@ -937,6 +946,7 @@
         chatting: 'Chatting',
         pricing_requested: 'Pricing requested',
         pricing_sent: 'Pricing sent',
+        package_selected: 'Package selected',
         booked: 'Booked',
         intake_sent: 'Intake sent',
         intake_completed: 'Ready for contract',
@@ -1020,9 +1030,12 @@
                 var pricingBtn = (c.status === 'pricing_requested')
                 ? '<button class="action-btn pricing" onclick="openPricingModal(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.phone || '') + '\',\'' + (c.email || '') + '\',\'' + (c.last_channel || 'email') + '\')">Send pricing</button>'
                 : '';
-                var intakeBtn = (c.status === 'booked')
-                ? '<button class="action-btn contract" onclick="sendIntakeForm(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.email || '') + '\',\'' + (c.selected_category || '') + '\',' + (c.selected_price || 0) + ')">Resend intake form</button>'
-                : '';
+                var intakeBtn = '';
+                if (c.status === 'package_selected') {
+                    intakeBtn = '<button class="action-btn contract" onclick="sendIntakeForm(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.email || '') + '\',\'' + (c.selected_category || '') + '\',' + (c.selected_price || 0) + ')">Send questionnaire now</button>';
+                } else if (c.status === 'booked' || c.status === 'intake_sent') {
+                    intakeBtn = '<button class="action-btn contract" onclick="sendIntakeForm(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.email || '') + '\',\'' + (c.selected_category || '') + '\',' + (c.selected_price || 0) + ')">Resend intake form</button>';
+                }
                 var contractBtn = (c.status === 'intake_completed')
                 ? '<button class="action-btn contract" onclick="openContractModal(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.email || '') + '\',\'' + (c.booking_id || '') + '\')">Review and send contract</button>'
                 : '';
