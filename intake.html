@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Questionnaire — Shine, The Mentalist</title>
+    <style>
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #f5f5f7;
+        color: #1d1d1f;
+        font-size: 15px;
+        min-height: 100vh;
+        padding: 16px
+    }
+
+    .page {
+        max-width: 480px;
+        margin: 0 auto
+    }
+
+    .header {
+        text-align: center;
+        padding: 24px 0 16px
+    }
+
+    .header .star {
+        font-size: 26px;
+        margin-bottom: 10px
+    }
+
+    .header h1 {
+        font-size: 20px;
+        font-weight: 600
+    }
+
+    .header p {
+        font-size: 13px;
+        color: #6e6e73;
+        margin-top: 8px;
+        line-height: 1.6
+    }
+
+    .card {
+        background: #fff;
+        border-radius: 16px;
+        padding: 18px;
+        margin-bottom: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08)
+    }
+
+    .field {
+        margin-bottom: 16px
+    }
+
+    .field:last-child {
+        margin-bottom: 0
+    }
+
+    .field label {
+        display: block;
+        font-size: 13px;
+        color: #1d1d1f;
+        margin-bottom: 6px;
+        font-weight: 500;
+        line-height: 1.4
+    }
+
+    .field .hint {
+        font-size: 12px;
+        color: #aeaeb2;
+        font-weight: 400;
+        display: block;
+        margin-top: 2px
+    }
+
+    .field input, .field select, .field textarea {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 15px;
+        border: 1px solid #e0e0e5;
+        border-radius: 10px;
+        background: #f5f5f7;
+        color: #1d1d1f;
+        font-family: inherit;
+        -webkit-appearance: none
+    }
+
+    .field input:focus, .field select:focus, .field textarea:focus {
+        outline: none;
+        border-color: #0071e3;
+        background: #fff
+    }
+
+    .field textarea {
+        resize: vertical;
+        min-height: 70px;
+        line-height: 1.5
+    }
+
+    .radio-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 4px
+    }
+
+    .radio-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid #e0e0e5;
+        border-radius: 10px;
+        cursor: pointer
+    }
+
+    .radio-option input {
+        width: 18px;
+        height: 18px;
+        accent-color: #0071e3
+    }
+
+    .radio-option.selected {
+        border-color: #0071e3;
+        background: #f0f7ff
+    }
+
+    .submit-btn {
+        width: 100%;
+        padding: 14px;
+        background: #0071e3;
+        color: #fff;
+        border: none;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        margin-top: 8px
+    }
+
+    .submit-btn:disabled {
+        background: #b0c8f0;
+        cursor: not-allowed
+    }
+
+    .loading {
+        text-align: center;
+        padding: 60px 20px;
+        color: #6e6e73
+    }
+
+    .success-screen {
+        display: none;
+        text-align: center;
+        padding: 60px 16px
+    }
+
+    .success-screen.show {
+        display: block
+    }
+
+    .success-screen .icon {
+        font-size: 48px;
+        margin-bottom: 16px
+    }
+
+    .success-screen h2 {
+        font-size: 20px;
+        font-weight: 600;
+        margin-bottom: 10px
+    }
+
+    .success-screen p {
+        font-size: 14px;
+        color: #6e6e73;
+        line-height: 1.6
+    }
+    </style>
+</head>
+<body>
+    <div class="page" id="main-page">
+        <div class="header">
+            <div class="star">✦</div>
+            <h1 id="greeting-title">Event Details</h1>
+            <p id="greeting-text">Loading your questionnaire...</p>
+        </div>
+        <div id="form-content"></div>
+    </div>
+
+    <div class="page" id="success-page" style="display:none">
+        <div class="success-screen show">
+            <div class="icon">✦</div>
+            <h2>All set!</h2>
+            <p>Thanks for filling that out — this helps me make your show personal and unforgettable. See you at the event!</p>
+        </div>
+    </div>
+
+    <script>
+    function getBookingId() {
+        return new URLSearchParams(window.location.search).get('bid') || '';
+    }
+
+    let bookingData = null;
+
+    function loadBooking() {
+        fetch('/api/get-booking-full?bid=' + getBookingId())
+        .then(r => r.json())
+        .then(data => {
+            if (data.error)
+                throw new Error(data.error);
+            bookingData = data;
+            renderForm(data);
+        })
+        .catch(e => {
+            document.getElementById('form-content').innerHTML = '<div class="loading">Could not load this form. Please contact Shine directly.</div>';
+        });
+    }
+
+    function radioGroup(name, options) {
+        return options.map((opt, i) =>
+        `<div class="radio-option" onclick="selectRadio(this, '${name}')">
+      <input type="radio" name="${name}" value="${opt}" id="${name}-${i}">
+      <label for="${name}-${i}" style="margin:0;font-weight:400">${opt}</label>
+    </div>`
+
+        ).join('');
+    }
+
+    function selectRadio(el, name) {
+        document.querySelectorAll(`[name="${name}"]`).forEach(input => {
+            input.closest('.radio-option').classList.remove('selected');
+        });
+        el.classList.add('selected');
+        el.querySelector('input').checked = true;
+    }
+
+    function renderForm(d) {
+        const firstName = (d.clientName || '').split(' ')[0];
+        document.getElementById('greeting-title').textContent = 'Hi ' + firstName + ',';
+        document.getElementById('greeting-text').textContent = "Thank you for booking my show! This short questionnaire helps me personalize the experience and ensure everything runs smoothly for your event. — Shine, The Mentalist";
+
+        const eventType = (d.eventType || '').toLowerCase();
+        let html = '<div class="card">';
+
+        // Common fields for all event types
+        html += `
+    <div class="field">
+      <label>Preferred show start time</label>
+      <input type="time" id="q_start_time">
+    </div>
+    <div class="field">
+      <label>Event location / address</label>
+      <input type="text" id="q_address" placeholder="Full address">
+    </div>
+    <div class="field">
+      <label>Indoor or outdoor event?</label>
+      <div class="radio-group">${
+
+
+
+
+
+
+
+
+
+        radioGroup('q_indoor_outdoor', ['Indoor', 'Outdoor', 'Both'])}</div>
+    </div>
+    <div class="field">
+      <label>Approximate number of guests</label>
+      <input type="text" id="q_guests" placeholder="e.g. 25">
+    </div>
+  `
+
+
+
+
+
+        ;
+
+        if (eventType.includes('bachelorette')) {
+            html += `
+      <div class="field"><label>Name of guest of honor (bride)</label><input type="text" id="q_honoree"></div>
+      <div class="field"><label>Date of marriage</label><input type="date" id="q_marriage_date"></div>
+      <div class="field"><label>Birthday of the groom</label><input type="date" id="q_groom_dob"></div>
+      <div class="field"><label>Birthday of the bride</label><input type="date" id="q_bride_dob"></div>
+      <div class="field"><label>What kind of vibe are you looking for?</label>
+        <div class="radio-group">${
+
+
+
+
+            radioGroup('q_vibe', ['Clean elegant & classy', 'Light adult humor', 'Slightly edgy / flirty', 'Bold & edgy'])}</div>
+      </div>
+      <div class="field"><label>Any other entertainment before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
+      <div class="field"><label>Inside jokes, themes, or fun facts about the bride and groom?</label><textarea id="q_inside_jokes"></textarea></div>
+      <div class="field"><label>Anything else I should know? <span class="hint">(how they met, the proposal story, etc.)</span></label><textarea id="q_anything_else"></textarea></div>
+    `
+
+
+
+
+            ;
+        } else if (eventType.includes('birthday')) {
+            html += `
+      <div class="field"><label>Type of crowd</label>
+        <div class="radio-group">${
+            radioGroup('q_crowd', ['All adults', 'Include kids', 'Family crowd'])}</div>
+      </div>
+      <div class="field"><label>Full name of guest of honor</label><input type="text" id="q_honoree"></div>
+      <div class="field"><label>Actual date of birth <span class="hint">(optional but preferred)</span></label><input type="date" id="q_honoree_dob"></div>
+      <div class="field"><label>Any VIPs or special people attending?</label><input type="text" id="q_vips"></div>
+      <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
+      <div class="field"><label>What kind of vibe are you looking for?</label>
+        <div class="radio-group">${
+
+
+
+
+
+            radioGroup('q_vibe', ['Clean elegant & classy', 'Family friendly', 'Light adult humor', 'Slightly edgy / flirty', 'Bold & edgy'])}</div>
+      </div>
+      <div class="field"><label>Inside jokes, themes, or fun facts I can use?</label><textarea id="q_inside_jokes"></textarea></div>
+      <div class="field"><label>Any other interesting trivia about the birthday person?</label><textarea id="q_trivia"></textarea></div>
+    `
+
+
+
+            ;
+        } else if (eventType.includes('corporate')) {
+            html += `
+      <div class="field"><label>Type of crowd</label>
+        <div class="radio-group">${
+            radioGroup('q_crowd', ['All adults', 'Mixed group', 'Executives / VIPs'])}</div>
+      </div>
+      <div class="field"><label>Any VIPs or executives attending?</label><input type="text" id="q_vips"></div>
+      <div class="field"><label>Company name / event theme</label><input type="text" id="q_theme"></div>
+      <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
+      <div class="field"><label>What kind of vibe are you looking for?</label>
+        <div class="radio-group">${
+
+
+
+
+            radioGroup('q_vibe', ['Clean elegant & classy', 'Family friendly', 'Light adult humor'])}</div>
+      </div>
+      <div class="field"><label>Inside jokes, themes, or fun facts I can use?</label><textarea id="q_inside_jokes"></textarea></div>
+    `
+
+
+            ;
+        } else {
+            // General / private celebration
+            html += `
+      <div class="field"><label>Type of crowd</label>
+        <div class="radio-group">${
+            radioGroup('q_crowd', ['All adults (mixed)', 'Family crowd', 'Include kids'])}</div>
+      </div>
+      <div class="field"><label>What is the occasion you are celebrating?</label><input type="text" id="q_occasion"></div>
+      <div class="field"><label>Is it someone's special day?</label><input type="text" id="q_special_day"></div>
+      <div class="field"><label>Any VIPs or special people attending?</label><input type="text" id="q_vips"></div>
+      <div class="field"><label>Anyone you'd like me to give special attention to in the show?</label><input type="text" id="q_special_attention"></div>
+      <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
+      <div class="field"><label>What kind of vibe are you looking for?</label>
+        <div class="radio-group">${
+
+
+
+
+
+
+            radioGroup('q_vibe', ['Clean elegant & classy', 'Family friendly', 'Light adult humor', 'Slightly edgy / flirty', 'Bold & edgy'])}</div>
+      </div>
+      <div class="field"><label>Any other entertainment before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
+      <div class="field"><label>Inside jokes, themes, or fun facts I can use?</label><textarea id="q_inside_jokes"></textarea></div>
+    `
+
+
+
+            ;
+        }
+
+        // Closing common fields
+        html += `
+    <div class="field">
+      <label>Will there be a clear area for the show?</label>
+      <div class="radio-group">${
+
+        radioGroup('q_clear_area', ['Yes', 'Somewhat', 'Not sure yet'])}</div>
+    </div>
+    <div class="field">
+      <label>Is access to a power outlet available?</label>
+      <div class="radio-group">${
+
+
+        radioGroup('q_power', ['Yes', 'No', 'Not sure'])}</div>
+    </div>
+  `
+
+        ;
+
+        html += '</div>';
+        html += '<button class="submit-btn" id="submit-btn" onclick="submitIntake()">Submit questionnaire</button>';
+
+        document.getElementById('form-content').innerHTML = html;
+    }
+
+    function submitIntake() {
+        const btn = document.getElementById('submit-btn');
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+
+        const answers = {};
+        document.querySelectorAll('#form-content input, #form-content textarea, #form-content select').forEach(el => {
+            if (el.type === 'radio') {
+                if (el.checked)
+                    answers[el.name] = el.value;
+            } else if (el.id) {
+                answers[el.id] = el.value;
+            }
+        });
+
+        fetch('/api/submit-intake', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                bookingId: getBookingId(),
+                answers: answers
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error)
+                throw new Error(data.error);
+            document.getElementById('main-page').style.display = 'none';
+            document.getElementById('success-page').style.display = 'block';
+        })
+        .catch(e => {
+            alert('Something went wrong — please try again.');
+            btn.disabled = false;
+            btn.textContent = 'Submit questionnaire';
+        });
+    }
+
+    loadBooking();
+    </script>
+</body>
+</html>
