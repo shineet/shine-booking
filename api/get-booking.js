@@ -1,5 +1,19 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
+
+  function normalizeTime(value) {
+    if (!value) return value;
+    const match = String(value).trim().match(/^(\d{1,2})(?::(\d{1,2}))?/);
+    if (!match) return value;
+    let hours = parseInt(match[1], 10);
+    let minutes = match[2] !== undefined ? parseInt(match[2], 10) : 0;
+    if (isNaN(hours)) return value;
+    if (isNaN(minutes)) minutes = 0;
+    hours = Math.min(Math.max(hours, 0), 23);
+    minutes = Math.min(Math.max(minutes, 0), 59);
+    return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
+  }
+
   try {
     const { bid, mode } = req.query;
     if (!bid) {
@@ -23,11 +37,12 @@ export default async function handler(req, res) {
 
     const answers = booking.intake_answers || {};
 
-    // mode=full -> for intake.html (just need name + event type)
+    // mode=full -> for intake.html (just need name + event type + event date)
     if (mode === 'full') {
       res.status(200).json({
         clientName: booking.client_name,
-        eventType: booking.event_type
+        eventType: booking.event_type,
+        eventDate: booking.event_date || ''
       });
       return;
     }
@@ -42,7 +57,7 @@ export default async function handler(req, res) {
         fee: booking.fee,
         venueAddress: booking.venue_address || answers.q_address || '',
         eventDate: answers.q_event_date || booking.event_date || '',
-        startTime: booking.start_time || answers.q_start_time || '',
+        startTime: normalizeTime(booking.start_time || answers.q_start_time || ''),
         indoorOutdoor: answers.q_indoor_outdoor || '',
         guests: answers.q_guests || ''
       });
