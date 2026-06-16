@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   try {
-    const { toPhone, toEmail, clientName, eventType, smsOverride, emailOverride, ...claudeBody } = req.body;
+    const { toPhone, toEmail, clientName, eventType, venue, otherEntertainment, pricingType, prices, smsOverride, emailOverride, ...claudeBody } = req.body;
 
     // Step 1: Claude writes SMS (or use override)
     let smsMessage = smsOverride;
@@ -38,12 +38,12 @@ Name: ${clientName}
 Event: ${eventType}
 
 Rules:
+- Write as Shine, The Mentalist in first person — never say "Shine will" or refer to yourself in third person
 - Friendly and personal, use their first name
 - 2-3 short paragraphs
-- Introduce yourself as Shine, The Mentalist
 - Mention you do 45-60 min interactive mentalism and magic shows
 - Tell them you'd love to be part of their ${eventType}
-- Ask ONE simple question to keep the conversation going
+- Ask ONE natural question about their venue or what kind of atmosphere they're going for
 - Do NOT ask about date, number of guests, or pricing
 - Signature must be exactly:
   Shine, The Mentalist
@@ -115,7 +115,56 @@ Rules:
       if (resendData.id) emailSent = true;
     }
 
-    res.status(200).json({ smsMessage, emailSubject, emailBody, smsSent, emailSent });
+    // Step 5: Save client to Supabase
+    let clientId = null;
+    if (toPhone || toEmail) {
+      const supabaseRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({
+          name: clientName,
+          phone: toPhone || null,
+          email: toEmail || null,
+          event_type: eventType,
+          venue: venue || null,
+          other_entertainment: otherEntertainment || null,
+          pricing_type: pricingType || 'standard',
+          custom_price_deluxe: prices?.deluxe || null,
+          custom_price_signature: prices?.signature || null,
+          custom_price_premium: prices?.premium || null,
+          status: 'new',
+          last_activity: new Date().toISOString()
+        })
+      });
+      const supabaseData = await supabaseRes.json();
+      if (supabaseData[0]?.id) {
+        clientId = supabaseData[0].id;
+
+        // Save outbound message to messages table
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.SUPABASE_SECRET_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+          },
+          body: JSON.stringify({
+            client_id: clientId,
+            channel: 'sms',
+            direction: 'outbound',
+            content: smsMessage,
+            status: smsSent ? 'sent' : 'failed'
+          })
+        });
+      }
+    }
+
+    res.status(200).json({ smsMessage, emailSubject, emailBody, smsSent, emailSent, clientId });
 
   } catch(e) {
     res.status(500).json({ error: { message: e.message } });
