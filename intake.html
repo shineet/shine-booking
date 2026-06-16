@@ -146,29 +146,40 @@
         transition: border-color 0.15s, background 0.15s
     }
 
-    .radio-option .dot {
+    .radio-option input[type="radio"] {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        margin: 1px 0 0 0;
         width: 21px;
         height: 21px;
+        min-width: 21px;
         border-radius: 50%;
         border: 2px solid #d1d1d6;
-        flex-shrink: 0;
-        position: relative;
-        transition: border-color 0.15s;
         background: #fff;
-        margin-top: 1px
+        flex-shrink: 0;
+        display: grid;
+        place-content: center;
+        transition: border-color 0.15s;
+        cursor: pointer
     }
 
-    .radio-option .dot::after {
+    .radio-option input[type="radio"]::before {
         content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
         width: 11px;
         height: 11px;
         border-radius: 50%;
         background: #0071e3;
-        transform: translate(-50%, -50%) scale(0);
+        transform: scale(0);
         transition: transform 0.12s
+    }
+
+    .radio-option input[type="radio"]:checked::before {
+        transform: scale(1)
+    }
+
+    .radio-option input[type="radio"]:checked {
+        border-color: #0071e3
     }
 
     .radio-option span.label-text {
@@ -181,22 +192,6 @@
     .radio-option.selected {
         border-color: #0071e3;
         background: #f0f7ff
-    }
-
-    .radio-option.selected .dot {
-        border-color: #0071e3
-    }
-
-    .radio-option.selected .dot::after {
-        transform: translate(-50%, -50%) scale(1)
-    }
-
-    .radio-option input {
-        position: absolute;
-        opacity: 0;
-        width: 0;
-        height: 0;
-        pointer-events: none
     }
 
     .submit-btn {
@@ -309,7 +304,6 @@
         return options.map((opt, i) =>
         '<label class="radio-option" for="' + name + '-' + i + '">' +
         '<input type="radio" name="' + name + '" value="' + opt + '" id="' + name + '-' + i + '" onchange="onRadioChange(this)">' +
-        '<span class="dot"></span>' +
         '<span class="label-text">' + opt + '</span>' +
         '</label>'
         ).join('');
