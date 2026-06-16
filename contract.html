@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Agreement — Shine, The Mentalist</title>
+    <style>
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #f5f5f7;
+        color: #1d1d1f;
+        font-size: 15px;
+        min-height: 100vh;
+        padding: 16px
+    }
+
+    .page {
+        max-width: 560px;
+        margin: 0 auto
+    }
+
+    .header {
+        text-align: center;
+        padding: 24px 0 12px
+    }
+
+    .header h1 {
+        font-size: 20px;
+        font-weight: 600
+    }
+
+    .contract-card {
+        background: #fff;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        line-height: 1.6
+    }
+
+    .contract-card h2 {
+        font-size: 18px;
+        text-align: center;
+        margin-bottom: 16px;
+        letter-spacing: 0.02em
+    }
+
+    .contract-card hr {
+        border: none;
+        border-top: 1px solid #e0e0e5;
+        margin: 0 0 16px
+    }
+
+    .contract-card p {
+        margin-bottom: 14px;
+        font-size: 14px
+    }
+
+    .contract-card h3 {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 18px 0 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em
+    }
+
+    .loading {
+        text-align: center;
+        padding: 60px 20px;
+        color: #6e6e73
+    }
+
+    .sign-card {
+        background: #fff;
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08)
+    }
+
+    .sign-card h3 {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: #6e6e73
+    }
+
+    .field {
+        margin-bottom: 14px
+    }
+
+    .field label {
+        display: block;
+        font-size: 12px;
+        color: #6e6e73;
+        margin-bottom: 5px;
+        font-weight: 500
+    }
+
+    .field input {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 15px;
+        border: 1px solid #e0e0e5;
+        border-radius: 10px;
+        background: #f5f5f7;
+        font-family: inherit
+    }
+
+    .field input:focus {
+        outline: none;
+        border-color: #0071e3;
+        background: #fff
+    }
+
+    canvas {
+        width: 100%;
+        height: 150px;
+        border: 2px dashed #d0d0d5;
+        border-radius: 10px;
+        background: #fff;
+        touch-action: none
+    }
+
+    .sig-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 8px
+    }
+
+    .clear-btn {
+        font-size: 13px;
+        color: #0071e3;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-family: inherit
+    }
+
+    .agree-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin: 16px 0
+    }
+
+    .agree-row input {
+        width: 18px;
+        height: 18px;
+        margin-top: 2px;
+        accent-color: #0071e3
+    }
+
+    .agree-row label {
+        font-size: 13px;
+        color: #6e6e73;
+        line-height: 1.5
+    }
+
+    .submit-btn {
+        width: 100%;
+        padding: 14px;
+        background: #0071e3;
+        color: #fff;
+        border: none;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit
+    }
+
+    .submit-btn:disabled {
+        background: #b0c8f0;
+        cursor: not-allowed
+    }
+
+    .status-msg {
+        margin-top: 12px;
+        padding: 12px;
+        border-radius: 10px;
+        font-size: 13px;
+        text-align: center;
+        display: none
+    }
+
+    .status-msg.error {
+        background: #fff0f0;
+        color: #8b0000;
+        display: block
+    }
+
+    .success-screen {
+        display: none;
+        text-align: center;
+        padding: 60px 16px
+    }
+
+    .success-screen.show {
+        display: block
+    }
+
+    .success-screen .icon {
+        font-size: 48px;
+        margin-bottom: 16px
+    }
+
+    .success-screen h2 {
+        font-size: 20px;
+        font-weight: 600;
+        margin-bottom: 10px
+    }
+
+    .success-screen p {
+        font-size: 14px;
+        color: #6e6e73;
+        line-height: 1.6;
+        margin-bottom: 8px
+    }
+    </style>
+</head>
+<body>
+    <div class="page" id="main-page">
+        <div class="header">
+            <h1>Performance Agreement</h1>
+        </div>
+        <div id="contract-content">
+            <div class="loading">Loading your agreement...</div>
+        </div>
+
+        <div class="sign-card" id="sign-section" style="display:none">
+            <h3>Your signature</h3>
+            <div class="field">
+                <label>Printed name</label>
+                <input type="text" id="printed-name" placeholder="Type your full name">
+            </div>
+            <canvas id="sig-pad">
+            </canvas>
+            <div class="sig-actions">
+                <button class="clear-btn" onclick="clearSignature()">Clear signature</button>
+                <span style="font-size:12px;color:#aeaeb2">Sign with finger or mouse</span>
+            </div>
+            <div class="agree-row">
+                <input type="checkbox" id="agree-check">
+                <label for="agree-check">I have read and agree to the terms of this Performance Agreement, and I am authorized to sign on behalf of the Client.</label>
+            </div>
+            <button class="submit-btn" id="submit-btn" onclick="submitSignature()" disabled>Sign agreement</button>
+            <div class="status-msg" id="status-msg"></div>
+        </div>
+    </div>
+
+    <div class="page" id="success-page" style="display:none">
+        <div class="success-screen show">
+            <div class="icon">✦</div>
+            <h2>Agreement signed!</h2>
+            <p>Thank you — your performance agreement has been signed.</p>
+            <p>A copy has been sent to your email. Shine will follow up shortly with a short questionnaire to personalize your event.</p>
+        </div>
+    </div>
+
+    <script>
+    function getBookingId() {
+        return new URLSearchParams(window.location.search).get('bid') || '';
+    }
+
+    let canvas,
+        ctx,
+        drawing = false,
+        hasSignature = false;
+
+    function setupCanvas() {
+        canvas = document.getElementById('sig-pad');
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#1d1d1f';
+
+        function pos(e) {
+            const r = canvas.getBoundingClientRect();
+            const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+            const y = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+            return {
+                x,
+                y
+            };
+        }
+        function start(e) {
+            drawing = true;
+            hasSignature = true;
+            const p = pos(e);
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            checkEnable();
+        }
+        function move(e) {
+            if (!drawing)
+                return;
+            e.preventDefault();
+            const p = pos(e);
+            ctx.lineTo(p.x, p.y);
+            ctx.stroke();
+        }
+        function end() {
+            drawing = false;
+        }
+
+        canvas.addEventListener('mousedown', start);
+        canvas.addEventListener('mousemove', move);
+        canvas.addEventListener('mouseup', end);
+        canvas.addEventListener('touchstart', start);
+        canvas.addEventListener('touchmove', move);
+        canvas.addEventListener('touchend', end);
+    }
+
+    function clearSignature() {
+        const rect = canvas.getBoundingClientRect();
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        hasSignature = false;
+        checkEnable();
+    }
+
+    function checkEnable() {
+        const name = document.getElementById('printed-name').value.trim();
+        const agreed = document.getElementById('agree-check').checked;
+        document.getElementById('submit-btn').disabled = !(name && hasSignature && agreed);
+    }
+
+    document.addEventListener('input', checkEnable);
+    document.addEventListener('change', checkEnable);
+
+    let bookingData = null;
+
+    function loadContract() {
+        const bid = getBookingId();
+        fetch('/api/get-booking?bid=' + bid)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error)
+                throw new Error(data.error);
+            bookingData = data;
+            renderContract(data);
+            document.getElementById('sign-section').style.display = 'block';
+            setupCanvas();
+        })
+        .catch(e => {
+            document.getElementById('contract-content').innerHTML =
+            '<div class="loading">Could not load this agreement. Please contact Shine directly.</div>';
+        });
+    }
+
+    function renderContract(d) {
+        const html = `
+    <div class="contract-card">
+      <h2>PERFORMANCE AGREEMENT</h2>
+      <hr>
+      <p>This Performance Agreement ("Agreement") is entered into on ${
+
+
+        d.todayDate} by and between MindGames, represented by Shine, The Mentalist ("Performer"), and ${d.clientName} ("Client"), located at ${d.venueAddress}.</p>
+
+      <h3>1. Performance Details</h3>
+      <p>Performer shall present a professional Magic &amp; Mentalism performance for the event titled "${
+
+        d.eventTitle}" at ${d.venueAddress} on ${d.eventDate}, beginning at approximately ${d.startTime} and concluding at approximately ${d.endTime}, for a total performance length of up to ${d.duration}.</p>
+
+      <h3>2. Compensation</h3>
+      <p>The total performance fee shall be $${
+
+        d.fee}.</p>
+      <p>A non-refundable deposit of 25% is required to secure the event date. The remaining balance shall be paid no later than the day of the performance prior to the start time.</p>
+      <p>Payment may be made via cash, Zelle (2020shine@gmail.com), Venmo (@Shine-Thankappan), PayPal (shine_e_thankappan@yahoo.com), or other mutually agreed method.</p>
+
+      <h3>3. Event Details</h3>
+      <p>Client agrees to provide adequate and safe performance space, suitable lighting, access to electrical power if required, reasonable audience control, and a safe environment.</p>
+
+      <h3>4. Cancellation &amp; Rescheduling</h3>
+      <p>If cancellation occurs 10 or more days prior to the event date, no additional fee will be charged beyond the deposit. If cancellation occurs fewer than 5 days prior to the event date, 100% of the agreed performance fee shall be due.</p>
+
+      <h3>5. Force Majeure</h3>
+      <p>Neither party shall be liable for failure to perform due to events beyond reasonable control, including acts of God, government restrictions, natural disasters, illness, or unforeseen emergencies.</p>
+
+      <h3>6. Liability &amp; Indemnification</h3>
+      <p>Performer shall not be liable for any indirect, incidental, or consequential damages arising from the performance. Client agrees to indemnify and hold Performer harmless from claims arising from the event not caused by Performer's gross negligence or willful misconduct.</p>
+
+      <h3>7. Recording &amp; Promotional Use</h3>
+      <p>To preserve the experience and protect original material, video recording of the performance by the Client or guests is not permitted unless approved in advance by the Performer. The Performer may record portions of the event for promotional or documentation purposes. Photography for personal use is allowed unless otherwise specified.</p>
+
+      <h3>8. Independent Contractor</h3>
+      <p>Performer is an independent contractor and not an employee of Client.</p>
+
+      <h3>9. Governing Law</h3>
+      <p>This Agreement shall be governed by and construed in accordance with the laws of the State of Texas.</p>
+
+      <h3>10. Entire Agreement</h3>
+      <p>This Agreement constitutes the entire understanding between the parties and supersedes all prior discussions. Any modifications must be in writing and signed by both parties.</p>
+    </div>
+  `
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        ;
+        document.getElementById('contract-content').innerHTML = html;
+    }
+
+    function submitSignature() {
+        const btn = document.getElementById('submit-btn');
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+
+        const signatureData = canvas.toDataURL('image/png');
+        const printedName = document.getElementById('printed-name').value.trim();
+
+        fetch('/api/sign-contract', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                bookingId: getBookingId(),
+                printedName: printedName,
+                signatureData: signatureData
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error)
+                throw new Error(data.error);
+            document.getElementById('main-page').style.display = 'none';
+            document.getElementById('success-page').style.display = 'block';
+        })
+        .catch(e => {
+            const el = document.getElementById('status-msg');
+            el.className = 'status-msg error';
+            el.textContent = 'Something went wrong — please try again or contact Shine directly.';
+            btn.disabled = false;
+            btn.textContent = 'Sign agreement';
+        });
+    }
+
+    loadContract();
+    </script>
+</body>
+</html>
