@@ -134,74 +134,6 @@
         margin-bottom: 12px
     }
 
-    .pricing-toggle {
-        display: flex;
-        background: #f5f5f7;
-        border-radius: 10px;
-        padding: 3px;
-        margin-bottom: 14px
-    }
-
-    .pricing-toggle button {
-        flex: 1;
-        padding: 8px;
-        font-size: 13px;
-        font-weight: 500;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-family: inherit;
-        background: none;
-        color: #6e6e73
-    }
-
-    .pricing-toggle button.active {
-        background: #fff;
-        color: #0071e3;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)
-    }
-
-    .custom-prices {
-        display: none;
-        margin-top: 10px
-    }
-
-    .custom-prices.show {
-        display: block
-    }
-
-    .custom-prices .three-col {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 8px
-    }
-
-    .custom-prices .price-field label {
-        font-size: 11px;
-        color: #6e6e73;
-        display: block;
-        margin-bottom: 4px;
-        font-weight: 500
-    }
-
-    .custom-prices .price-field input {
-        width: 100%;
-        padding: 8px 10px;
-        font-size: 14px;
-        border: 1px solid #e0e0e5;
-        border-radius: 8px;
-        background: #f5f5f7;
-        color: #1d1d1f;
-        font-family: inherit
-    }
-
-    .price-hint {
-        font-size: 11px;
-        color: #6e6e73;
-        margin-top: 6px;
-        font-style: italic
-    }
-
     .generate-btn {
         width: 100%;
         padding: 10px;
@@ -328,7 +260,7 @@
         color: #6e6e73;
         margin-top: 6px;
         font-style: italic
-    }/* Dashboard styles */
+    }/* Dashboard */
     #dashboard-view {
         display: none
     }
@@ -339,12 +271,7 @@
         padding: 14px 16px;
         margin-bottom: 10px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-        cursor: pointer;
         border-left: 3px solid #e0e0e5
-    }
-
-    .lead-card:active {
-        background: #f5f5f7
     }
 
     .lead-card.status-new {
@@ -433,37 +360,55 @@
         margin-top: 4px
     }
 
+    .lead-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px
+    }
+
+    .action-btn {
+        padding: 7px 14px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+        font-family: inherit
+    }
+
+    .action-btn.pricing {
+        background: #fff3e0;
+        color: #b35900
+    }
+
+    .action-btn.pricing:hover {
+        background: #ffe0b2
+    }
+
+    .action-btn.delete {
+        background: #fff0f0;
+        color: #c0392b
+    }
+
+    .action-btn.delete:hover {
+        background: #ffd5d5
+    }
+
+    .lead-pricing-link {
+        font-size: 12px;
+        color: #5856d6;
+        margin-top: 4px
+    }
+
+    .lead-pricing-link a {
+        color: #5856d6;
+        text-decoration: none
+    }
+
     .empty-state {
         text-align: center;
         padding: 40px 20px;
         color: #6e6e73
-    }
-
-    .empty-state p {
-        font-size: 15px;
-        margin-bottom: 8px
-    }
-
-    .empty-state small {
-        font-size: 13px
-    }
-
-    .new-lead-btn {
-        width: 100%;
-        padding: 14px;
-        background: #0071e3;
-        color: #fff;
-        border: none;
-        border-radius: 12px;
-        font-size: 16px;
-        font-weight: 600;
-        cursor: pointer;
-        margin-bottom: 16px;
-        font-family: inherit
-    }
-
-    .new-lead-btn:hover {
-        background: #0077ed
     }
 
     .refresh-btn {
@@ -477,28 +422,156 @@
         color: #6e6e73;
         font-family: inherit;
         margin-bottom: 12px
+    }/* Pricing modal */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 100;
+        align-items: flex-end;
+        justify-content: center
     }
 
-    .lead-pricing-link {
-        font-size: 12px;
-        color: #0071e3;
-        margin-top: 4px
+    .modal-overlay.show {
+        display: flex
     }
 
-    .lead-pricing-link a {
-        color: #0071e3;
-        text-decoration: none
+    .modal {
+        background: #fff;
+        border-radius: 20px 20px 0 0;
+        padding: 24px 16px;
+        width: 100%;
+        max-width: 420px;
+        max-height: 85vh;
+        overflow-y: auto
     }
 
-    .pricing-badge {
-        display: inline-block;
-        background: #fff3e0;
-        color: #b35900;
-        font-size: 11px;
+    .modal h2 {
+        font-size: 18px;
         font-weight: 600;
-        padding: 2px 8px;
-        border-radius: 20px;
-        margin-left: 6px
+        margin-bottom: 6px
+    }
+
+    .modal p {
+        font-size: 13px;
+        color: #6e6e73;
+        margin-bottom: 16px
+    }
+
+    .pricing-option {
+        display: flex;
+        align-items: center;
+        padding: 14px;
+        border: 1px solid #e0e0e5;
+        border-radius: 12px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        gap: 12px
+    }
+
+    .pricing-option:hover {
+        border-color: #0071e3;
+        background: #f0f7ff
+    }
+
+    .pricing-option.selected {
+        border-color: #0071e3;
+        background: #f0f7ff
+    }
+
+    .pricing-option-icon {
+        font-size: 22px
+    }
+
+    .pricing-option-text {
+        flex: 1
+    }
+
+    .pricing-option-title {
+        font-size: 14px;
+        font-weight: 600
+    }
+
+    .pricing-option-desc {
+        font-size: 12px;
+        color: #6e6e73;
+        margin-top: 2px
+    }
+
+    .custom-price-inputs {
+        display: none;
+        margin-top: 12px;
+        padding: 14px;
+        background: #f5f5f7;
+        border-radius: 12px
+    }
+
+    .custom-price-inputs.show {
+        display: block
+    }
+
+    .three-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px
+    }
+
+    .price-field label {
+        font-size: 11px;
+        color: #6e6e73;
+        display: block;
+        margin-bottom: 4px;
+        font-weight: 500
+    }
+
+    .price-field input {
+        width: 100%;
+        padding: 8px 10px;
+        font-size: 14px;
+        border: 1px solid #e0e0e5;
+        border-radius: 8px;
+        background: #fff;
+        font-family: inherit
+    }
+
+    .modal-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 16px
+    }
+
+    .modal-cancel {
+        flex: 1;
+        padding: 12px;
+        background: #f5f5f7;
+        border: none;
+        border-radius: 10px;
+        font-size: 15px;
+        cursor: pointer;
+        font-family: inherit;
+        color: #6e6e73
+    }
+
+    .modal-send {
+        flex: 2;
+        padding: 12px;
+        background: #0071e3;
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit
+    }
+
+    .modal-send:disabled {
+        background: #b0c8f0;
+        cursor: not-allowed
     }
     </style>
 </head>
@@ -514,17 +587,17 @@
             <button class="tab" onclick="showTab('new-lead')">+ New Lead</button>
         </div>
 
-        <!-- DASHBOARD VIEW -->
+        <!-- DASHBOARD -->
         <div id="dashboard-view">
             <button class="refresh-btn" onclick="loadDashboard()">↻ Refresh</button>
             <div id="leads-list">
                 <div class="empty-state">
-                    <p>Loading leads...</p>
+                    <p>Loading...</p>
                 </div>
             </div>
         </div>
 
-        <!-- NEW LEAD VIEW -->
+        <!-- NEW LEAD -->
         <div id="new-lead-view">
             <div class="card">
                 <div class="section-label">Client details</div>
@@ -590,38 +663,8 @@
             </div>
 
             <div class="card">
-                <div class="section-label">Pricing</div>
-                <div class="pricing-toggle">
-                    <button class="active" id="std-btn" onclick="setPricing('standard')">Standard pricing</button>
-                    <button id="custom-btn" onclick="setPricing('custom')">Custom pricing</button>
-                </div>
-                <div id="std-prices" style="font-size:13px;color:#6e6e73">
-                        Private: $400 / $500 / $600 &nbsp;·&nbsp; Corporate: $1,000 / $1,200 / $1,500
-                      </div>
-                <div class="custom-prices" id="custom-prices">
-                    <p style="font-size:12px;color:#6e6e73;margin-bottom:8px">Set your custom prices for this client:</p>
-                    <div id="private-custom" class="three-col">
-                        <div class="price-field">
-                            <label>Deluxe</label>
-                            <input type="number" id="p1" placeholder="400">
-                        </div>
-                        <div class="price-field">
-                            <label>Signature</label>
-                            <input type="number" id="p2" placeholder="500">
-                        </div>
-                        <div class="price-field">
-                            <label>Premium</label>
-                            <input type="number" id="p3" placeholder="600">
-                        </div>
-                    </div>
-                    <p class="price-hint" id="price-hint">Private event pricing</p>
-                </div>
-            </div>
-
-            <div class="card">
                 <div class="section-label">Preview & edit messages</div>
                 <button class="generate-btn" onclick="generateMessages()" id="gen-btn">Generate AI messages</button>
-
                 <div id="messages-area" style="display:none">
                     <div class="msg-label">
                         SMS message 
@@ -631,24 +674,15 @@
                         <textarea id="sms-text" rows="3" oninput="updateCharCount()"></textarea>
                     </div>
                     <div class="char-count" id="char-count">0 / 160 characters</div>
-
-                    <div class="msg-label" style="margin-top:16px">
-                        Email subject 
-                        <span style="font-weight:400;color:#6e6e73">(tap to edit)</span>
-                    </div>
+                    <div class="msg-label" style="margin-top:16px">Email subject</div>
                     <div class="field">
                         <input type="text" id="email-subject">
                     </div>
-
-                    <div class="msg-label">
-                        Email body 
-                        <span style="font-weight:400;color:#6e6e73">(tap to edit)</span>
-                    </div>
+                    <div class="msg-label">Email body</div>
                     <div class="field">
                         <textarea id="email-body" rows="8"></textarea>
                     </div>
                     <p class="edit-note">Edit any message above before sending.</p>
-
                     <div class="followup-row">
                         <input type="checkbox" id="followup" checked>
                         <label for="followup">Auto follow-up if no reply in 24 hours</label>
@@ -661,11 +695,89 @@
         </div>
     </div>
 
+    <!-- PRICING MODAL -->
+    <div class="modal-overlay" id="pricing-modal">
+        <div class="modal">
+            <h2>Send pricing</h2>
+            <p id="modal-client-name">Choose which packages to send</p>
+
+            <div class="pricing-option" onclick="selectPricingOption('private-standard')" id="opt-private-standard">
+                <div class="pricing-option-icon">🎂</div>
+                <div class="pricing-option-text">
+                    <div class="pricing-option-title">Private — Standard</div>
+                    <div class="pricing-option-desc">Deluxe $400 · Signature $500 · Premium $600</div>
+                </div>
+            </div>
+
+            <div class="pricing-option" onclick="selectPricingOption('private-custom')" id="opt-private-custom">
+                <div class="pricing-option-icon">✨</div>
+                <div class="pricing-option-text">
+                    <div class="pricing-option-title">Private — Custom pricing</div>
+                    <div class="pricing-option-desc">Set your own prices for this client</div>
+                </div>
+            </div>
+            <div class="custom-price-inputs" id="private-custom-inputs">
+                <div class="three-col">
+                    <div class="price-field">
+                        <label>Deluxe</label>
+                        <input type="number" id="pc-d1" placeholder="400">
+                    </div>
+                    <div class="price-field">
+                        <label>Signature</label>
+                        <input type="number" id="pc-d2" placeholder="500">
+                    </div>
+                    <div class="price-field">
+                        <label>Premium</label>
+                        <input type="number" id="pc-d3" placeholder="600">
+                    </div>
+                </div>
+            </div>
+
+            <div class="pricing-option" onclick="selectPricingOption('corporate-standard')" id="opt-corporate-standard">
+                <div class="pricing-option-icon">🏢</div>
+                <div class="pricing-option-text">
+                    <div class="pricing-option-title">Corporate — Standard</div>
+                    <div class="pricing-option-desc">Deluxe $1,000 · Signature $1,200 · Premium $1,500</div>
+                </div>
+            </div>
+
+            <div class="pricing-option" onclick="selectPricingOption('corporate-custom')" id="opt-corporate-custom">
+                <div class="pricing-option-icon">💼</div>
+                <div class="pricing-option-text">
+                    <div class="pricing-option-title">Corporate — Custom pricing</div>
+                    <div class="pricing-option-desc">Set your own prices for this client</div>
+                </div>
+            </div>
+            <div class="custom-price-inputs" id="corporate-custom-inputs">
+                <div class="three-col">
+                    <div class="price-field">
+                        <label>Deluxe</label>
+                        <input type="number" id="pc-c1" placeholder="1000">
+                    </div>
+                    <div class="price-field">
+                        <label>Signature</label>
+                        <input type="number" id="pc-c2" placeholder="1200">
+                    </div>
+                    <div class="price-field">
+                        <label>Premium</label>
+                        <input type="number" id="pc-c3" placeholder="1500">
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="modal-cancel" onclick="closeModal()">Cancel</button>
+                <button class="modal-send" id="modal-send-btn" onclick="sendPricing()" disabled>Send pricing</button>
+            </div>
+        </div>
+    </div>
+
     <script>
     const SUPABASE_URL = 'https://nkhwttlmtidtippylbzs.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_jvudqPYcwnnqjO8w7DQd2g_SSyb-HJl';
 
-    let pricingType = 'standard';
+    let currentClientId = null;
+    let selectedPricingOption = null;
 
     const STATUS_LABELS = {
         new: '🆕 New',
@@ -680,7 +792,6 @@
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.getElementById('dashboard-view').style.display = 'none';
         document.getElementById('new-lead-view').style.display = 'none';
-
         if (tab === 'dashboard') {
             document.querySelectorAll('.tab')[0].classList.add('active');
             document.getElementById('dashboard-view').style.display = 'block';
@@ -694,7 +805,6 @@
     async function loadDashboard() {
         const list = document.getElementById('leads-list');
         list.innerHTML = '<div class="empty-state"><p>Loading...</p></div>';
-
         try {
             const r = await fetch(`${SUPABASE_URL}/rest/v1/clients?select=*&order=last_activity.desc`, {
                 headers: {
@@ -703,37 +813,41 @@
                 }
             });
             const clients = await r.json();
-
             if (!clients.length) {
-                list.innerHTML = '<div class="empty-state"><p>No leads yet</p><small>Tap "+ New Lead" to add your first lead</small></div>';
+                list.innerHTML = '<div class="empty-state"><p>No leads yet</p><small>Tap "+ New Lead" to add your first</small></div>';
                 return;
             }
-
             list.innerHTML = clients.map(c => {
                 const statusLabel = STATUS_LABELS[c.status] || c.status;
                 const timeAgo = getTimeAgo(c.last_activity);
-                const pricingBadge = c.pricing_type === 'custom' ? '<span class="pricing-badge">Custom $</span>' : '';
                 const pricingLinkHtml = c.notes && c.notes.includes('Pricing link sent:')
                 ? `<div class="lead-pricing-link">📋 <a href="${c.notes.replace('Pricing link sent: ', '')}" target="_blank">View pricing sent</a></div>`
+                : '';
+                const pricingBtn = c.status === 'pricing_requested'
+                ? `<button class="action-btn pricing" onclick="openPricingModal('${c.id}','${c.name}','${c.phone || ''}','${c.email || ''}','${c.last_channel || ''}')">💰 Send pricing</button>`
                 : '';
                 return `
         <div class="lead-card status-${c.status}">
           <div class="lead-top">
             <div class="lead-name">${
-                c.name} ${pricingBadge}</div>
+                c.name}</div>
             <div class="lead-status status-${c.status}">${statusLabel}</div>
           </div>
           <div class="lead-detail">${
-                c.event_type || 'Event type unknown'} · ${c.venue || 'Venue TBD'}</div>
+                c.event_type || 'Unknown event'} · ${c.venue || 'Venue TBD'}</div>
           ${pricingLinkHtml}
           <div class="lead-time">${timeAgo}</div>
-        </div>
-      `
+          <div class="lead-actions">
+            ${
+                pricingBtn}
+            <button class="action-btn delete" onclick="deleteClient('${c.id}','${c.name}')">🗑 Delete</button>
+          </div>
+        </div>`
 
                 ;
             }).join('');
         } catch (e) {
-            list.innerHTML = `<div class="empty-state"><p>Error loading leads</p><small>${e.message}</small></div>`;
+            list.innerHTML = `<div class="empty-state"><p>Error: ${e.message}</p></div>`;
         }
     }
 
@@ -752,44 +866,118 @@
         return `${Math.floor(hrs / 24)}d ago`;
     }
 
-    function openClient(id) {
-        alert('Client detail view coming soon! For now, check Supabase for full conversation history.');
-    }
-
-    function setPricing(type) {
-        pricingType = type;
-        document.getElementById('std-btn').classList.toggle('active', type === 'standard');
-        document.getElementById('custom-btn').classList.toggle('active', type === 'custom');
-        document.getElementById('std-prices').style.display = type === 'standard' ? 'block' : 'none';
-        document.getElementById('custom-prices').classList.toggle('show', type === 'custom');
-
-        // Update price hints based on event type
-        updatePriceHints();
-    }
-
-    function updatePriceHints() {
-        const eventType = document.getElementById('event_type').value;
-        const isCorporate = eventType.toLowerCase().includes('corporate');
-        const hint = document.getElementById('price-hint');
-        const p1 = document.getElementById('p1');
-        const p2 = document.getElementById('p2');
-        const p3 = document.getElementById('p3');
-
-        if (isCorporate) {
-            hint.textContent = 'Corporate event pricing';
-            p1.placeholder = '1000';
-            p2.placeholder = '1200';
-            p3.placeholder = '1500';
-        } else {
-            hint.textContent = 'Private event pricing';
-            p1.placeholder = '400';
-            p2.placeholder = '500';
-            p3.placeholder = '600';
+    async function deleteClient(id, name) {
+        if (!confirm(`Delete ${name}? This cannot be undone.`))
+            return;
+        try {
+            await fetch(`${SUPABASE_URL}/rest/v1/clients?id=eq.${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_KEY}`
+                }
+            });
+            loadDashboard();
+        } catch (e) {
+            alert('Error deleting: ' + e.message);
         }
     }
 
-    document.getElementById('event_type').addEventListener('change', updatePriceHints);
+    // Pricing modal
+    let modalClient = {};
 
+    function openPricingModal(id, name, phone, email, lastChannel) {
+        currentClientId = id;
+        modalClient = {
+            id,
+            name,
+            phone,
+            email,
+            lastChannel
+        };
+        selectedPricingOption = null;
+        document.getElementById('modal-client-name').textContent = `Sending to ${name}`;
+        document.querySelectorAll('.pricing-option').forEach(o => o.classList.remove('selected'));
+        document.getElementById('private-custom-inputs').classList.remove('show');
+        document.getElementById('corporate-custom-inputs').classList.remove('show');
+        document.getElementById('modal-send-btn').disabled = true;
+        document.getElementById('pricing-modal').classList.add('show');
+    }
+
+    function closeModal() {
+        document.getElementById('pricing-modal').classList.remove('show');
+        currentClientId = null;
+        selectedPricingOption = null;
+    }
+
+    function selectPricingOption(option) {
+        selectedPricingOption = option;
+        document.querySelectorAll('.pricing-option').forEach(o => o.classList.remove('selected'));
+        document.getElementById(`opt-${option}`).classList.add('selected');
+        document.getElementById('private-custom-inputs').classList.remove('show');
+        document.getElementById('corporate-custom-inputs').classList.remove('show');
+        if (option === 'private-custom')
+            document.getElementById('private-custom-inputs').classList.add('show');
+        if (option === 'corporate-custom')
+            document.getElementById('corporate-custom-inputs').classList.add('show');
+        document.getElementById('modal-send-btn').disabled = false;
+    }
+
+    async function sendPricing() {
+        if (!selectedPricingOption || !currentClientId)
+            return;
+
+        const btn = document.getElementById('modal-send-btn');
+        btn.disabled = true;
+        btn.textContent = 'Sending...';
+
+        // Build pricing link
+        let pricingLink = '';
+        if (selectedPricingOption === 'private-standard') {
+            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=private';
+        } else if (selectedPricingOption === 'corporate-standard') {
+            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=corporate';
+        } else if (selectedPricingOption === 'private-custom') {
+            const d1 = document.getElementById('pc-d1').value || 400;
+            const d2 = document.getElementById('pc-d2').value || 500;
+            const d3 = document.getElementById('pc-d3').value || 600;
+            pricingLink = `https://shine-booking.vercel.app/pricing.html?type=private&d1=${d1}&d2=${d2}&d3=${d3}`;
+        } else if (selectedPricingOption === 'corporate-custom') {
+            const c1 = document.getElementById('pc-c1').value || 1000;
+            const c2 = document.getElementById('pc-c2').value || 1200;
+            const c3 = document.getElementById('pc-c3').value || 1500;
+            pricingLink = `https://shine-booking.vercel.app/pricing.html?type=corporate&d1=${c1}&d2=${c2}&d3=${c3}`;
+        }
+
+        try {
+            const r = await fetch('/api/send-pricing', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    clientId: currentClientId,
+                    clientName: modalClient.name,
+                    phone: modalClient.phone,
+                    email: modalClient.email,
+                    lastChannel: modalClient.lastChannel,
+                    pricingLink
+                })
+            });
+            const data = await r.json();
+            if (data.error)
+                throw new Error(data.error);
+            closeModal();
+            loadDashboard();
+        } catch (e) {
+            alert('Error sending pricing: ' + e.message);
+        }
+
+        btn.disabled = false;
+        btn.textContent = 'Send pricing';
+    }
+
+    // New lead form
     const SYSTEM_PROMPT = `You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic show performer in Texas. Performs 45-60 min interactive shows. Write a warm, personalized first contact SMS to a potential client from a Bark lead. Rules: under 160 characters total, use client first name, mention the event type naturally, sign off as "- Shine, The Mentalist", do NOT mention pricing, ask ONE natural question about their venue or plans. Return ONLY the SMS text, nothing else.`;
 
     function formatDate(d) {
@@ -814,33 +1002,7 @@
             guests: document.getElementById('guests').value,
             venue: document.getElementById('venue').value.trim(),
             otherEntertainment: document.getElementById('other_entertainment').value.trim(),
-            notes: document.getElementById('notes').value.trim(),
-            pricingType: pricingType,
-            customP1: document.getElementById('p1').value,
-            customP2: document.getElementById('p2').value,
-            customP3: document.getElementById('p3').value
-        };
-    }
-
-    function getCustomPrices(d) {
-        const isCorporate = d.eventType.toLowerCase().includes('corporate');
-        if (d.pricingType === 'custom') {
-            return {
-                deluxe: parseInt(d.customP1) || (isCorporate ? 1000 : 400),
-                signature: parseInt(d.customP2) || (isCorporate ? 1200 : 500),
-                premium: parseInt(d.customP3) || (isCorporate ? 1500 : 600)
-            };
-        }
-        return isCorporate
-        ? {
-            deluxe: 1000,
-            signature: 1200,
-            premium: 1500
-        }
-        : {
-            deluxe: 400,
-            signature: 500,
-            premium: 600
+            notes: document.getElementById('notes').value.trim()
         };
     }
 
@@ -861,12 +1023,10 @@
             showStatus('Please fill in client name and event type first.', 'error');
             return;
         }
-
         const btn = document.getElementById('gen-btn');
         btn.disabled = true;
         btn.textContent = 'Writing messages...';
         showStatus('Claude is writing personalized SMS and email...', 'loading');
-
         try {
             const r = await fetch('/api/chat', {
                 method: 'POST',
@@ -888,7 +1048,6 @@
             const data = await r.json();
             if (data.error)
                 throw new Error(data.error.message);
-
             document.getElementById('sms-text').value = data.smsMessage;
             document.getElementById('email-subject').value = data.emailSubject;
             document.getElementById('email-body').value = data.emailBody;
@@ -899,7 +1058,6 @@
         } catch (e) {
             showStatus('Error: ' + e.message, 'error');
         }
-
         btn.disabled = false;
         btn.textContent = 'Regenerate messages';
     }
@@ -910,23 +1068,17 @@
             showStatus('Please fill in client name, phone, and event type.', 'error');
             return;
         }
-
         const smsText = document.getElementById('sms-text').value.trim();
         const emailSubject = document.getElementById('email-subject').value.trim();
         const emailBody = document.getElementById('email-body').value.trim();
-
         if (!smsText) {
             showStatus('Please generate messages first.', 'error');
             return;
         }
-
         const btn = document.getElementById('send-btn');
         btn.disabled = true;
         btn.textContent = 'Sending...';
         showStatus('Sending messages...', 'loading');
-
-        const prices = getCustomPrices(d);
-
         try {
             const r = await fetch('/api/chat', {
                 method: 'POST',
@@ -947,8 +1099,6 @@
                     eventType: d.eventType,
                     venue: d.venue,
                     otherEntertainment: d.otherEntertainment,
-                    pricingType: d.pricingType,
-                    prices: prices,
                     smsOverride: smsText,
                     emailOverride: `Subject: ${emailSubject}\n\n${emailBody}`
                 })
@@ -956,22 +1106,12 @@
             const data = await r.json();
             if (data.error)
                 throw new Error(data.error.message);
-
-            showStatus(
-            `${data.smsSent ? '✓ SMS sent to ' + d.phone : '⚠ SMS pending A2P approval'}<br>
-       ${data.emailSent ? '✓ Email sent to ' + d.email : d.email ? '⚠ Email not sent' : ''}<br><br>
-       ${document.getElementById('followup').checked ? '✓ Follow-up scheduled in 24 hours if no reply.' : ''}`,
-            'success'
-            );
-
-            // Reset form after successful send
-            if (data.smsSent || data.emailSent) {
+            showStatus(`${data.smsSent ? '✓ SMS sent to ' + d.phone : '⚠ SMS pending A2P approval'}<br>${data.emailSent ? '✓ Email sent to ' + d.email : d.email ? '⚠ Email not sent' : ''}<br><br>${document.getElementById('followup').checked ? '✓ Follow-up scheduled in 24 hours if no reply.' : ''}`, 'success');
+            if (data.smsSent || data.emailSent)
                 setTimeout(() => showTab('dashboard'), 2000);
-            }
         } catch (e) {
             showStatus('Error: ' + e.message, 'error');
         }
-
         btn.disabled = false;
         btn.textContent = 'Send messages';
     }
@@ -982,7 +1122,12 @@
         el.innerHTML = msg;
     }
 
-    // Start on dashboard
+    // Close modal when clicking overlay
+    document.getElementById('pricing-modal').addEventListener('click', function(e) {
+        if (e.target === this)
+            closeModal();
+    });
+
     showTab('dashboard');
     </script>
 </body>
