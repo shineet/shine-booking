@@ -12,6 +12,20 @@ export default async function handler(req, res) {
       return;
     }
 
+    // Fetch the live client record so we have the most up-to-date event_date
+    let eventDate = null;
+    if (clientId) {
+      const clientRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}&limit=1`, {
+        headers: {
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+        }
+      });
+      const clientRows = await clientRes.json();
+      const client = Array.isArray(clientRows) ? clientRows[0] : null;
+      if (client) eventDate = client.event_date || null;
+    }
+
     // Create a booking record now — intake answers will fill it in
     const bookingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings`, {
       method: 'POST',
@@ -26,6 +40,7 @@ export default async function handler(req, res) {
         client_name: clientName,
         client_email: clientEmail,
         event_type: eventType || '',
+        event_date: eventDate,
         fee: fee || null,
         contract_status: 'not_sent',
         intake_status: 'sent'
