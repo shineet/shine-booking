@@ -72,14 +72,28 @@ Rules:
 
     conversations[From].push({ role: 'assistant', content: cleanReply });
 
-    // Send SMS reply
-    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
-    const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
-    await fetch(twilioUrl, {
-      method: 'POST',
-      headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: From, Body: cleanReply }).toString()
-    });
+    // Check global review-mode setting
+    let reviewMode = false;
+    try {
+      const settingsRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1&limit=1`, {
+        headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` }
+      });
+      const settingsRows = await settingsRes.json();
+      reviewMode = Array.isArray(settingsRows) && settingsRows[0] ? !!settingsRows[0].review_mode : false;
+    } catch(e) {
+      console.error('Settings lookup failed, defaulting to auto-send:', e.message);
+    }
+
+    if (!reviewMode) {
+      // Send SMS reply immediately
+      const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
+      const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+      await fetch(twilioUrl, {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: From, Body: cleanReply }).toString()
+      });
+    }
 
     // Update Supabase — failure safe
     if (client) {
@@ -99,9 +113,26 @@ Rules:
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
           body: JSON.stringify([
             { client_id: client.id, channel: 'sms', direction: 'inbound', content: Body, status: 'received' },
-            { client_id: client.id, channel: 'sms', direction: 'outbound', content: cleanReply, status: 'sent' }
+            { client_id: client.id, channel: 'sms', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: From }
           ])
         });
+
+        if (reviewMode) {
+          try {
+            await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+              body: JSON.stringify({
+                from: 'Shine Booking Assistant <shine@texasmentalist.com>',
+                to: 'shinethementalist@gmail.com',
+                subject: `📝 Reply pending review — ${client.name || From}`,
+                text: `${client.name || From} texted:\n"${Body}"\n\nAI drafted this reply:\n"${cleanReply}"\n\nReview and send it from the dashboard:\nshine-booking.vercel.app`
+              })
+            });
+          } catch(notifyErr) {
+            console.error('Pending-review notification failed:', notifyErr.message);
+          }
+        }
 
         // Client confirmed booking intent — send thank-you + intake questionnaire if we have their email
         if (bookingIntent && client.email) {
