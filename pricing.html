@@ -390,6 +390,87 @@
         font-size: 14px;
         color: #888;
         line-height: 1.6
+    }/* Decision page */
+    .decision-screen {
+        text-align: center;
+        padding: 36px 16px 16px
+    }
+
+    .decision-screen .star {
+        font-size: 32px;
+        margin-bottom: 14px
+    }
+
+    .decision-screen h2 {
+        font-size: 22px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        letter-spacing: -0.01em
+    }
+
+    .decision-screen .picked-summary {
+        font-size: 14px;
+        color: #aaa;
+        margin: 18px auto 28px;
+        padding: 14px 18px;
+        background: #1a1a1a;
+        border: 1px solid #2a2a2a;
+        border-radius: 12px;
+        max-width: 320px
+    }
+
+    .decision-screen .picked-summary strong {
+        color: #f5f5f7;
+        display: block;
+        margin-bottom: 2px
+    }
+
+    .decision-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        max-width: 340px;
+        margin: 0 auto
+    }
+
+    .decision-btn {
+        width: 100%;
+        padding: 16px;
+        border-radius: 14px;
+        font-size: 16px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+        border: none;
+        transition: transform 0.1s
+    }
+
+    .decision-btn:active {
+        transform: scale(0.98)
+    }
+
+    .decision-btn.primary {
+        background: #34c759;
+        color: #0a0a0a
+    }
+
+    .decision-btn.secondary {
+        background: #1a1a1a;
+        color: #f5f5f7;
+        border: 1.5px solid #333
+    }
+
+    .decision-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed
+    }
+
+    .decision-btn .sub {
+        display: block;
+        font-size: 12px;
+        font-weight: 400;
+        opacity: 0.75;
+        margin-top: 2px
     }
     </style>
 </head>
@@ -431,6 +512,28 @@
         <button class="confirm-btn" id="confirm-bar-btn" onclick="onConfirmBarClick()">Confirm</button>
     </div>
 
+    <div class="page" id="decision-page" style="display:none">
+        <div class="decision-screen">
+            <div class="star">✦</div>
+            <h2>Ready to lock in your date?</h2>
+            <div class="picked-summary" id="decision-summary"></div>
+            <div class="decision-actions">
+                <button class="decision-btn primary" id="book-shine-btn" onclick="onBookShineClick()">
+
+                            Book Shine
+                            
+                    <span class="sub">I'm ready — let's confirm the date</span>
+                </button>
+                <button class="decision-btn secondary" id="need-time-btn" onclick="onNeedTimeClick()">
+
+                            I need more time
+                            
+                    <span class="sub">Just save my interest for now</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="page" id="success-page" style="display:none">
         <div class="success-screen show">
             <div class="check-icon">✦</div>
@@ -470,6 +573,8 @@
     let pickedLabel = null;
     let pickedPrice = null;
     let pickedCategory = null;
+    let capturedName = '';
+    let capturedContact = '';
 
     function getParams() {
         const p = new URLSearchParams(window.location.search);
@@ -576,9 +681,9 @@
     function onConfirmBarClick() {
         const params = getParams();
 
-        // If we already know who this is (cid present), submit directly
+        // If we already know who this is (cid present), go straight to the decision page
         if (params.clientId) {
-            submitSelectionDirect();
+            showDecisionPage();
             return;
         }
 
@@ -588,12 +693,35 @@
         document.getElementById('confirm-modal').classList.add('show');
     }
 
-    function submitSelectionDirect() {
-        const params = getParams();
+    function showDecisionPage() {
+        document.getElementById('confirm-bar').classList.remove('show');
+        document.getElementById('main-page').style.display = 'none';
+        document.getElementById('decision-summary').innerHTML =
+        `<strong>${pickedCategory === 'corporate' ? 'Corporate' : 'Private'} — ${pickedLabel}</strong>$${pickedPrice.toLocaleString()} per show`;
+        document.getElementById('decision-page').style.display = 'block';
+    }
 
-        const confirmBtn = document.getElementById('confirm-bar-btn');
-        confirmBtn.disabled = true;
-        confirmBtn.textContent = 'Confirming...';
+    function setDecisionButtonsDisabled(disabled) {
+        document.getElementById('book-shine-btn').disabled = disabled;
+        document.getElementById('need-time-btn').disabled = disabled;
+    }
+
+    function onBookShineClick() {
+        const btn = document.getElementById('book-shine-btn');
+        setDecisionButtonsDisabled(true);
+        btn.innerHTML = 'Confirming...';
+        submitFinalSelection(true);
+    }
+
+    function onNeedTimeClick() {
+        const btn = document.getElementById('need-time-btn');
+        setDecisionButtonsDisabled(true);
+        btn.innerHTML = 'One moment...';
+        submitFinalSelection(false);
+    }
+
+    function submitFinalSelection(readyToBook) {
+        const params = getParams();
 
         fetch('/api/select-package', {
             method: 'POST',
@@ -602,26 +730,34 @@
             },
             body: JSON.stringify({
                 clientId: params.clientId,
-                name: '',
-                contact: '',
+                name: capturedName,
+                contact: capturedContact,
                 category: pickedCategory,
                 tier: pickedTier,
                 label: pickedLabel,
-                price: pickedPrice
+                price: pickedPrice,
+                readyToBook: readyToBook
             })
         })
         .then(r => r.json())
         .then(data => {
-            document.getElementById('confirm-bar').classList.remove('show');
-            document.getElementById('main-page').style.display = 'none';
-            document.getElementById('success-text').textContent =
-            `You selected the ${pickedLabel} package ($${pickedPrice.toLocaleString()}). I'll follow up shortly to confirm everything!`;
+            document.getElementById('decision-page').style.display = 'none';
             document.getElementById('success-page').style.display = 'block';
+            if (readyToBook) {
+                document.getElementById('success-title').textContent = 'Thank you for booking!';
+                document.getElementById('success-text').textContent =
+                `I'm so excited to be part of your event! I've just sent a quick questionnaire to your email — filling it out helps me personalize the show and get your performance agreement ready. Talk soon!`;
+            } else {
+                document.getElementById('success-title').textContent = "No rush at all";
+                document.getElementById('success-text').textContent =
+                `Take your time — I've saved your ${pickedLabel} package selection. Whenever you're ready, just let me know so we can lock in your date. Looking forward to it!`;
+            }
         })
         .catch(e => {
             alert('Something went wrong — please try again or text me directly!');
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Confirm';
+            setDecisionButtonsDisabled(false);
+            document.getElementById('book-shine-btn').innerHTML = 'Book Shine<span class="sub">I\'m ready — let\'s confirm the date</span>';
+            document.getElementById('need-time-btn').innerHTML = 'I need more time<span class="sub">Just save my interest for now</span>';
         });
     }
 
@@ -637,41 +773,10 @@
             return;
         }
 
-        const btn = document.getElementById('confirm-btn');
-        btn.disabled = true;
-        btn.textContent = 'Submitting...';
-
-        const params = getParams();
-
-        fetch('/api/select-package', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                clientId: params.clientId,
-                name: name,
-                contact: contact,
-                category: pickedCategory,
-                tier: pickedTier,
-                label: pickedLabel,
-                price: pickedPrice
-            })
-        })
-        .then(r => r.json())
-        .then(data => {
-            document.getElementById('confirm-modal').classList.remove('show');
-            document.getElementById('confirm-bar').classList.remove('show');
-            document.getElementById('main-page').style.display = 'none';
-            document.getElementById('success-text').textContent =
-            `You selected the ${pickedLabel} package ($${pickedPrice.toLocaleString()}). I'll follow up shortly to confirm everything!`;
-            document.getElementById('success-page').style.display = 'block';
-        })
-        .catch(e => {
-            alert('Something went wrong — please try again or text me directly!');
-            btn.disabled = false;
-            btn.textContent = 'Confirm selection';
-        });
+        capturedName = name;
+        capturedContact = contact;
+        document.getElementById('confirm-modal').classList.remove('show');
+        showDecisionPage();
     }
 
     document.getElementById('confirm-modal').addEventListener('click', function(e) {
