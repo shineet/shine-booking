@@ -13,11 +13,11 @@
 
     body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background: #f5f5f7;
+        background: linear-gradient(180deg, #f7f7fb 0%, #f0f1f5 100%);
         color: #1d1d1f;
         font-size: 15px;
         min-height: 100vh;
-        padding: 16px
+        padding: 16px 16px 40px
     }
 
     .page {
@@ -27,36 +27,52 @@
 
     .header {
         text-align: center;
-        padding: 24px 0 16px
+        padding: 28px 0 18px
     }
 
     .header .star {
-        font-size: 26px;
-        margin-bottom: 10px
+        font-size: 30px;
+        margin-bottom: 12px;
+        display: inline-block;
+        filter: drop-shadow(0 2px 6px rgba(0, 113, 227, 0.25))
     }
 
     .header h1 {
-        font-size: 20px;
-        font-weight: 600
+        font-size: 21px;
+        font-weight: 700;
+        letter-spacing: -0.01em
     }
 
     .header p {
-        font-size: 13px;
+        font-size: 13.5px;
         color: #6e6e73;
         margin-top: 8px;
-        line-height: 1.6
+        line-height: 1.6;
+        padding: 0 8px
     }
 
-    .card {
+    .section {
         background: #fff;
-        border-radius: 16px;
-        padding: 18px;
-        margin-bottom: 12px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08)
+        border-radius: 18px;
+        padding: 20px;
+        margin-bottom: 14px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.05)
+    }
+
+    .section-title {
+        font-size: 11.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #0071e3;
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 6px
     }
 
     .field {
-        margin-bottom: 16px
+        margin-bottom: 18px
     }
 
     .field:last-child {
@@ -65,10 +81,10 @@
 
     .field label {
         display: block;
-        font-size: 13px;
+        font-size: 13.5px;
         color: #1d1d1f;
-        margin-bottom: 6px;
-        font-weight: 500;
+        margin-bottom: 7px;
+        font-weight: 600;
         line-height: 1.4
     }
 
@@ -82,14 +98,15 @@
 
     .field input, .field select, .field textarea {
         width: 100%;
-        padding: 10px 12px;
+        padding: 11px 13px;
         font-size: 15px;
-        border: 1px solid #e0e0e5;
-        border-radius: 10px;
-        background: #f5f5f7;
+        border: 1.5px solid #e5e5ea;
+        border-radius: 11px;
+        background: #fafafc;
         color: #1d1d1f;
         font-family: inherit;
-        -webkit-appearance: none
+        -webkit-appearance: none;
+        transition: border-color 0.15s, background 0.15s
     }
 
     .field input:focus, .field select:focus, .field textarea:focus {
@@ -100,31 +117,62 @@
 
     .field textarea {
         resize: vertical;
-        min-height: 70px;
+        min-height: 72px;
         line-height: 1.5
+    }
+
+    .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px
     }
 
     .radio-group {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 9px;
         margin-top: 4px
     }
 
     .radio-option {
         display: flex;
         align-items: center;
-        gap: 10px;
-        padding: 10px 12px;
-        border: 1px solid #e0e0e5;
-        border-radius: 10px;
-        cursor: pointer
+        gap: 11px;
+        padding: 12px 14px;
+        border: 1.5px solid #e5e5ea;
+        border-radius: 12px;
+        cursor: pointer;
+        background: #fafafc;
+        transition: border-color 0.15s, background 0.15s
     }
 
-    .radio-option input {
-        width: 18px;
-        height: 18px;
-        accent-color: #0071e3
+    .radio-option .dot {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        border: 2px solid #d1d1d6;
+        flex-shrink: 0;
+        position: relative;
+        transition: border-color 0.15s;
+        background: #fff
+    }
+
+    .radio-option .dot::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #0071e3;
+        transform: translate(-50%, -50%) scale(0);
+        transition: transform 0.12s
+    }
+
+    .radio-option span.label-text {
+        font-size: 14.5px;
+        font-weight: 500
     }
 
     .radio-option.selected {
@@ -132,22 +180,45 @@
         background: #f0f7ff
     }
 
+    .radio-option.selected .dot {
+        border-color: #0071e3
+    }
+
+    .radio-option.selected .dot::after {
+        transform: translate(-50%, -50%) scale(1)
+    }
+
+    .radio-option input {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+        pointer-events: none
+    }
+
     .submit-btn {
         width: 100%;
-        padding: 14px;
+        padding: 16px;
         background: #0071e3;
         color: #fff;
         border: none;
-        border-radius: 12px;
-        font-size: 16px;
-        font-weight: 600;
+        border-radius: 14px;
+        font-size: 16.5px;
+        font-weight: 700;
         cursor: pointer;
         font-family: inherit;
-        margin-top: 8px
+        margin-top: 6px;
+        box-shadow: 0 4px 14px rgba(0, 113, 227, 0.3);
+        transition: transform 0.1s, box-shadow 0.1s
+    }
+
+    .submit-btn:active {
+        transform: scale(0.98)
     }
 
     .submit-btn:disabled {
         background: #b0c8f0;
+        box-shadow: none;
         cursor: not-allowed
     }
 
@@ -160,7 +231,7 @@
     .success-screen {
         display: none;
         text-align: center;
-        padding: 60px 16px
+        padding: 70px 16px
     }
 
     .success-screen.show {
@@ -168,20 +239,23 @@
     }
 
     .success-screen .icon {
-        font-size: 48px;
-        margin-bottom: 16px
+        font-size: 52px;
+        margin-bottom: 18px;
+        display: inline-block;
+        filter: drop-shadow(0 2px 8px rgba(52, 199, 89, 0.3))
     }
 
     .success-screen h2 {
-        font-size: 20px;
-        font-weight: 600;
+        font-size: 21px;
+        font-weight: 700;
         margin-bottom: 10px
     }
 
     .success-screen p {
-        font-size: 14px;
+        font-size: 14.5px;
         color: #6e6e73;
-        line-height: 1.6
+        line-height: 1.7;
+        padding: 0 12px
     }
     </style>
 </head>
@@ -226,20 +300,19 @@
 
     function radioGroup(name, options) {
         return options.map((opt, i) =>
-        `<div class="radio-option" onclick="selectRadio(this, '${name}')">
-      <input type="radio" name="${name}" value="${opt}" id="${name}-${i}">
-      <label for="${name}-${i}" style="margin:0;font-weight:400">${opt}</label>
-    </div>`
-
+        '<label class="radio-option" for="' + name + '-' + i + '">' +
+        '<input type="radio" name="' + name + '" value="' + opt + '" id="' + name + '-' + i + '" onchange="onRadioChange(this)">' +
+        '<span class="dot"></span>' +
+        '<span class="label-text">' + opt + '</span>' +
+        '</label>'
         ).join('');
     }
 
-    function selectRadio(el, name) {
-        document.querySelectorAll(`[name="${name}"]`).forEach(input => {
-            input.closest('.radio-option').classList.remove('selected');
+    function onRadioChange(input) {
+        document.querySelectorAll('input[name="' + input.name + '"]').forEach(function(r) {
+            r.closest('.radio-option').classList.remove('selected');
         });
-        el.classList.add('selected');
-        el.querySelector('input').checked = true;
+        input.closest('.radio-option').classList.add('selected');
     }
 
     function renderForm(d) {
@@ -248,17 +321,24 @@
         document.getElementById('greeting-text').textContent = "Thank you for booking my show! This short questionnaire helps me personalize the experience and ensure everything runs smoothly for your event. — Shine, The Mentalist";
 
         const eventType = (d.eventType || '').toLowerCase();
-        let html = '<div class="card">';
+        let html = '';
 
-        // Common fields for all event types
+        // Section 1: Event basics
+        html += '<div class="section"><div class="section-title">📍 Event basics</div>';
         html += `
     <div class="field">
       <label>Event date</label>
       <input type="date" id="q_event_date">
     </div>
-    <div class="field">
-      <label>Preferred show start time</label>
-      <input type="time" id="q_start_time">
+    <div class="two-col">
+      <div class="field">
+        <label>Start time</label>
+        <input type="time" id="q_start_time">
+      </div>
+      <div class="field">
+        <label>Guest count</label>
+        <input type="text" id="q_guests" placeholder="e.g. 25">
+      </div>
     </div>
     <div class="field">
       <label>Event location / address</label>
@@ -280,28 +360,38 @@
 
 
 
+
+
+
+
+
+
         radioGroup('q_indoor_outdoor', ['Indoor', 'Outdoor', 'Both'])}</div>
-    </div>
-    <div class="field">
-      <label>Approximate number of guests</label>
-      <input type="text" id="q_guests" placeholder="e.g. 25">
     </div>
   `
 
-
-
-
-
         ;
+        html += '</div>';
 
-        if (eventType.includes('bachelorette')) {
+        // Section 2: Event-specific questions
+        html += '<div class="section"><div class="section-title">🎉 About your event</div>';
+
+        if (eventType.includes('bachelorette') || eventType.includes('bachelor')) {
             html += `
-      <div class="field"><label>Name of guest of honor (bride)</label><input type="text" id="q_honoree"></div>
+      <div class="field"><label>Name of guest of honor</label><input type="text" id="q_honoree" placeholder="Bride's name"></div>
+      <div class="two-col">
+        <div class="field"><label>Bride's date of birth</label><input type="date" id="q_bride_dob"></div>
+        <div class="field"><label>Groom's date of birth</label><input type="date" id="q_groom_dob"></div>
+      </div>
       <div class="field"><label>Date of marriage</label><input type="date" id="q_marriage_date"></div>
-      <div class="field"><label>Birthday of the groom</label><input type="date" id="q_groom_dob"></div>
-      <div class="field"><label>Birthday of the bride</label><input type="date" id="q_bride_dob"></div>
+      <div class="field"><label>Any VIPs or special people attending?</label><input type="text" id="q_vips"></div>
+      <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
       <div class="field"><label>What kind of vibe are you looking for?</label>
         <div class="radio-group">${
+
+
+
+
 
 
 
@@ -324,7 +414,7 @@
             radioGroup('q_crowd', ['All adults', 'Include kids', 'Family crowd'])}</div>
       </div>
       <div class="field"><label>Full name of guest of honor</label><input type="text" id="q_honoree"></div>
-      <div class="field"><label>Actual date of birth <span class="hint">(optional but preferred)</span></label><input type="date" id="q_honoree_dob"></div>
+      <div class="field"><label>Actual date of birth</label><input type="date" id="q_honoree_dob"></div>
       <div class="field"><label>Any VIPs or special people attending?</label><input type="text" id="q_vips"></div>
       <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
       <div class="field"><label>What kind of vibe are you looking for?</label>
@@ -365,6 +455,32 @@
 
 
             ;
+        } else if (eventType.includes('graduation')) {
+            html += `
+      <div class="field"><label>Type of crowd</label>
+        <div class="radio-group">${
+            radioGroup('q_crowd', ['All adults', 'Include kids', 'Family crowd'])}</div>
+      </div>
+      <div class="field"><label>Name of the person graduating</label><input type="text" id="q_honoree"></div>
+      <div class="field"><label>Their date of birth</label><input type="date" id="q_honoree_dob"></div>
+      <div class="field"><label>Anyone you'd like me to definitely involve in the show?</label><input type="text" id="q_special_attention"></div>
+      <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
+      <div class="field"><label>What kind of vibe are you looking for?</label>
+        <div class="radio-group">${
+
+
+
+
+
+            radioGroup('q_vibe', ['Clean elegant & classy', 'Family friendly', 'Light adult humor', 'Slightly edgy / flirty', 'Bold & edgy'])}</div>
+      </div>
+      <div class="field"><label>Any other entertainment before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
+      <div class="field"><label>Inside jokes, themes, or fun facts I can use?</label><textarea id="q_inside_jokes"></textarea></div>
+    `
+
+
+
+            ;
         } else {
             // General / private celebration
             html += `
@@ -373,12 +489,14 @@
             radioGroup('q_crowd', ['All adults (mixed)', 'Family crowd', 'Include kids'])}</div>
       </div>
       <div class="field"><label>What is the occasion you are celebrating?</label><input type="text" id="q_occasion"></div>
-      <div class="field"><label>Is it someone's special day?</label><input type="text" id="q_special_day"></div>
+      <div class="field"><label>Is it someone's special day?</label><input type="text" id="q_special_day" placeholder="Name, if applicable"></div>
+      <div class="field"><label>Their date of birth <span class="hint">(if applicable)</span></label><input type="date" id="q_honoree_dob"></div>
       <div class="field"><label>Any VIPs or special people attending?</label><input type="text" id="q_vips"></div>
       <div class="field"><label>Anyone you'd like me to give special attention to in the show?</label><input type="text" id="q_special_attention"></div>
       <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
       <div class="field"><label>What kind of vibe are you looking for?</label>
         <div class="radio-group">${
+
 
 
 
@@ -395,8 +513,10 @@
 
             ;
         }
+        html += '</div>';
 
-        // Closing common fields
+        // Section 3: Logistics
+        html += '<div class="section"><div class="section-title">⚡ Logistics</div>';
         html += `
     <div class="field">
       <label>Will there be a clear area for the show?</label>
@@ -414,8 +534,8 @@
   `
 
         ;
-
         html += '</div>';
+
         html += '<button class="submit-btn" id="submit-btn" onclick="submitIntake()">Submit questionnaire</button>';
 
         document.getElementById('form-content').innerHTML = html;
