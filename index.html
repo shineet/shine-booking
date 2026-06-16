@@ -846,7 +846,7 @@
                 <label>Venue address</label>
                 <input type="text" id="ct-address" placeholder="Full address">
             </div>
-            <div class="three-col">
+            <div class="two-col">
                 <div class="price-field">
                     <label>Event date</label>
                     <input type="date" id="ct-date">
@@ -854,10 +854,6 @@
                 <div class="price-field">
                     <label>Start time</label>
                     <input type="time" id="ct-start">
-                </div>
-                <div class="price-field">
-                    <label>End time</label>
-                    <input type="time" id="ct-end">
                 </div>
             </div>
             <div class="two-col" style="margin-top:14px">
@@ -1110,7 +1106,6 @@
             document.getElementById('ct-address').value = data.venueAddress || '';
             document.getElementById('ct-date').value = data.eventDate || '';
             document.getElementById('ct-start').value = data.startTime || '';
-            document.getElementById('ct-end').value = '';
             document.getElementById('ct-duration').value = '45 minutes';
             document.getElementById('ct-fee').value = data.fee || '';
         });
@@ -1130,7 +1125,6 @@
         btn.textContent = 'Sending...';
 
         var startTime = document.getElementById('ct-start').value;
-        var endTime = document.getElementById('ct-end').value;
 
         fetch('/api/send-contract', {
             method: 'POST',
@@ -1146,7 +1140,6 @@
                 venueAddress: document.getElementById('ct-address').value,
                 eventDate: document.getElementById('ct-date').value,
                 startTime: startTime,
-                endTime: endTime,
                 duration: document.getElementById('ct-duration').value,
                 fee: document.getElementById('ct-fee').value
             })
