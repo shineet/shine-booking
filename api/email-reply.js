@@ -183,7 +183,7 @@ www.texasmentalist.com`;
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
           body: JSON.stringify([
-            { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received' },
+            { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null },
             { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject }
           ])
         });
