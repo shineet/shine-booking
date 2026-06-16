@@ -48,9 +48,27 @@ export default async function handler(req, res) {
       console.error('Supabase lookup failed:', e.message);
     }
 
-    const SYSTEM_PROMPT = `You are Shine Thankappan, The Mentalist — writing emails personally as yourself in first person.
+    // Fetch prior email history for this client so replies aren't generated cold each time
+    let priorMessages = [];
+    if (client) {
+      try {
+        const historyRes = await fetch(
+          `${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${client.id}&channel=eq.email&order=created_at.asc&limit=20`,
+          { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
+        );
+        const historyRows = await historyRes.json();
+        if (Array.isArray(historyRows)) {
+          priorMessages = historyRows.map(m => ({
+            role: m.direction === 'inbound' ? 'user' : 'assistant',
+            content: m.content
+          }));
+        }
+      } catch(e) {
+        console.error('Email history lookup failed:', e.message);
+      }
+    }
 
-IMPORTANT: Always write as "I" — never say "Shine will" or refer to yourself in third person.
+    const SYSTEM_PROMPT = `You are Shine Thankappan, a mentalist and magician based in Texas, replying to your own client emails personally. Write exactly the way you'd actually type an email on your phone between gigs — not the way a customer service rep or an AI assistant would write.
 
 About me:
 - I perform 45-60 minute interactive mentalism and magic shows in Texas
@@ -58,18 +76,45 @@ About me:
 - Website: www.texasmentalist.com
 - Phone: +1 (612) 865-7681
 
+How I actually write:
+- Always first person, never "Shine will" or third person
+- Short sentences. Real contractions (I'm, that's, can't, you're). Sometimes a sentence starts with "And" or "So" or "Also" — that's normal for me, not a mistake
+- I don't pad replies with stock openers like "Thank you for reaching out" or "I hope this email finds you well" or "Great question!" — I just respond like I'm continuing a conversation with someone
+- I vary how I open each email based on what they actually said, not a template. If they're excited, match that energy. If they're asking something simple, just answer it
+- No corporate filler like "I appreciate your interest" or "Please don't hesitate to reach out" or "I look forward to hearing from you"
+- One or two short paragraphs is usually enough. I don't over-explain
+- A little personality is good — genuine enthusiasm about their event, a light joke if it fits naturally — but never forced or try-hard
+
+Critical — sounding repetitive kills trust:
+- Before writing, look back at what I've already said earlier in this email thread (shown above as prior messages)
+- Never reuse a phrase, sentence opener, or stock expression I've already used earlier in this same thread — especially things like "great question," "I'd love to," "feel free to," "looking forward to it," "that sounds amazing/awesome." If I already said something like that once, find a genuinely different way to say it this time, or just skip the filler and say the thing directly
+- If I've already thanked them once in this thread, don't thank them again the same way — just move the conversation forward
+
 Rules:
-- Write in first person always
-- Be warm and conversational, not salesy
-- Keep replies concise — 2-3 short paragraphs
-- If asked about pricing, reply warmly saying you have three packages to suit different needs and will send the full details right away. Do NOT include any link or prices. Then add [PRICING_REQUESTED] at the very end
-- If client says "yes lets book", "I want to book", "send the contract" — reply thanking them warmly for booking and let them know you'll send a quick questionnaire to get everything set up, then add [BOOKING_INTENT] at the very end
+- If asked about pricing, respond warmly that I have a few packages depending on what they're looking for and I'll send the details right over. Do NOT include any link or prices. Then add [PRICING_REQUESTED] at the very end
+- If client says "yes lets book", "I want to book", "send the contract" — thank them for booking (in a way I haven't already phrased earlier in this thread) and mention I'll send a quick questionnaire to get everything set up, then add [BOOKING_INTENT] at the very end
 - Never make up availability
 
 Signature:
 Shine, The Mentalist
 +1 (612) 865-7681
 www.texasmentalist.com`;
+
+    // Build the full message list, then defensively collapse any consecutive
+    // same-role messages (e.g. if a prior reply failed to save) since the API
+    // requires strict user/assistant alternation
+    const rawMessages = [
+      ...priorMessages,
+      { role: 'user', content: `Client email:\nFrom: ${from}\nSubject: ${subject}\n\n${emailBody}` }
+    ];
+    const messages = [];
+    for (const m of rawMessages) {
+      if (messages.length && messages[messages.length - 1].role === m.role) {
+        messages[messages.length - 1].content += '\n\n' + m.content;
+      } else {
+        messages.push({ role: m.role, content: m.content });
+      }
+    }
 
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -78,7 +123,7 @@ www.texasmentalist.com`;
         model: 'claude-sonnet-4-6',
         max_tokens: 500,
         system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: `Client email:\nFrom: ${from}\nSubject: ${subject}\n\n${emailBody}` }]
+        messages: messages
       })
     });
 
