@@ -179,7 +179,7 @@ www.texasmentalist.com`;
           body: JSON.stringify({ status: newStatus, last_activity: new Date().toISOString(), last_channel: 'email' })
         });
 
-        await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+        const messagesRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
           body: JSON.stringify([
@@ -187,6 +187,10 @@ www.texasmentalist.com`;
             { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject }
           ])
         });
+        if (!messagesRes.ok) {
+          const errBody = await messagesRes.text();
+          console.error('Messages insert failed:', messagesRes.status, errBody);
+        }
 
         if (reviewMode) {
           try {
