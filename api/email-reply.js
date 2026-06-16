@@ -54,10 +54,12 @@ export default async function handler(req, res) {
     const clients = await clientRes.json();
     client = clients[0] || null;
 
-    // Build pricing context
+    // Build pricing info and link
     let pricingContext = '';
+    let pricingLink = '';
     if (client) {
       const isCorporate = (client.event_type || '').toLowerCase().includes('corporate');
+      const eventTypeParam = isCorporate ? 'corporate' : 'private';
       const prices = client.pricing_type === 'custom' ? {
         deluxe: client.custom_price_deluxe || (isCorporate ? 1000 : 400),
         signature: client.custom_price_signature || (isCorporate ? 1200 : 500),
@@ -67,18 +69,30 @@ export default async function handler(req, res) {
         signature: isCorporate ? 1200 : 500,
         premium: isCorporate ? 1500 : 600
       };
+
+      // Build pricing link with correct params
+      if (client.pricing_type === 'custom') {
+        pricingLink = `https://shine-booking.vercel.app/pricing.html?type=${eventTypeParam}&d1=${prices.deluxe}&d2=${prices.signature}&d3=${prices.premium}`;
+      } else {
+        pricingLink = `https://shine-booking.vercel.app/pricing.html?type=${eventTypeParam}`;
+      }
+
       pricingContext = `
 Client: ${client.name}
 Event type: ${client.event_type}
 Pricing packages:
 - Deluxe: $${prices.deluxe}
 - Signature: $${prices.signature}
-- Premium: $${prices.premium}`;
+- Premium: $${prices.premium}
+Pricing link: ${pricingLink}`;
+    } else {
+      // Unknown client â€” send generic link
+      pricingLink = 'https://shine-booking.vercel.app/pricing.html';
     }
 
-    const SYSTEM_PROMPT = `You are Shine Thankappan, The Mentalist — writing emails personally as yourself in first person.
+    const SYSTEM_PROMPT = `You are Shine Thankappan, The Mentalist â€” writing emails personally as yourself in first person.
 
-IMPORTANT: Always write as "I" — never say "Shine will" or refer to yourself in third person. Never say "Shine offers" — say "I offer".
+IMPORTANT: Always write as "I" â€” never say "Shine will" or refer to yourself in third person. Never say "Shine offers" â€” say "I offer".
 ${pricingContext}
 
 About me:
@@ -90,9 +104,11 @@ About me:
 Rules:
 - Write in first person always
 - Be warm and conversational, not salesy
-- Keep replies concise — 2-3 short paragraphs
-- If asked about pricing, mention the three packages briefly and say: "I can send you the full package details — just let me know if you prefer email or WhatsApp!" then add [PRICING_REQUESTED] at the very end
-- If client says "yes lets book", "I want to book", "send the contract" — reply saying you will send over the contract shortly, then add [BOOKING_INTENT] at the very end
+- Keep replies concise â€” 2-3 short paragraphs
+- If asked about pricing, write a warm reply and include the pricing link EXACTLY as provided: ${pricingLink}
+  Say something like "Here's a link to my packages and pricing: ${pricingLink}" â€” include the full URL
+  Then add [PRICING_SENT] at the very end of your reply
+- If client says "yes lets book", "I want to book", "send the contract" â€” reply saying you will send over the contract shortly, then add [BOOKING_INTENT] at the very end
 - Never make up availability
 
 Signature:
@@ -123,8 +139,8 @@ www.texasmentalist.com`;
 
     const replyText = claudeData.content[0].text;
     const bookingIntent = replyText.includes('[BOOKING_INTENT]');
-    const pricingRequested = replyText.includes('[PRICING_REQUESTED]');
-    const cleanReply = replyText.replace('[BOOKING_INTENT]', '').replace('[PRICING_REQUESTED]', '').trim();
+    const pricingSent = replyText.includes('[PRICING_SENT]');
+    const cleanReply = replyText.replace('[BOOKING_INTENT]', '').replace('[PRICING_SENT]', '').trim();
 
     // Send reply email
     await fetch('https://api.resend.com/emails', {
@@ -144,8 +160,15 @@ www.texasmentalist.com`;
     // Update client status in Supabase
     if (client) {
       let newStatus = 'chatting';
-      if (pricingRequested) newStatus = 'pricing_requested';
+      if (pricingSent) newStatus = 'pricing_sent';
       if (bookingIntent) newStatus = 'booked';
+
+      const updateData = {
+        status: newStatus,
+        last_activity: new Date().toISOString()
+      };
+      // Save the pricing link sent so dashboard can show it
+      if (pricingSent) updateData.notes = `Pricing link sent: ${pricingLink}`;
 
       await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
         method: 'PATCH',
@@ -154,10 +177,7 @@ www.texasmentalist.com`;
           'apikey': process.env.SUPABASE_SECRET_KEY,
           'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
         },
-        body: JSON.stringify({
-          status: newStatus,
-          last_activity: new Date().toISOString()
-        })
+        body: JSON.stringify(updateData)
       });
 
       // Save messages
@@ -175,15 +195,15 @@ www.texasmentalist.com`;
       });
     }
 
-    // Notify you if pricing requested or booking intent
-    if (pricingRequested || bookingIntent) {
+    // Notify you if pricing sent or booking intent
+    if (pricingSent || bookingIntent) {
       const notifSubject = bookingIntent
-        ? `🎯 ${client?.name || fromEmail} wants to book!`
-        : `💰 ${client?.name || fromEmail} is asking about pricing`;
+        ? `ðŸŽ¯ ${client?.name || fromEmail} wants to book!`
+        : `ðŸ“‹ Pricing sent to ${client?.name || fromEmail}`;
 
       const notifText = bookingIntent
         ? `Client is ready to book!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\n\nLog in to send the contract:\nshine-booking.vercel.app`
-        : `Client is asking about pricing!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\nPricing type: ${client?.pricing_type}\n\nLog in to send the pricing link:\nshine-booking.vercel.app`;
+        : `Pricing link was sent to client!\n\nFrom: ${fromEmail}\nName: ${client?.name}\nEvent: ${client?.event_type}\nPricing type: ${client?.pricing_type}\n\nLink sent: ${pricingLink}\n\nshine-booking.vercel.app`;
 
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -200,7 +220,7 @@ www.texasmentalist.com`;
       });
     }
 
-    res.status(200).json({ received: true, replied: true, bookingIntent, pricingRequested });
+    res.status(200).json({ received: true, replied: true, bookingIntent, pricingSent, pricingLink });
 
   } catch(e) {
     console.error('Email reply error:', e);
