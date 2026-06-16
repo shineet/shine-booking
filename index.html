@@ -969,7 +969,7 @@
                 ? '<button class="action-btn pricing" onclick="openPricingModal(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.phone || '') + '\',\'' + (c.email || '') + '\',\'' + (c.last_channel || 'email') + '\')">Send pricing</button>'
                 : '';
                 var intakeBtn = (c.status === 'booked')
-                ? '<button class="action-btn contract" onclick="sendIntakeForm(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.email || '') + '\',\'' + (c.selected_category || '') + '\',' + (c.selected_price || 0) + ')">Send intake form</button>'
+                ? '<button class="action-btn contract" onclick="sendIntakeForm(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.email || '') + '\',\'' + (c.selected_category || '') + '\',' + (c.selected_price || 0) + ')">Resend intake form</button>'
                 : '';
                 var contractBtn = (c.status === 'intake_completed')
                 ? '<button class="action-btn contract" onclick="openContractModal(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.email || '') + '\',\'' + (c.booking_id || '') + '\')">Review and send contract</button>'
