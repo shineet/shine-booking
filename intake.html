@@ -130,15 +130,15 @@
     .radio-group {
         display: flex;
         flex-direction: column;
-        gap: 9px;
-        margin-top: 4px
+        gap: 10px;
+        margin-top: 6px
     }
 
     .radio-option {
         display: flex;
-        align-items: center;
-        gap: 11px;
-        padding: 12px 14px;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 14px 16px;
         border: 1.5px solid #e5e5ea;
         border-radius: 12px;
         cursor: pointer;
@@ -147,14 +147,15 @@
     }
 
     .radio-option .dot {
-        width: 20px;
-        height: 20px;
+        width: 21px;
+        height: 21px;
         border-radius: 50%;
         border: 2px solid #d1d1d6;
         flex-shrink: 0;
         position: relative;
         transition: border-color 0.15s;
-        background: #fff
+        background: #fff;
+        margin-top: 1px
     }
 
     .radio-option .dot::after {
@@ -162,8 +163,8 @@
         position: absolute;
         top: 50%;
         left: 50%;
-        width: 10px;
-        height: 10px;
+        width: 11px;
+        height: 11px;
         border-radius: 50%;
         background: #0071e3;
         transform: translate(-50%, -50%) scale(0);
@@ -172,7 +173,9 @@
 
     .radio-option span.label-text {
         font-size: 14.5px;
-        font-weight: 500
+        font-weight: 500;
+        line-height: 1.45;
+        padding-top: 1px
     }
 
     .radio-option.selected {
@@ -296,6 +299,10 @@
         .catch(e => {
             document.getElementById('form-content').innerHTML = '<div class="loading">Could not load this form. Please contact Shine directly.</div>';
         });
+    }
+
+    function escapeAttr(str) {
+        return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     }
 
     function radioGroup(name, options) {
@@ -487,7 +494,8 @@
         <div class="radio-group">${
             radioGroup('q_crowd', ['All adults (mixed)', 'Family crowd', 'Include kids'])}</div>
       </div>
-      <div class="field"><label>What is the occasion you are celebrating?</label><input type="text" id="q_occasion"></div>
+      <div class="field"><label>What is the occasion you are celebrating?</label><input type="text" id="q_occasion" value="${
+            (eventType && eventType !== 'other') ? escapeAttr(d.eventType) : ''}"></div>
       <div class="field"><label>Is it someone's special day?</label><input type="text" id="q_special_day" placeholder="Name, if applicable"></div>
       <div class="field"><label>Their date of birth <span class="hint">(if applicable)</span></label><input type="date" id="q_honoree_dob"></div>
       <div class="field"><label>Any VIPs or special people attending?</label><input type="text" id="q_vips"></div>
@@ -495,8 +503,6 @@
       <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
       <div class="field"><label>What kind of vibe are you looking for?</label>
         <div class="radio-group">${
-
-
 
 
 
