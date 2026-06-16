@@ -1,4 +1,4 @@
-async function createBookingAndSendIntake(clientId, clientName, clientEmail, eventType, fee) {
+async function createBookingAndSendIntake(clientId, clientName, clientEmail, eventType, eventDate, fee) {
   if (!clientEmail) return null;
 
   const bookingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings`, {
@@ -14,6 +14,7 @@ async function createBookingAndSendIntake(clientId, clientName, clientEmail, eve
       client_name: clientName,
       client_email: clientEmail,
       event_type: eventType || '',
+      event_date: eventDate || null,
       fee: fee || null,
       contract_status: 'not_sent',
       intake_status: 'sent'
@@ -70,6 +71,7 @@ export default async function handler(req, res) {
     let finalClientName = name;
     let finalClientEmail = null;
     let finalEventType = category === 'corporate' ? 'Corporate event' : 'Private celebration';
+    let finalEventDate = null;
 
     // If we have a clientId, update that client record and fetch its details
     if (clientId) {
@@ -103,10 +105,11 @@ export default async function handler(req, res) {
         finalClientName = client.name;
         finalClientEmail = client.email;
         finalEventType = client.event_type || finalEventType;
+        finalEventDate = client.event_date || null;
       }
     } else {
       // No clientId in URL — create a new lead from this selection
-      const isEmail = contact.includes('@');
+      const isEmail = (contact || '').includes('@');
       const newClientRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
         method: 'POST',
         headers: {
@@ -138,6 +141,8 @@ export default async function handler(req, res) {
     }
 
     // Notify you immediately
+    const notifyName = finalClientName || name || 'A client';
+    const notifyContact = finalClientEmail || contact || 'on file';
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -147,15 +152,15 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from: 'Shine Booking Assistant <shine@texasmentalist.com>',
         to: 'shinethementalist@gmail.com',
-        subject: `🎯 ${name || 'A client'} selected the ${label} package!`,
-        text: `Great news!\n\n${name || 'A client'} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}\n\nContact: ${contact}\n\nThe intake questionnaire is being sent to them automatically now.`
+        subject: `🎯 ${notifyName} selected the ${label} package!`,
+        text: `Great news!\n\n${notifyName} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}\n\nContact: ${notifyContact}\n\nThe intake questionnaire is being sent to them automatically now.`
       })
     });
 
     // Immediately send the intake form now that the client is booked
     if (finalClientEmail) {
       try {
-        await createBookingAndSendIntake(finalClientId, finalClientName, finalClientEmail, finalEventType, price);
+        await createBookingAndSendIntake(finalClientId, finalClientName, finalClientEmail, finalEventType, finalEventDate, price);
       } catch (intakeErr) {
         console.error('Auto-send intake failed:', intakeErr);
         // Don't fail the whole request just because intake send failed — booking itself succeeded
