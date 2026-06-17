@@ -32,6 +32,11 @@ export default async function handler(req, res) {
       }
     }
     if (!emailBody) emailBody = `Client sent an email with subject: ${subject}`;
+    // Cap length defensively — long reply threads can carry the full quoted history,
+    // which can blow up the prompt size and the response we get back from Claude.
+    if (emailBody.length > 4000) {
+      emailBody = emailBody.substring(0, 4000) + '\n\n[...message truncated, original was longer...]';
+    }
 
     const fromEmail = from.match(/<(.+)>/)?.[1] || from;
     const fromNameMatch = from.match(/^"?([^"<]+)"?\s*<.+>$/);
@@ -148,6 +153,10 @@ Only include this block once. Do not mention this block or its contents in the v
 
     const claudeData = await claudeResponse.json();
     if (claudeData.error) throw new Error(claudeData.error.message);
+    if (!claudeData.content || !claudeData.content[0] || !claudeData.content[0].text) {
+      console.error('Unexpected Claude response shape:', JSON.stringify(claudeData).substring(0, 2000));
+      throw new Error('Claude returned an unexpected response shape (no text content)');
+    }
 
     const replyText = claudeData.content[0].text;
     const bookingIntent = replyText.includes('[BOOKING_INTENT]');
@@ -391,6 +400,20 @@ Only include this block once. Do not mention this block or its contents in the v
 
   } catch(e) {
     console.error('Email reply error:', e);
+    try {
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+        body: JSON.stringify({
+          from: 'Shine Booking Assistant <shine@texasmentalist.com>',
+          to: 'shinethementalist@gmail.com',
+          subject: '⚠️ An inbound email failed to process',
+          text: `An email came in but I couldn't generate a reply or draft for it, so nothing showed up on your dashboard for this one.\n\nError: ${e.message}\n\nYou may want to check your Gmail (shinethementalist@gmail.com) for the original message and reply manually if needed.`
+        })
+      });
+    } catch(notifyErr) {
+      console.error('Failure-notification email also failed:', notifyErr.message);
+    }
     res.status(200).json({ received: true, error: e.message });
   }
 }
