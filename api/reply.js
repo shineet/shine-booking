@@ -71,6 +71,11 @@ Rules:
     });
 
     const claudeData = await claudeRes.json();
+    if (claudeData.error) throw new Error(claudeData.error.message);
+    if (!claudeData.content || !claudeData.content[0] || !claudeData.content[0].text) {
+      console.error('Unexpected Claude response shape:', JSON.stringify(claudeData).substring(0, 2000));
+      throw new Error('Claude returned an unexpected response shape (no text content)');
+    }
     const replyText = claudeData.content[0].text;
     const bookingIntent = replyText.includes('[BOOKING_INTENT]');
     const pricingRequested = replyText.includes('[PRICING_REQUESTED]');
