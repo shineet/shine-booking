@@ -1902,9 +1902,10 @@
     function deleteClientFromView() {
         if (!viewingClientId)
             return;
+        var id = viewingClientId;
         var name = document.getElementById('view-name').textContent;
         closeViewModal();
-        deleteClient(viewingClientId, name);
+        deleteClient(id, name);
     }
 
     function editFromView() {
