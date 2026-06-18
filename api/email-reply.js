@@ -38,6 +38,44 @@ export default async function handler(req, res) {
       emailBody = emailBody.substring(0, 4000) + '\n\n[...message truncated, original was longer...]';
     }
 
+    // Detect out-of-office / vacation auto-replies so we don't create a lead or
+    // draft a reply for them. No single signal is reliable on its own across all
+    // mail providers, so we check several common ones together.
+    function looksLikeAutoReply(rawEmailStr, subjectStr, bodyStr) {
+      const headerBlock = (rawEmailStr || '').split(/\r?\n\r?\n/)[0] || '';
+      const headerSignals = [
+        /^Auto-Submitted:\s*(?!no\b)/im,
+        /^X-Autoreply:\s*yes/im,
+        /^X-Autorespond:/im,
+        /^Precedence:\s*auto_reply/im,
+        /^X-Auto-Response-Suppress:/im
+      ];
+      if (headerSignals.some(function(re) { return re.test(headerBlock); })) return true;
+
+      const subjectLower = (subjectStr || '').toLowerCase();
+      const subjectSignals = [
+        'out of office', 'out-of-office', 'automatic reply', 'auto reply',
+        'auto-reply', 'autoreply', "i'm away", 'vacation response', 'away from'
+      ];
+      if (subjectSignals.some(function(s) { return subjectLower.includes(s); })) return true;
+
+      const bodyLower = (bodyStr || '').toLowerCase().substring(0, 500);
+      const bodySignals = [
+        'i am currently out of the office', "i'm currently out of the office",
+        'i am out of office', 'i will be out of the office', 'currently out of office',
+        'on vacation and will respond', 'limited access to email', 'i am on leave',
+        'will be back in the office'
+      ];
+      if (bodySignals.some(function(s) { return bodyLower.includes(s); })) return true;
+
+      return false;
+    }
+
+    if (looksLikeAutoReply(rawEmail, subject, emailBody)) {
+      res.status(200).json({ received: true, skipped: 'auto-reply / out-of-office detected' });
+      return;
+    }
+
     const fromEmail = from.match(/<(.+)>/)?.[1] || from;
     const fromNameMatch = from.match(/^"?([^"<]+)"?\s*<.+>$/);
     const fromName = fromNameMatch ? fromNameMatch[1].trim() : '';
