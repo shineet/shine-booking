@@ -66,7 +66,7 @@ export default async function handler(req, res) {
 
   // Default mode: generate AI first-contact messages, send them, and create the client record
   try {
-    const { toPhone, toEmail, clientName, eventType, venue, otherEntertainment, pricingType, prices, leadSource, eventDate, guests, smsOverride, emailOverride, ...claudeBody } = req.body;
+    const { toPhone, toEmail, clientName, eventType, venue, otherEntertainment, pricingType, prices, leadSource, eventDate, guests, smsOverride, emailOverride, existingClientId, ...claudeBody } = req.body;
 
     // Step 1: Claude writes SMS (or use override)
     let smsMessage = smsOverride;
@@ -179,36 +179,56 @@ Rules:
     // Step 5: Save client to Supabase
     let clientId = null;
     if (toPhone || toEmail) {
-      const supabaseRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': process.env.SUPABASE_SECRET_KEY,
-          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
-          'Prefer': 'return=representation'
-        },
-        body: JSON.stringify({
-          name: clientName,
-          phone: toPhone || null,
-          email: toEmail || null,
-          event_type: eventType,
-          venue: venue || null,
-          other_entertainment: otherEntertainment || null,
-          lead_source: leadSource || null,
-          event_date: eventDate || null,
-          guests: guests || null,
-          pricing_type: pricingType || 'standard',
-          custom_price_deluxe: prices?.deluxe || null,
-          custom_price_signature: prices?.signature || null,
-          custom_price_premium: prices?.premium || null,
-          status: 'new',
-          last_activity: new Date().toISOString()
-        })
-      });
-      const supabaseData = await supabaseRes.json();
-      if (supabaseData[0]?.id) {
-        clientId = supabaseData[0].id;
+      const clientPayload = {
+        name: clientName,
+        phone: toPhone || null,
+        email: toEmail || null,
+        event_type: eventType,
+        venue: venue || null,
+        other_entertainment: otherEntertainment || null,
+        lead_source: leadSource || null,
+        event_date: eventDate || null,
+        guests: guests || null,
+        pricing_type: pricingType || 'standard',
+        custom_price_deluxe: prices?.deluxe || null,
+        custom_price_signature: prices?.signature || null,
+        custom_price_premium: prices?.premium || null,
+        last_activity: new Date().toISOString()
+      };
 
+      if (existingClientId) {
+        // Update the existing record (e.g. messaging a previously-saved lead for the first time)
+        // rather than creating a duplicate. Status moves on from 'new' since first contact is happening now.
+        clientPayload.status = 'chatting';
+        const updateRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${existingClientId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.SUPABASE_SECRET_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(clientPayload)
+        });
+        const updateData = await updateRes.json();
+        if (updateData[0]?.id) clientId = updateData[0].id;
+      } else {
+        clientPayload.status = 'new';
+        const supabaseRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.SUPABASE_SECRET_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(clientPayload)
+        });
+        const supabaseData = await supabaseRes.json();
+        if (supabaseData[0]?.id) clientId = supabaseData[0].id;
+      }
+
+      if (clientId) {
         // Save outbound message to messages table
         await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
           method: 'POST',
@@ -218,6 +238,7 @@ Rules:
             'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
           },
           body: JSON.stringify({
+
             client_id: clientId,
             channel: 'sms',
             direction: 'outbound',
