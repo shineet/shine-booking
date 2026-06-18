@@ -2134,7 +2134,7 @@
             pricingLink = 'https://shine-booking.vercel.app/pricing.html?format=strolling&type=corporate&cid=' + currentClientId + '&sr=' + scr + '&sf=' + scf;
         }
 
-        fetch('/api/send-pricing', {
+        fetch('/api/chat?mode=pricing', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
