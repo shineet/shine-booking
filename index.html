@@ -894,7 +894,7 @@
 
         <div class="tab-bar">
             <button class="tab active" onclick="showTab('dashboard')">Dashboard</button>
-            <button class="tab" onclick="showTab('new-lead')">+ New Lead</button>
+            <button class="tab" onclick="messagingExistingClientId=null;showTab('new-lead')">+ New Lead</button>
         </div>
 
         <div id="dashboard-view">
@@ -1037,6 +1037,7 @@
             </div>
 
             <button class="send-btn" onclick="sendMessages()" id="send-btn" disabled>Send messages</button>
+            <button class="generate-btn" onclick="saveLeadOnly()" id="save-lead-btn" style="margin-top:10px">Save lead (no message yet)</button>
             <div class="status" id="status"></div>
         </div>
     </div>
@@ -1241,6 +1242,7 @@
                 <button class="action-btn delete" style="flex:1;padding:12px" onclick="deleteClientFromView()">Delete</button>
                 <button class="modal-send" style="flex:1" onclick="editFromView()">Edit</button>
             </div>
+            <button class="generate-btn" id="view-message-btn" style="margin-top:10px;display:none" onclick="messageClientFromView()">Generate & send first message</button>
         </div>
     </div>
 
@@ -1848,6 +1850,8 @@
     }
 
     var viewingClientId = null;
+    var viewingClientForMessage = null;
+    var messagingExistingClientId = null;
 
     function openViewModal(clientId) {
         viewingClientId = clientId;
@@ -1878,6 +1882,15 @@
 
             document.getElementById('view-name').textContent = c.name || 'Client';
             document.getElementById('view-status-line').textContent = statusLabel;
+
+            var msgBtn = document.getElementById('view-message-btn');
+            if (c.status === 'new') {
+                msgBtn.style.display = 'block';
+                viewingClientForMessage = c;
+            } else {
+                msgBtn.style.display = 'none';
+                viewingClientForMessage = null;
+            }
 
             var rowsHtml = [
             ['Phone', c.phone],
@@ -1922,6 +1935,46 @@
         var id = viewingClientId;
         closeViewModal();
         openEditModal(id);
+    }
+
+    function messageClientFromView() {
+        if (!viewingClientForMessage)
+            return;
+        var c = viewingClientForMessage;
+        messagingExistingClientId = c.id;
+        closeViewModal();
+        showTab('new-lead');
+
+        document.getElementById('name').value = c.name || '';
+        document.getElementById('phone').value = c.phone || '';
+        document.getElementById('email').value = c.email || '';
+        if (c.lead_source) {
+            var srcSelect = document.getElementById('lead_source');
+            var matched = Array.prototype.find.call(srcSelect.options, function(o) {
+                return o.value === c.lead_source;
+            });
+            if (matched) {
+                srcSelect.value = c.lead_source;
+            } else {
+                srcSelect.value = 'Other';
+                document.getElementById('other-source-field').style.display = 'block';
+                document.getElementById('other_source_name').value = c.lead_source;
+            }
+        }
+        if (c.event_type)
+            document.getElementById('event_type').value = c.event_type;
+        if (c.event_date)
+            document.getElementById('date').value = c.event_date;
+        if (c.guests)
+            document.getElementById('guests').value = mapGuestsToOption(c.guests) || '';
+        if (c.venue)
+            document.getElementById('venue').value = c.venue;
+        if (c.other_entertainment)
+            document.getElementById('other_entertainment').value = c.other_entertainment;
+        if (c.notes)
+            document.getElementById('notes').value = c.notes;
+
+        showStatus('Loaded ' + (c.name || 'this client') + '\'s details — generate and send their first message below.', 'success');
     }
 
     var editingClientId = null;
@@ -2329,6 +2382,59 @@
         };
     }
 
+    function saveLeadOnly() {
+        var d = getFormData();
+        if (!d.name) {
+            alert('Please enter a client name first.');
+            return;
+        }
+
+        var btn = document.getElementById('save-lead-btn');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+
+        fetch(SUPABASE_URL + '/rest/v1/clients', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_KEY,
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify({
+                name: d.name,
+                phone: d.phone || null,
+                email: d.email || null,
+                event_type: d.eventType || null,
+                event_date: d.date || null,
+                guests: d.guests || null,
+                venue: d.venue || null,
+                other_entertainment: d.otherEntertainment || null,
+                lead_source: d.leadSource || null,
+                notes: d.notes || null,
+                status: 'new',
+                last_activity: new Date().toISOString()
+            })
+        })
+        .then(function(r) {
+            if (!r.ok)
+                return r.text().then(function(t) {
+                    throw new Error('Save failed (' + r.status + '): ' + t);
+                });
+            return r.json();
+        })
+        .then(function() {
+            showTab('dashboard');
+        })
+        .catch(function(err) {
+            alert('Could not save lead: ' + err.message);
+        })
+        .finally(function() {
+            btn.disabled = false;
+            btn.textContent = 'Save lead (no message yet)';
+        });
+    }
+
     function buildPrompt(d) {
         return 'Bark lead:\nName: ' + d.name + '\nEvent: ' + (d.eventType || 'not specified') + '\nDate: ' + formatDate(d.date) + '\nGuests: ' + (d.guests || 'not specified') + '\nVenue: ' + (d.venue || 'not specified') + '\nOther entertainment: ' + (d.otherEntertainment || 'not specified') + '\nNotes: ' + (d.notes || 'none');
     }
@@ -2436,7 +2542,8 @@
                 eventDate: d.date,
                 guests: d.guests,
                 smsOverride: smsText,
-                emailOverride: 'Subject: ' + emailSubject + '\n\n' + emailBody
+                emailOverride: 'Subject: ' + emailSubject + '\n\n' + emailBody,
+                existingClientId: messagingExistingClientId || undefined
             })
         })
         .then(function(r) {
@@ -2447,6 +2554,7 @@
                 throw new Error(data.error.message);
             var followup = document.getElementById('followup').checked;
             showStatus((data.smsSent ? 'SMS sent to ' + d.phone : 'SMS pending A2P approval') + '<br>' + (data.emailSent ? 'Email sent to ' + d.email : (d.email ? 'Email not sent' : '')) + '<br>' + (followup ? 'Follow-up scheduled in 24 hours if no reply.' : ''), 'success');
+            messagingExistingClientId = null;
             if (data.smsSent || data.emailSent)
                 setTimeout(function() {
                     showTab('dashboard');
