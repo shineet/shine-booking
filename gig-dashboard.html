@@ -474,6 +474,16 @@ td { padding: 9px 14px; vertical-align: middle; }
 
 </div><!-- /main -->
 
+<!-- ── Past Gig Detail Modal ── -->
+<div class="modal-overlay" id="gig-detail-modal">
+  <div class="modal wide">
+    <div id="gig-detail-content"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('gig-detail-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Detail Modal (upcoming gig) ── -->
 <div class="modal-overlay" id="detail-modal">
   <div class="modal wide">
@@ -1070,10 +1080,11 @@ function renderTable() {
     const fee   = Number(g.fee)||0;
     const tip   = Number(g.tip)||0;
     const total = fee+tip;
+    const clickable = g.client_id ? `style="cursor:pointer" onclick="openGigDetail('${g.id}')"` : `onclick="openGigDetail('${g.id}')"  style="cursor:pointer"`;
     return `
-    <tr>
+    <tr ${clickable} title="Click to view details">
       <td>${fmtDate(g.date) || '<span style="color:var(--muted)">—</span>'}</td>
-      <td><strong>${esc(g.client)}</strong></td>
+      <td><strong>${esc(g.client)}</strong>${g.client_id ? ' <span style="font-size:10px;color:var(--green);opacity:.7">●</span>' : ''}</td>
       <td class="fee-cell">${fee>0 ? fmt(fee) : '<span style="color:var(--muted)">—</span>'}</td>
       <td class="tip-cell">${tip>0 ? fmt(tip) : ''}</td>
       <td class="total-cell">${total>0 ? fmt(total) : '<span style="color:var(--muted)">—</span>'}</td>
@@ -1081,7 +1092,7 @@ function renderTable() {
       <td><span class="${srcClass(g.source)}">${esc(normSrc(g.source))}</span></td>
       <td style="color:var(--muted);font-size:12px">${esc(g.duration||'')}</td>
       <td style="font-size:12px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(g.type||'')}">${esc(g.type||'')}</td>
-      <td style="white-space:nowrap">
+      <td style="white-space:nowrap" onclick="event.stopPropagation()">
         <button class="row-btn" onclick="openEdit('${g.id}')">edit</button>
         <button class="row-btn del" onclick="deleteGig('${g.id}')">del</button>
       </td>
@@ -1153,6 +1164,92 @@ async function deleteGig(id) {
     setSyncState('error', 'Delete failed');
     alert('Could not delete. Error: ' + err.message);
   }
+}
+
+// ── Past gig detail ───────────────────────────────────────────────────────────
+async function openGigDetail(gigId) {
+  const g = allGigs.find(x => x.id === gigId);
+  if (!g) return;
+
+  const fee   = Number(g.fee)||0;
+  const tip   = Number(g.tip)||0;
+  const total = fee + tip;
+
+  const renderField = f => f.val ? `
+    <div class="detail-field${f.full ? ' full' : ''}">
+      <div class="lbl">${esc(f.lbl)}</div>
+      <div class="val">${f.link ? `<a href="${esc(f.link)}">${esc(f.val)}</a>` : esc(f.val)}</div>
+    </div>` : '';
+
+  // Start with gig-level info
+  let html = `
+    <div class="detail-header">
+      <div class="detail-name">${esc(g.client)}</div>
+      <div class="detail-event">${esc(g.type || 'Past Gig')} &nbsp;·&nbsp; <span style="color:var(--muted)">${fmtDate(g.date) || 'Date unknown'}</span></div>
+    </div>
+    <div class="fee-highlight">
+      <div>
+        <div class="lbl">Total Earned</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">Fee ${fmt(fee)}${tip ? ' + Tip ' + fmt(tip) : ''}</div>
+      </div>
+      <div class="val">${fmt(total)}</div>
+    </div>
+    <div class="detail-grid">
+      ${renderField({ lbl:'Date',     val: fmtDate(g.date) })}
+      ${renderField({ lbl:'Time',     val: g.time })}
+      ${renderField({ lbl:'Source',   val: normSrc(g.source) })}
+      ${renderField({ lbl:'Duration', val: g.duration })}
+      ${renderField({ lbl:'Type',     val: g.type, full: true })}
+    </div>`;
+
+  // If linked to a client, fetch full details
+  if (g.client_id) {
+    try {
+      const rows = await sbGet(`clients?id=eq.${g.client_id}&select=*,bookings(*)`);
+      const c = rows[0];
+      if (c) {
+        const booking = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings;
+        const intake  = booking?.intake_answers || {};
+
+        const contactFields = [
+          { lbl:'Phone', val: c.phone, link: c.phone ? `tel:${c.phone}` : null },
+          { lbl:'Email', val: c.email, link: c.email ? `mailto:${c.email}` : null },
+          { lbl:'Venue', val: booking?.venue_address || c.venue, full: true },
+          { lbl:'Guests', val: c.guests },
+        ].filter(f => f.val);
+
+        const intakeFields = Object.entries(intake)
+          .filter(([k,v]) => v && INTAKE_LABELS[k])
+          .map(([k,v]) => ({ lbl: INTAKE_LABELS[k], val: String(v), full: k==='q_trivia' }));
+
+        const contractUrl = c.booking_id
+          ? `https://shine-booking.vercel.app/contract.html?bid=${c.booking_id}` : null;
+        const contractStatus = booking?.contract_status || '';
+        let contractLabel = '';
+        if (contractStatus === 'signed') {
+          const d = booking?.signed_at ? new Date(booking.signed_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+          contractLabel = `Signed by ${booking?.signed_name || c.name}${d ? ' on ' + d : ''}`;
+        }
+
+        if (contactFields.length) html += `
+          <div style="margin:16px 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Contact</div>
+          <div class="detail-grid">${contactFields.map(renderField).join('')}</div>`;
+
+        if (contractLabel) html += `
+          <div style="margin:16px 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Contract</div>
+          <div class="detail-grid">${renderField({ lbl:'Contract', val: contractLabel, link: contractUrl })}</div>`;
+
+        if (intakeFields.length) html += `
+          <div style="margin:16px 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Questionnaire Answers</div>
+          <div class="detail-grid">${intakeFields.map(renderField).join('')}</div>`;
+      }
+    } catch(e) {
+      html += `<p style="color:var(--muted);font-size:12px;margin-top:12px">Could not load full client details.</p>`;
+    }
+  }
+
+  document.getElementById('gig-detail-content').innerHTML = html;
+  openModal('gig-detail-modal');
 }
 
 // ── Export ────────────────────────────────────────────────────────────────────
