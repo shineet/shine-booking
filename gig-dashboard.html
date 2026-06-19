@@ -755,11 +755,23 @@ function openDetail(clientId) {
     { lbl: 'Venue',     val: venue,              full: true },
   ];
 
+  // Contract link — reconstruct from booking_id, label from actual status
+  const contractUrl = c.booking_id
+    ? `https://shine-booking.vercel.app/contract.html?bid=${c.booking_id}` : null;
+  const contractStatus = booking?.contract_status || '';
+  let contractLabel = '';
+  if (contractStatus === 'signed') {
+    const signedDate = booking?.signed_at ? new Date(booking.signed_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+    contractLabel = `Signed by ${esc(booking?.signed_name || c.name)}${signedDate ? ' on ' + signedDate : ''}`;
+  } else if (contractStatus) {
+    contractLabel = contractStatus.charAt(0).toUpperCase() + contractStatus.slice(1) + ' — awaiting signature';
+  }
+
   // Other entertainment, source, etc.
   const extraFields = [];
   if (c.lead_source)          extraFields.push({ lbl: 'Lead Source',         val: c.lead_source });
   if (c.other_entertainment)  extraFields.push({ lbl: 'Other Entertainment', val: c.other_entertainment });
-  if (booking?.contract_status) extraFields.push({ lbl: 'Contract',          val: booking.contract_status });
+  if (contractLabel)          extraFields.push({ lbl: 'Contract',            val: contractLabel, link: contractUrl });
 
   // Intake / questionnaire answers
   const intake = booking?.intake_answers || {};
@@ -795,7 +807,7 @@ function openDetail(clientId) {
       <div class="detail-grid">${intakeFields.map(renderField).join('')}</div>
     ` : ''}
 
-    ${c.notes ? `
+    ${c.notes && !c.notes.startsWith('Contract sent:') ? `
       <div style="margin:16px 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Notes</div>
       <div class="detail-notes">${esc(c.notes)}</div>
     ` : ''}
