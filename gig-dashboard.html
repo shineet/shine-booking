@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shine, The Mentalist — Gig Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #22263a;
+  --border: #2a2f45;
+  --accent: #7c6af5;
+  --accent2: #5b8af5;
+  --green: #4caf87;
+  --amber: #f0a500;
+  --red: #e05252;
+  --text: #e8eaf6;
+  --muted: #8892b0;
+  --card-bg: #1e2235;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── Topbar ── */
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.topbar h1 { font-size: 17px; font-weight: 600; }
+.topbar .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.sync-status { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.sync-dot.live { background: var(--green); }
+.sync-dot.syncing { background: var(--accent); animation: pulse 1s infinite; }
+.sync-dot.error { background: var(--red); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 15px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity .15s;
+  white-space: nowrap;
+}
+button:hover { opacity: .85; }
+button:disabled { opacity: .4; cursor: default; }
+button.secondary { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+button.danger { background: #5c2020; color: #f8a0a0; border: 1px solid #7a2a2a; }
+button.success { background: #1a3a28; color: #6ee0a4; border: 1px solid #2a5a38; }
+
+/* ── Main layout ── */
+.main { padding: 22px 28px; max-width: 1400px; margin: 0 auto; }
+
+/* ── Upcoming section ── */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.section-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+.count-pill {
+  background: var(--amber);
+  color: #1a1200;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.upcoming-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.upcoming-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+  position: relative;
+  overflow: hidden;
+}
+.upcoming-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+.upcoming-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+.upcoming-card.urgent::before { background: var(--amber); }
+.upcoming-card.soon::before { background: var(--green); }
+.upcoming-card.future::before { background: var(--accent); }
+.upcoming-card.urgent { border-color: rgba(240,165,0,.3); }
+.upcoming-card.soon { border-color: rgba(76,175,135,.25); }
+
+.card-days {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  margin-bottom: 8px;
+}
+.urgent .card-days { color: var(--amber); }
+.soon .card-days { color: var(--green); }
+.future .card-days { color: var(--accent); }
+
+.card-client { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.card-meta { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.6; }
+.card-footer { display: flex; justify-content: space-between; align-items: center; }
+.card-fee { font-size: 18px; font-weight: 700; color: var(--green); }
+.card-source { font-size: 11px; color: var(--muted); }
+
+/* ── KPI row ── */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.kpi {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.kpi .label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 5px; }
+.kpi .value { font-size: 24px; font-weight: 700; letter-spacing: -.5px; }
+.kpi .sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.kpi .value.green { color: var(--green); }
+.kpi .value.purple { color: var(--accent); }
+.kpi .value.blue { color: var(--accent2); }
+
+/* ── Year strip ── */
+.year-strip { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
+.year-pill {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.year-pill:hover, .year-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.year-pill .yr-rev { color: rgba(255,255,255,.65); }
+
+/* ── Charts ── */
+.charts-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.chart-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+}
+.chart-card h3 { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 14px; }
+.chart-card canvas { max-height: 190px; }
+
+/* ── Table ── */
+.table-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.table-header {
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.table-header h3 { font-size: 14px; font-weight: 600; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.filters input, .filters select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 11px;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+.filters input::placeholder { color: var(--muted); }
+.filters input:focus, .filters select:focus { border-color: var(--accent); }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--muted);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+thead th:hover { color: var(--text); }
+thead th.sorted { color: var(--accent); }
+tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--surface2); }
+td { padding: 9px 14px; vertical-align: middle; }
+
+.badge { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+.badge.bark { background: #1e3a1e; color: #5dc87a; }
+.badge.gigsalad { background: #1e2e3a; color: #5bb0d8; }
+.badge.bash { background: #2d2a1e; color: #d4b85c; }
+.badge.thumbtack { background: #2a1e3a; color: #b85cd4; }
+.badge.directmail { background: #2a201e; color: #d47c5c; }
+.badge.wix { background: #1e2a2a; color: #5cd4b8; }
+.badge.other { background: #242424; color: var(--muted); }
+
+.fee-cell { font-weight: 600; }
+.total-cell { font-weight: 700; color: var(--green); }
+.tip-cell { color: var(--muted); }
+
+.table-footer {
+  padding: 10px 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.row-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.row-btn:hover { background: var(--surface2); color: var(--text); opacity: 1; }
+.row-btn.del { color: #c05050; }
+
+.empty { text-align: center; padding: 36px; color: var(--muted); }
+
+/* ── Modals ── */
+.modal-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.7);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 26px;
+  width: 500px;
+  max-width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal.wide { width: 620px; }
+.modal h2 { font-size: 16px; margin-bottom: 18px; }
+
+/* Detail modal */
+.detail-header { margin-bottom: 20px; }
+.detail-name { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.detail-event { font-size: 14px; color: var(--muted); }
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.detail-field { display: flex; flex-direction: column; gap: 3px; }
+.detail-field.full { grid-column: 1/-1; }
+.detail-field .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+.detail-field .val { font-size: 14px; font-weight: 500; }
+.detail-field .val a { color: var(--accent2); text-decoration: none; }
+.detail-field .val a:hover { text-decoration: underline; }
+
+.detail-notes {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 20px;
+  white-space: pre-wrap;
+}
+
+.fee-highlight {
+  background: #1a2f1e;
+  border: 1px solid #2a4f2e;
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.fee-highlight .lbl { font-size: 12px; color: var(--muted); }
+.fee-highlight .val { font-size: 24px; font-weight: 700; color: var(--green); }
+
+/* Add/edit form */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-group { display: flex; flex-direction: column; gap: 4px; }
+.form-group.full { grid-column: 1/-1; }
+.form-group label { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+.form-group input, .form-group select, .form-group textarea {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 11px;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+
+/* Done modal */
+.done-summary {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.done-total { font-size: 18px; font-weight: 700; color: var(--green); margin-top: 6px; }
+
+@media (max-width: 900px) {
+  .kpi-row { grid-template-columns: repeat(3, 1fr); }
+  .charts-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .main { padding: 16px; }
+  .detail-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div>
+    <h1>Shine, The Mentalist — Gig Dashboard</h1>
+    <div class="sub" id="topbar-sub">Loading...</div>
+  </div>
+  <div class="topbar-right">
+    <div class="sync-status">
+      <div class="sync-dot syncing" id="sync-dot"></div>
+      <span id="sync-label">Connecting...</span>
+    </div>
+    <button class="secondary" id="refresh-btn" onclick="loadAll()">Refresh</button>
+    <button class="secondary" onclick="exportCSV()">Export CSV</button>
+    <button onclick="openAdd()">+ Add Gig</button>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Upcoming gigs -->
+  <div id="upcoming-section" style="display:none; margin-bottom:28px;">
+    <div class="section-header">
+      <span class="section-title">Upcoming Gigs</span>
+      <span class="count-pill" id="upcoming-count"></span>
+    </div>
+    <div class="upcoming-grid" id="upcoming-cards"></div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi"><div class="label">Total Revenue</div><div class="value green" id="kpi-total">—</div><div class="sub" id="kpi-gigs-sub">—</div></div>
+    <div class="kpi"><div class="label">This Year (2026)</div><div class="value purple" id="kpi-year">—</div><div class="sub" id="kpi-year-sub">—</div></div>
+    <div class="kpi"><div class="label">Avg Fee / Gig</div><div class="value blue" id="kpi-avg">—</div><div class="sub">paid gigs only</div></div>
+    <div class="kpi"><div class="label">Top Source</div><div class="value" id="kpi-source" style="font-size:18px">—</div><div class="sub" id="kpi-source-sub">—</div></div>
+    <div class="kpi"><div class="label">Best Single Gig</div><div class="value" id="kpi-best" style="font-size:18px">—</div><div class="sub" id="kpi-best-sub">—</div></div>
+  </div>
+
+  <!-- Year strip -->
+  <div class="year-strip" id="year-strip"></div>
+
+  <!-- Charts -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <h3>Revenue by Year</h3>
+      <canvas id="chart-year"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Gigs by Source</h3>
+      <canvas id="chart-source"></canvas>
+    </div>
+  </div>
+
+  <!-- History table -->
+  <div class="table-section">
+    <div class="table-header">
+      <h3>Gig History <span id="count-badge" style="font-size:12px;color:var(--muted);font-weight:400;margin-left:4px;"></span></h3>
+      <div class="filters">
+        <input type="text" id="search" placeholder="Search client, type..." oninput="applyFilters()">
+        <select id="filter-year" onchange="applyFilters()"><option value="">All Years</option></select>
+        <select id="filter-source" onchange="applyFilters()"><option value="">All Sources</option></select>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortBy('date')" id="th-date">Date ↕</th>
+            <th onclick="sortBy('client')" id="th-client">Client ↕</th>
+            <th onclick="sortBy('fee')" id="th-fee">Fee ↕</th>
+            <th onclick="sortBy('tip')" id="th-tip">Tip ↕</th>
+            <th onclick="sortBy('total')" id="th-total">Total ↕</th>
+            <th>Time</th>
+            <th onclick="sortBy('source')" id="th-source">Source ↕</th>
+            <th>Duration</th>
+            <th>Type / Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="table-footer">
+      <span id="footer-count">—</span>
+      <span id="footer-total">—</span>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- ── Detail Modal (upcoming gig) ── -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal wide">
+    <div id="detail-content"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('detail-modal')">Close</button>
+      <button class="success" id="detail-done-btn" onclick="openMarkDone()">Mark as Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Mark as Done Modal ── -->
+<div class="modal-overlay" id="done-modal">
+  <div class="modal">
+    <h2>Mark Gig as Done</h2>
+    <div class="done-summary" id="done-summary"></div>
+    <div class="form-group">
+      <label>Tip received ($)</label>
+      <input type="number" id="done-tip" placeholder="0" min="0" oninput="updateDoneTotal()">
+    </div>
+    <div id="done-total-line" style="margin-top:10px;font-size:13px;color:var(--muted);"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('done-modal')">Cancel</button>
+      <button class="success" onclick="confirmDone()">Archive &amp; Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add / Edit Modal ── -->
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <h2 id="add-modal-title">Add Gig</h2>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Client Name</label>
+        <input type="text" id="f-client" placeholder="e.g. Sarah M.">
+      </div>
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="f-date">
+      </div>
+      <div class="form-group">
+        <label>Time</label>
+        <input type="text" id="f-time" placeholder="e.g. 7-8 PM">
+      </div>
+      <div class="form-group">
+        <label>Fee ($)</label>
+        <input type="number" id="f-fee" placeholder="0" min="0">
+      </div>
+      <div class="form-group">
+        <label>Tip ($)</label>
+        <input type="number" id="f-tip" placeholder="0" min="0">
+      </div>
+      <div class="form-group">
+        <label>Source</label>
+        <select id="f-source">
+          <option value="">Unknown</option>
+          <option value="Bark">Bark</option>
+          <option value="GigSalad">GigSalad</option>
+          <option value="Bash">Bash</option>
+          <option value="Thumbtack">Thumbtack</option>
+          <option value="Wix">Wix</option>
+          <option value="Direct Mail">Direct Mail</option>
+          <option value="Referral">Referral</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Duration</label>
+        <input type="text" id="f-duration" placeholder="e.g. 60 minutes">
+      </div>
+      <div class="form-group full">
+        <label>Event Type / Notes</label>
+        <textarea id="f-type" rows="2" placeholder="e.g. Birthday party, corporate dinner..."></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('add-modal')">Cancel</button>
+      <button onclick="saveGig()">Save Gig</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ──────────────────────────────────────────────────────────────────
+const SB_URL = 'https://nkhwttlmtidtippylbzs.supabase.co';
+const SB_KEY = 'sb_publishable_jvudqPYcwnnqjO8w7DQd2g_SSyb-HJl';
+const TODAY  = new Date().toISOString().split('T')[0];
+
+const SB_HEADERS = {
+  'apikey': SB_KEY,
+  'Authorization': `Bearer ${SB_KEY}`,
+  'Content-Type': 'application/json',
+  'Prefer': 'return=representation',
+};
+
+// ── State ────────────────────────────────────────────────────────────────────
+let allGigs     = [];   // from gigs table
+let upcoming    = [];   // confirmed clients with future date
+let filtered    = [];
+let sortKey     = 'date';
+let sortDir     = -1;
+let editingId   = null; // UUID string or null
+let activeClient = null; // client record open in detail modal
+
+// ── Supabase helpers ─────────────────────────────────────────────────────────
+async function sbGet(path) {
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, { headers: SB_HEADERS });
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  return r.json();
+}
+async function sbPost(table, body) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}`, {
+    method: 'POST', headers: SB_HEADERS, body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  return r.json();
+}
+async function sbPatch(table, id, body) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, {
+    method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  return r.json();
+}
+async function sbDelete(table, id) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, {
+    method: 'DELETE', headers: SB_HEADERS
+  });
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+}
+
+// ── Load all data ─────────────────────────────────────────────────────────────
+async function loadAll() {
+  setSyncState('syncing', 'Loading...');
+  document.getElementById('refresh-btn').disabled = true;
+  try {
+    const confirmedStatuses = 'booked,confirmed,contract_signed,paid';
+    const [gigs, clients] = await Promise.all([
+      sbGet('gigs?select=*&order=date.desc.nullslast'),
+      sbGet(`clients?or=(booking_id.not.is.null,status.in.(${confirmedStatuses}))&select=*,bookings(*)`),
+    ]);
+
+    allGigs  = Array.isArray(gigs) ? gigs : [];
+    // Upcoming = confirmed clients with future event date, not yet marked completed
+    upcoming = (Array.isArray(clients) ? clients : []).filter(c => {
+      if (!c.event_date) return false;
+      if (c.event_date < TODAY) return false;
+      if (c.status === 'completed') return false;
+      return true;
+    });
+
+    renderUpcoming();
+    populateFilters();
+    renderKPIs();
+    renderCharts();
+    applyFilters();
+    renderYearStrip();
+
+    const now = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    setSyncState('live', `Synced ${now}`);
+    document.getElementById('topbar-sub').textContent =
+      `${allGigs.length} gigs in history · ${upcoming.length} upcoming · Last sync ${now}`;
+  } catch (err) {
+    console.error(err);
+    setSyncState('error', 'Sync failed');
+    // Fallback to cached data
+    const cached = localStorage.getItem('shine_gigs_cache');
+    if (cached) {
+      allGigs = JSON.parse(cached);
+      populateFilters(); renderKPIs(); renderCharts(); applyFilters(); renderYearStrip();
+      document.getElementById('topbar-sub').textContent = 'Offline — showing cached data';
+    }
+  }
+  document.getElementById('refresh-btn').disabled = false;
+  // Cache for offline
+  if (allGigs.length) localStorage.setItem('shine_gigs_cache', JSON.stringify(allGigs));
+}
+
+function setSyncState(state, msg) {
+  document.getElementById('sync-dot').className = 'sync-dot ' + state;
+  document.getElementById('sync-label').textContent = msg;
+}
+
+// ── Upcoming cards ───────────────────────────────────────────────────────────
+function daysUntil(dateStr) {
+  const diff = new Date(dateStr) - new Date(TODAY);
+  return Math.ceil(diff / 86400000);
+}
+
+function urgencyClass(days) {
+  if (days <= 7)  return 'urgent';
+  if (days <= 30) return 'soon';
+  return 'future';
+}
+
+function renderUpcoming() {
+  const sec   = document.getElementById('upcoming-section');
+  const grid  = document.getElementById('upcoming-cards');
+  const count = document.getElementById('upcoming-count');
+
+  if (!upcoming.length) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  count.textContent = upcoming.length;
+
+  const sorted = [...upcoming].sort((a, b) => a.event_date.localeCompare(b.event_date));
+
+  grid.innerHTML = sorted.map(c => {
+    const days  = daysUntil(c.event_date);
+    const cls   = urgencyClass(days);
+    const label = days === 0 ? 'TODAY' : days === 1 ? 'TOMORROW' : `IN ${days} DAYS`;
+    const fee   = c.selected_price ? `$${Number(c.selected_price).toLocaleString()}` : 'Fee TBD';
+    const meta  = [fmtDate(c.event_date), c.event_type, c.venue].filter(Boolean).join(' · ');
+    return `
+      <div class="upcoming-card ${cls}" onclick="openDetail('${c.id}')">
+        <div class="card-days">${label}</div>
+        <div class="card-client">${esc(c.name)}</div>
+        <div class="card-meta">${esc(meta)}</div>
+        <div class="card-footer">
+          <div class="card-fee">${fee}</div>
+          <div class="card-source">${esc(c.lead_source || '')}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Detail modal ─────────────────────────────────────────────────────────────
+
+// Human-readable labels for known field names
+const FIELD_LABELS = {
+  name: null,                    // shown in header
+  id: null, created_at: null, status: null, last_activity: null,
+  last_channel: null, pricing_type: null, booking_id: null,
+  custom_price_deluxe: null, custom_price_signature: null, custom_price_premium: null,
+  selected_price: null,          // shown in fee block
+  selected_package: null, selected_category: null,
+  // shown in primary grid — handled explicitly
+  event_date: null, phone: null, email: null, venue: null,
+  guests: null, lead_source: null, event_type: null,
+  notes: null,                   // shown in notes block
+  // everything else gets auto-labelled
+  other_entertainment:  'Other Entertainment',
+  bookings:             null,    // handled separately as booking block
+};
+
+function labelFor(key) {
+  if (key in FIELD_LABELS) return FIELD_LABELS[key];
+  return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function openDetail(clientId) {
+  const c = upcoming.find(x => x.id === clientId);
+  if (!c) return;
+  activeClient = c;
+
+  const days    = daysUntil(c.event_date);
+  const daysLbl = days === 0 ? 'TODAY' : days === 1 ? 'TOMORROW' : `IN ${days} DAYS`;
+  const fee     = c.selected_price ? `$${Number(c.selected_price).toLocaleString()}` : 'TBD';
+  const pkg     = [c.selected_category, c.selected_package].filter(Boolean).join(' · ');
+
+  // Primary grid fields (always shown first, even if null)
+  const primaryFields = [
+    { lbl: 'Date',    val: fmtDate(c.event_date), link: null },
+    { lbl: 'Source',  val: c.lead_source || '—',  link: null },
+    { lbl: 'Venue',   val: c.venue || '—',         link: null },
+    { lbl: 'Guests',  val: c.guests || '—',         link: null },
+    { lbl: 'Phone',   val: c.phone || '—',          link: c.phone ? `tel:${c.phone}` : null },
+    { lbl: 'Email',   val: c.email || '—',          link: c.email ? `mailto:${c.email}` : null },
+  ];
+
+  // Extra fields — anything in the record not already handled and not null/empty
+  const skipKeys = new Set(['id','name','created_at','status','last_activity','last_channel',
+    'pricing_type','booking_id','custom_price_deluxe','custom_price_signature',
+    'custom_price_premium','selected_price','selected_package','selected_category',
+    'event_date','phone','email','venue','guests','lead_source','event_type','notes','bookings']);
+
+  const extraFields = Object.entries(c)
+    .filter(([k, v]) => !skipKeys.has(k) && v !== null && v !== '' && labelFor(k) !== null)
+    .map(([k, v]) => ({ lbl: labelFor(k), val: String(v) }));
+
+  // Booking record fields (questionnaire answers live here)
+  const booking = c.bookings;
+  const bookingFields = booking && typeof booking === 'object'
+    ? Object.entries(booking)
+        .filter(([k, v]) => !['id','created_at','client_id'].includes(k) && v !== null && v !== '')
+        .map(([k, v]) => ({ lbl: labelFor(k), val: String(v) }))
+    : [];
+
+  const renderField = f => `
+    <div class="detail-field">
+      <div class="lbl">${esc(f.lbl)}</div>
+      <div class="val">${f.link ? `<a href="${esc(f.link)}">${esc(f.val)}</a>` : esc(f.val)}</div>
+    </div>`;
+
+  document.getElementById('detail-content').innerHTML = `
+    <div class="detail-header">
+      <div class="detail-name">${esc(c.name)}</div>
+      <div class="detail-event">${esc(c.event_type || 'Event')} &nbsp;·&nbsp; <span style="color:var(--amber)">${daysLbl}</span></div>
+    </div>
+
+    <div class="fee-highlight">
+      <div>
+        <div class="lbl">Agreed Fee</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(pkg) || 'Standard'}</div>
+      </div>
+      <div class="val">${fee}</div>
+    </div>
+
+    <div class="detail-grid">
+      ${primaryFields.map(renderField).join('')}
+    </div>
+
+    ${extraFields.length ? `
+      <div style="margin:16px 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Additional Details</div>
+      <div class="detail-grid">${extraFields.map(renderField).join('')}</div>
+    ` : ''}
+
+    ${bookingFields.length ? `
+      <div style="margin:16px 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Questionnaire / Booking Details</div>
+      <div class="detail-grid">${bookingFields.map(renderField).join('')}</div>
+    ` : ''}
+
+    ${c.notes ? `
+      <div style="margin:16px 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Notes</div>
+      <div class="detail-notes">${esc(c.notes)}</div>
+    ` : ''}
+  `;
+
+  openModal('detail-modal');
+}
+
+// ── Mark as Done ─────────────────────────────────────────────────────────────
+function openMarkDone() {
+  if (!activeClient) return;
+  const c   = activeClient;
+  const fee = Number(c.selected_price) || 0;
+
+  document.getElementById('done-summary').innerHTML = `
+    <strong>${esc(c.name)}</strong><br>
+    ${esc(c.event_type || '')} &nbsp;·&nbsp; ${fmtDate(c.event_date)}<br>
+    ${c.venue ? esc(c.venue) + '<br>' : ''}
+    <div class="done-total">Fee: $${fee.toLocaleString()}</div>
+  `;
+  document.getElementById('done-tip').value = '';
+  document.getElementById('done-total-line').textContent = '';
+  closeModal('detail-modal');
+  openModal('done-modal');
+}
+
+function updateDoneTotal() {
+  if (!activeClient) return;
+  const fee = Number(activeClient.selected_price) || 0;
+  const tip = Number(document.getElementById('done-tip').value) || 0;
+  document.getElementById('done-total-line').textContent =
+    tip > 0 ? `Total earned: $${(fee + tip).toLocaleString()}` : '';
+}
+
+async function confirmDone() {
+  if (!activeClient) return;
+  const c   = activeClient;
+  const fee = Number(c.selected_price) || 0;
+  const tip = Number(document.getElementById('done-tip').value) || 0;
+
+  // Build type string
+  let type = c.event_type || '';
+  if (c.venue) type += (type ? ' — ' : '') + c.venue;
+  if (c.guests) type += ' · ' + c.guests + ' guests';
+
+  try {
+    setSyncState('syncing', 'Saving...');
+    // Insert into gigs table
+    await sbPost('gigs', {
+      client:    c.name,
+      fee,
+      tip,
+      date:      c.event_date,
+      time:      '',
+      source:    c.lead_source || '',
+      duration:  '',
+      type:      type.trim(),
+      client_id: c.id,
+    });
+    // Mark client as completed
+    await sbPatch('clients', c.id, { status: 'completed' });
+
+    closeModal('done-modal');
+    activeClient = null;
+    await loadAll();
+  } catch (err) {
+    console.error(err);
+    setSyncState('error', 'Save failed — check console');
+    alert('Could not save. Error: ' + err.message);
+  }
+}
+
+// ── KPIs ─────────────────────────────────────────────────────────────────────
+function renderKPIs() {
+  const paid  = allGigs.filter(g => g.total > 0 || (g.fee + g.tip) > 0);
+  const total = allGigs.reduce((s, g) => s + (Number(g.fee)||0) + (Number(g.tip)||0), 0);
+  const yr    = allGigs.filter(g => g.date && g.date.startsWith('2026'));
+  const yrRev = yr.reduce((s, g) => s + (Number(g.fee)||0) + (Number(g.tip)||0), 0);
+  const fees  = allGigs.filter(g => Number(g.fee) > 0).map(g => Number(g.fee));
+  const avg   = fees.length ? fees.reduce((a,b)=>a+b,0)/fees.length : 0;
+
+  const srcCount = {};
+  allGigs.forEach(g => {
+    const s = normSrc(g.source);
+    if (s && s !== 'Unknown') srcCount[s] = (srcCount[s]||0)+1;
+  });
+  const top = Object.entries(srcCount).sort((a,b)=>b[1]-a[1])[0] || ['—',0];
+
+  const best = allGigs.reduce((b,g) => {
+    const t = (Number(g.fee)||0)+(Number(g.tip)||0);
+    return t > b.t ? {g, t} : b;
+  }, {g:null, t:0});
+
+  document.getElementById('kpi-total').textContent    = fmt(total);
+  document.getElementById('kpi-gigs-sub').textContent = `${allGigs.length} total gigs`;
+  document.getElementById('kpi-year').textContent     = fmt(yrRev);
+  document.getElementById('kpi-year-sub').textContent = `${yr.length} gigs in 2026`;
+  document.getElementById('kpi-avg').textContent      = fmt(avg);
+  document.getElementById('kpi-source').textContent   = top[0];
+  document.getElementById('kpi-source-sub').textContent = `${top[1]} gigs`;
+  document.getElementById('kpi-best').textContent     = fmt(best.t);
+  document.getElementById('kpi-best-sub').textContent = best.g ? (best.g.client + (best.g.date ? ', ' + fmtDate(best.g.date) : '')) : '';
+}
+
+// ── Year strip ────────────────────────────────────────────────────────────────
+function renderYearStrip() {
+  const years = {};
+  allGigs.forEach(g => {
+    const y = g.date ? parseInt(g.date) : null;
+    if (y && y >= 2020) {
+      if (!years[y]) years[y] = {count:0,rev:0};
+      years[y].count++;
+      years[y].rev += (Number(g.fee)||0) + (Number(g.tip)||0);
+    }
+  });
+  const active = document.getElementById('filter-year').value;
+  document.getElementById('year-strip').innerHTML = Object.keys(years).map(Number)
+    .sort((a,b)=>b-a).map(y => `
+      <div class="year-pill ${active == y ? 'active' : ''}" onclick="filterByYear(${y})">
+        <strong>${y}</strong> &nbsp;<span class="yr-rev">${fmt(years[y].rev)} · ${years[y].count} gigs</span>
+      </div>`).join('');
+}
+
+function filterByYear(y) {
+  const s = document.getElementById('filter-year');
+  s.value = s.value == y ? '' : y;
+  applyFilters();
+  renderYearStrip();
+}
+
+// ── Charts ────────────────────────────────────────────────────────────────────
+let chartYear, chartSource;
+
+function renderCharts() {
+  const years = {};
+  allGigs.forEach(g => {
+    const y = g.date ? parseInt(g.date) : null;
+    if (y && y >= 2020) years[y] = (years[y]||0) + (Number(g.fee)||0) + (Number(g.tip)||0);
+  });
+  const yl = Object.keys(years).map(Number).sort();
+
+  const yCtx = document.getElementById('chart-year').getContext('2d');
+  if (chartYear) chartYear.destroy();
+  chartYear = new Chart(yCtx, {
+    type: 'bar',
+    data: {
+      labels: yl.map(String),
+      datasets: [{
+        data: yl.map(y => years[y]),
+        backgroundColor: yl.map(y => y === 2026 ? '#7c6af5' : '#2d3458'),
+        borderRadius: 5, borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: {display:false}, tooltip: { callbacks: { label: ctx => ' ' + fmt(ctx.raw) } } },
+      scales: {
+        x: { grid: {color:'#2a2f45'}, ticks: {color:'#8892b0'} },
+        y: { grid: {color:'#2a2f45'}, ticks: {color:'#8892b0', callback: v => fmt(v)} }
+      }
+    }
+  });
+
+  const srcs = {};
+  allGigs.filter(g=>Number(g.fee)>0).forEach(g => {
+    const s = normSrc(g.source);
+    srcs[s] = (srcs[s]||0)+1;
+  });
+  const sl = Object.keys(srcs).sort((a,b)=>srcs[b]-srcs[a]);
+  const colors = ['#7c6af5','#5b8af5','#4caf87','#f0a500','#e05252','#1abc9c','#9b59b6','#8892b0'];
+
+  const sCtx = document.getElementById('chart-source').getContext('2d');
+  if (chartSource) chartSource.destroy();
+  chartSource = new Chart(sCtx, {
+    type: 'doughnut',
+    data: {
+      labels: sl,
+      datasets: [{ data: sl.map(s=>srcs[s]), backgroundColor: colors.slice(0,sl.length), borderWidth:2, borderColor:'#1e2235' }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position:'bottom', labels: {color:'#8892b0', font:{size:11}, padding:10, boxWidth:12} },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} gig${ctx.raw>1?'s':''}` } }
+      }
+    }
+  });
+}
+
+// ── Table ─────────────────────────────────────────────────────────────────────
+function populateFilters() {
+  const years = [...new Set(allGigs.map(g => g.date ? parseInt(g.date) : null).filter(Boolean))].sort((a,b)=>b-a);
+  const yrSel = document.getElementById('filter-year');
+  const curYr = yrSel.value;
+  yrSel.innerHTML = '<option value="">All Years</option>';
+  years.forEach(y => { const o = document.createElement('option'); o.value=y; o.textContent=y; if(curYr==y) o.selected=true; yrSel.appendChild(o); });
+
+  const srcs = [...new Set(allGigs.map(g=>normSrc(g.source)))].sort();
+  const srcSel = document.getElementById('filter-source');
+  const curSrc = srcSel.value;
+  srcSel.innerHTML = '<option value="">All Sources</option>';
+  srcs.forEach(s => { const o = document.createElement('option'); o.value=s.toLowerCase(); o.textContent=s; if(curSrc===s.toLowerCase()) o.selected=true; srcSel.appendChild(o); });
+}
+
+function applyFilters() {
+  const q   = document.getElementById('search').value.toLowerCase();
+  const yr  = document.getElementById('filter-year').value;
+  const src = document.getElementById('filter-source').value;
+
+  filtered = allGigs.filter(g => {
+    if (q && !g.client.toLowerCase().includes(q) && !(g.type||'').toLowerCase().includes(q)) return false;
+    if (yr && (!g.date || !g.date.startsWith(yr))) return false;
+    if (src && normSrc(g.source).toLowerCase() !== src) return false;
+    return true;
+  });
+
+  sortFiltered();
+  renderTable();
+  renderYearStrip();
+}
+
+function sortBy(key) {
+  if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = -1; }
+  document.querySelectorAll('thead th').forEach(th => {
+    const col = th.id?.replace('th-', '');
+    th.className = col === key ? 'sorted' : '';
+  });
+  sortFiltered();
+  renderTable();
+}
+
+function sortFiltered() {
+  filtered.sort((a, b) => {
+    let av = a[sortKey] ?? '', bv = b[sortKey] ?? '';
+    if (sortKey === 'date') { av = av||'0000'; bv = bv||'0000'; return av<bv ? sortDir : av>bv ? -sortDir : 0; }
+    if (typeof av === 'number' || sortKey==='fee'||sortKey==='tip'||sortKey==='total') {
+      av = Number(av)||0; bv = Number(bv)||0; return (av-bv)*sortDir;
+    }
+    av = String(av).toLowerCase(); bv = String(bv).toLowerCase();
+    return av<bv ? sortDir : av>bv ? -sortDir : 0;
+  });
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tbody');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="empty">No gigs match the current filters.</td></tr>';
+    document.getElementById('footer-count').textContent = '0 gigs';
+    document.getElementById('footer-total').textContent = '';
+    document.getElementById('count-badge').textContent  = '(0)';
+    return;
+  }
+
+  const tot = filtered.reduce((s,g)=>(s+(Number(g.fee)||0)+(Number(g.tip)||0)),0);
+  document.getElementById('footer-count').textContent = `${filtered.length} gig${filtered.length>1?'s':''}`;
+  document.getElementById('footer-total').textContent = `Showing: ${fmt(tot)}`;
+  document.getElementById('count-badge').textContent  = `(${filtered.length})`;
+
+  tbody.innerHTML = filtered.map(g => {
+    const fee   = Number(g.fee)||0;
+    const tip   = Number(g.tip)||0;
+    const total = fee+tip;
+    return `
+    <tr>
+      <td>${fmtDate(g.date) || '<span style="color:var(--muted)">—</span>'}</td>
+      <td><strong>${esc(g.client)}</strong></td>
+      <td class="fee-cell">${fee>0 ? fmt(fee) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td class="tip-cell">${tip>0 ? fmt(tip) : ''}</td>
+      <td class="total-cell">${total>0 ? fmt(total) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td style="color:var(--muted);font-size:12px">${esc(g.time||'—')}</td>
+      <td><span class="${srcClass(g.source)}">${esc(normSrc(g.source))}</span></td>
+      <td style="color:var(--muted);font-size:12px">${esc(g.duration||'')}</td>
+      <td style="font-size:12px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(g.type||'')}">${esc(g.type||'')}</td>
+      <td style="white-space:nowrap">
+        <button class="row-btn" onclick="openEdit('${g.id}')">edit</button>
+        <button class="row-btn del" onclick="deleteGig('${g.id}')">del</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Add / Edit ────────────────────────────────────────────────────────────────
+function openAdd() {
+  editingId = null;
+  document.getElementById('add-modal-title').textContent = 'Add Gig';
+  ['client','date','time','fee','tip','duration','type'].forEach(f => document.getElementById('f-'+f).value = '');
+  document.getElementById('f-source').value = '';
+  openModal('add-modal');
+}
+
+function openEdit(id) {
+  const g = allGigs.find(x => x.id === id);
+  if (!g) return;
+  editingId = id;
+  document.getElementById('add-modal-title').textContent = 'Edit Gig';
+  document.getElementById('f-client').value   = g.client || '';
+  document.getElementById('f-date').value     = g.date || '';
+  document.getElementById('f-time').value     = g.time || '';
+  document.getElementById('f-fee').value      = g.fee || '';
+  document.getElementById('f-tip').value      = g.tip || '';
+  document.getElementById('f-source').value   = g.source || '';
+  document.getElementById('f-duration').value = g.duration || '';
+  document.getElementById('f-type').value     = g.type || '';
+  openModal('add-modal');
+}
+
+async function saveGig() {
+  const client = document.getElementById('f-client').value.trim();
+  if (!client) { alert('Client name is required.'); return; }
+  const body = {
+    client,
+    date:     document.getElementById('f-date').value || null,
+    time:     document.getElementById('f-time').value,
+    fee:      Number(document.getElementById('f-fee').value) || 0,
+    tip:      Number(document.getElementById('f-tip').value) || 0,
+    source:   document.getElementById('f-source').value,
+    duration: document.getElementById('f-duration').value,
+    type:     document.getElementById('f-type').value,
+  };
+  try {
+    setSyncState('syncing', 'Saving...');
+    if (editingId) {
+      await sbPatch('gigs', editingId, body);
+    } else {
+      await sbPost('gigs', body);
+    }
+    closeModal('add-modal');
+    await loadAll();
+  } catch (err) {
+    setSyncState('error', 'Save failed');
+    alert('Could not save. Error: ' + err.message);
+  }
+}
+
+async function deleteGig(id) {
+  const g = allGigs.find(x => x.id === id);
+  if (!g || !confirm(`Delete "${g.client}"? This cannot be undone.`)) return;
+  try {
+    setSyncState('syncing', 'Deleting...');
+    await sbDelete('gigs', id);
+    await loadAll();
+  } catch (err) {
+    setSyncState('error', 'Delete failed');
+    alert('Could not delete. Error: ' + err.message);
+  }
+}
+
+// ── Export ────────────────────────────────────────────────────────────────────
+function exportCSV() {
+  const cols = ['Date','Client','Fee','Tip','Total','Time','Source','Duration','Type'];
+  const rows = allGigs.map(g => {
+    const fee = Number(g.fee)||0, tip = Number(g.tip)||0;
+    return [g.date||'', g.client, fee, tip, fee+tip, g.time||'', normSrc(g.source), g.duration||'', g.type||''];
+  });
+  const csv = [cols,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `shine-gigs-${TODAY}.csv`;
+  a.click();
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function fmt(n) { return '$' + Number(n).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+
+function fmtDate(d) {
+  if (!d) return '';
+  const [y,m,day] = d.split('-');
+  return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)-1] + ' ' + parseInt(day) + ', ' + y;
+}
+
+function normSrc(s) {
+  if (!s) return 'Unknown';
+  const t = s.trim().toLowerCase();
+  if (t === 'gigsalad') return 'GigSalad';
+  if (t === 'bark')     return 'Bark';
+  if (t === 'bash')     return 'Bash';
+  if (t === 'thumbtack') return 'Thumbtack';
+  if (t === 'wix')      return 'Wix';
+  if (t.includes('mail')) return 'Direct Mail';
+  if (t === '')         return 'Unknown';
+  return s.trim();
+}
+
+function srcClass(s) {
+  const n = normSrc(s).toLowerCase();
+  if (n === 'bark')        return 'badge bark';
+  if (n === 'gigsalad')    return 'badge gigsalad';
+  if (n === 'bash')        return 'badge bash';
+  if (n === 'thumbtack')   return 'badge thumbtack';
+  if (n === 'direct mail') return 'badge directmail';
+  if (n === 'wix')         return 'badge wix';
+  return 'badge other';
+}
+
+function esc(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) closeModal(el.id); });
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.getElementById('th-date').classList.add('sorted');
+loadAll();
+</script>
+</body>
+</html>
