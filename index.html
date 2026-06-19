@@ -41,58 +41,114 @@
         color: var(--text);
         font-size: 15px;
         min-height: 100vh;
-        padding: 16px
+        padding: 0
     }
 
-    .app {
-        max-width: 460px;
+    /* ── Topbar (matches gig-dashboard) ── */
+    .topbar {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        padding: 14px 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px
+    }
+
+    .topbar h1 { font-size: 17px; font-weight: 600 }
+    .topbar .sub { font-size: 11px; color: var(--muted); margin-top: 2px }
+
+    .topbar-tabs {
+        display: flex;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 3px;
+        gap: 2px
+    }
+
+    /* ── Main content area ── */
+    .main {
+        padding: 22px 28px;
+        max-width: 1400px;
         margin: 0 auto
     }
 
-    .header {
-        text-align: center;
-        padding: 24px 0 16px
-    }
+    /* Legacy .app wrapper — now a passthrough */
+    .app { width: 100% }
 
-    .header h1 {
-        font-size: 22px;
-        font-weight: 600;
-        color: var(--text)
-    }
-
-    .header p {
-        font-size: 13px;
-        color: var(--muted);
-        margin-top: 4px
-    }
+    /* Tab bar (hidden on desktop, used on mobile) */
+    .header { display: none }
 
     .tab-bar {
-        display: flex;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 4px;
-        margin-bottom: 16px
+        display: none
     }
 
     .tab {
         flex: 1;
-        padding: 8px;
+        padding: 8px 18px;
         text-align: center;
         font-size: 13px;
         font-weight: 500;
-        border-radius: 9px;
+        border-radius: 8px;
         cursor: pointer;
         color: var(--muted);
         border: none;
         background: none;
         font-family: inherit;
-        transition: all .15s
+        transition: all .15s;
+        white-space: nowrap
     }
 
     .tab.active {
-        background: var(--surface2);
-        color: var(--text)
+        background: var(--card-bg);
+        color: var(--text);
+        border: 1px solid var(--border)
+    }
+
+    /* ── Desktop: 2-col dashboard layout ── */
+    .dashboard-inner {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 20px;
+        align-items: start
+    }
+
+    .dashboard-sidebar {
+        position: sticky;
+        top: 20px
+    }
+
+    .dashboard-leads {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 12px
+    }
+
+    /* ── New lead: centered column on desktop ── */
+    .new-lead-inner {
+        max-width: 680px;
+        margin: 0 auto
+    }
+
+    @media (max-width: 700px) {
+        .topbar { padding: 12px 16px }
+        .topbar-tabs { display: none }
+        .header { display: block; text-align: center; padding: 20px 0 12px }
+        .header h1 { font-size: 20px; font-weight: 600 }
+        .header p { font-size: 13px; color: var(--muted); margin-top: 4px }
+        .tab-bar {
+            display: flex;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 4px;
+            margin-bottom: 16px
+        }
+        .main { padding: 12px 14px }
+        .dashboard-inner { display: block }
+        .dashboard-leads { display: block }
+        .new-lead-inner { max-width: 100% }
     }
 
     .card {
@@ -420,7 +476,8 @@
     .empty-state {
         text-align: center;
         padding: 40px 20px;
-        color: var(--muted)
+        color: var(--muted);
+        grid-column: 1 / -1
     }
 
     .refresh-btn {
@@ -829,42 +886,65 @@
     </style>
 </head>
 <body>
+    <!-- Topbar -->
+    <div class="topbar">
+        <div>
+            <div class="topbar h1" style="font-size:17px;font-weight:600">&#10022; Shine, The Mentalist</div>
+            <div class="sub">Booking assistant</div>
+        </div>
+        <div class="topbar-tabs">
+            <button class="tab active" onclick="showTab('dashboard')">Dashboard</button>
+            <button class="tab" onclick="messagingExistingClientId=null;showTab('new-lead')">+ New Lead</button>
+        </div>
+    </div>
+
+    <!-- Mobile header + tabs (shown only on small screens) -->
     <div class="app">
+    <div class="main">
         <div class="header">
             <h1>&#10022; Shine, The Mentalist</h1>
             <p>Booking assistant</p>
         </div>
-
         <div class="tab-bar">
             <button class="tab active" onclick="showTab('dashboard')">Dashboard</button>
             <button class="tab" onclick="messagingExistingClientId=null;showTab('new-lead')">+ New Lead</button>
         </div>
 
         <div id="dashboard-view">
-            <div class="review-toggle-card">
-                <div class="review-toggle-text">
-                    <div class="review-toggle-title">Review replies before sending</div>
-                    <div class="review-toggle-desc" id="review-toggle-desc">AI replies send automatically</div>
+            <div class="dashboard-inner">
+                <!-- Sidebar: controls -->
+                <div class="dashboard-sidebar">
+                    <div class="review-toggle-card">
+                        <div class="review-toggle-text">
+                            <div class="review-toggle-title">Review replies before sending</div>
+                            <div class="review-toggle-desc" id="review-toggle-desc">AI replies send automatically</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="review-mode-toggle" onchange="onReviewModeToggle()">
+                            <span class="switch-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="pending-section" id="pending-section" style="display:none">
+                        <div id="pending-list"></div>
+                    </div>
+
+                    <button class="refresh-btn" onclick="loadDashboard();loadPendingReplies();">&#8635; Refresh</button>
                 </div>
-                <label class="switch">
-                    <input type="checkbox" id="review-mode-toggle" onchange="onReviewModeToggle()">
-                    <span class="switch-slider"></span>
-                </label>
-            </div>
 
-            <div class="pending-section" id="pending-section" style="display:none">
-                <div id="pending-list"></div>
-            </div>
-
-            <button class="refresh-btn" onclick="loadDashboard();loadPendingReplies();">&#8635; Refresh</button>
-            <div id="leads-list">
-                <div class="empty-state">
-                    <p>Loading...</p>
+                <!-- Main: lead grid -->
+                <div>
+                    <div id="leads-list" class="dashboard-leads">
+                        <div class="empty-state">
+                            <p>Loading...</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <div id="new-lead-view">
+        <div class="new-lead-inner">
             <div class="card">
                 <div class="section-label">Quick fill from screenshot</div>
                 <p style="font-size:13px;color:var(--muted);margin:0 0 10px 0">Upload one or more screenshots from Bark, GigSalad, or another platform — Shine's assistant will read them and fill in what it can find below.</p>
@@ -983,7 +1063,10 @@
             <button class="generate-btn" onclick="saveLeadOnly()" id="save-lead-btn" style="margin-top:10px">Save lead (no message yet)</button>
             <div class="status" id="status"></div>
         </div>
-    </div>
+        </div><!-- /.new-lead-inner -->
+        </div><!-- /#new-lead-view -->
+    </div><!-- /.main -->
+    </div><!-- /.app -->
 
     <!-- Pricing modal -->
     <div class="modal-overlay" id="pricing-modal">
@@ -1287,19 +1370,22 @@
     };
 
     function showTab(tab) {
-        var tabs = document.querySelectorAll('.tab');
-        tabs[0].classList.remove('active');
-        tabs[1].classList.remove('active');
+        document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
         document.getElementById('dashboard-view').style.display = 'none';
         document.getElementById('new-lead-view').style.display = 'none';
         if (tab === 'dashboard') {
-            tabs[0].classList.add('active');
+            document.querySelectorAll('.tab:first-child, .tab:nth-child(1)').forEach(function(t) {});
+            document.querySelectorAll('.tab').forEach(function(t) {
+                if (t.textContent.trim() === 'Dashboard') t.classList.add('active');
+            });
             document.getElementById('dashboard-view').style.display = 'block';
             loadDashboard();
             loadReviewModeState();
             loadPendingReplies();
         } else {
-            tabs[1].classList.add('active');
+            document.querySelectorAll('.tab').forEach(function(t) {
+                if (t.textContent.trim() === '+ New Lead') t.classList.add('active');
+            });
             document.getElementById('new-lead-view').style.display = 'block';
         }
     }
