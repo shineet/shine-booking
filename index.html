@@ -1721,13 +1721,31 @@ function saveLeadOnly() {
     if (!d.name) { alert('Please enter a client name first.'); return; }
     var btn = document.getElementById('save-lead-btn');
     btn.disabled = true; btn.textContent = 'Saving...';
-    fetch(SUPABASE_URL + '/rest/v1/clients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
-        body: JSON.stringify({ name: d.name, phone: d.phone||null, email: d.email||null, event_type: d.eventType||null, event_date: d.date||null, guests: d.guests||null, venue: d.venue||null, other_entertainment: d.otherEntertainment||null, lead_source: d.leadSource||null, notes: d.notes||null, status: 'new', last_activity: new Date().toISOString() })
-    })
+
+    var payload = { name: d.name, phone: d.phone||null, email: d.email||null, event_type: d.eventType||null, event_date: d.date||null, guests: d.guests||null, venue: d.venue||null, other_entertainment: d.otherEntertainment||null, lead_source: d.leadSource||null, notes: d.notes||null, last_activity: new Date().toISOString() };
+
+    var request;
+    if (messagingExistingClientId) {
+        // Already an existing client (e.g. opened via "Generate & send first message") —
+        // update that same record instead of creating a duplicate. Status stays as-is
+        // since no message has actually been sent yet.
+        request = fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + messagingExistingClientId, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
+            body: JSON.stringify(payload)
+        });
+    } else {
+        payload.status = 'new';
+        request = fetch(SUPABASE_URL + '/rest/v1/clients', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
+            body: JSON.stringify(payload)
+        });
+    }
+
+    request
     .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
-    .then(function() { showView('pipeline'); })
+    .then(function() { messagingExistingClientId = null; showView('pipeline'); })
     .catch(function(e) { alert('Could not save: ' + e.message); })
     .finally(function() { btn.disabled = false; btn.textContent = 'Save lead (no message yet)'; });
 }
