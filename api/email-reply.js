@@ -157,7 +157,16 @@ www.texasmentalist.com`;
     const EXTRACTION_INSTRUCTION = `
 
 This person is not yet in my client records — they're a brand new inquiry. After writing your reply, on a new line at the very end, output an extraction block in this exact format (after any [PRICING_REQUESTED] or [BOOKING_INTENT] tags, as the last thing in your response):
-[LEAD_INFO]{"name":"their name if mentioned or inferable from the email, else null","eventType":"one of: Birthday party, Bachelorette party, Corporate event, Private celebration, Anniversary, Other, or null if unclear","eventDate":"YYYY-MM-DD if a specific date is mentioned, else null","guests":"a short string like '25-50' or a number if mentioned, else null"}[/LEAD_INFO]
+[LEAD_INFO]{"name":"their name if mentioned or inferable from the email, else null","eventType":"one of: Birthday party, Bachelorette party, Corporate event, Private celebration, Anniversary, Other, or null if unclear","eventDate":"YYYY-MM-DD if a specific date is mentioned, else null","guests":"a short string like '25-50' or a number if mentioned, else null","contactType":"either 'planner' or 'client'"}[/LEAD_INFO]
+
+For contactType, classify based on the whole email, weighing these signals together (no single one is decisive on its own):
+- A job title suggesting they book entertainment for OTHERS, e.g. "Event Producer", "Event Coordinator", "Wedding Planner", "Director of Events", "DMC" (Destination Management Company)
+- Language like "on behalf of our client", "our client is looking for", "I'm reaching out for one of our clients"
+- A signature block naming a company that does event planning/production/coordination as its business, rather than being the actual host of the event
+- A business-sounding email domain (not gmail/yahoo/icloud/outlook.com) combined with one of the above signals
+
+If the email reads like someone planning THEIR OWN event (birthday, wedding, office party they're personally organizing), classify as "client" even if sent from a work email address. When genuinely unsure, default to "client" — false positives here are worse than false negatives.
+
 Only include this block once. Do not mention this block or its contents in the visible reply text — it's purely structured data for internal use.`;
 
     const systemPrompt = client ? SYSTEM_PROMPT : SYSTEM_PROMPT + EXTRACTION_INSTRUCTION;
@@ -351,6 +360,7 @@ Only include this block once. Do not mention this block or its contents in the v
         const leadEventType = (extractedLead && extractedLead.eventType) || '';
         const leadEventDate = (extractedLead && extractedLead.eventDate) || null;
         const leadGuests = (extractedLead && extractedLead.guests) || null;
+        const leadContactType = (extractedLead && extractedLead.contactType === 'planner') ? 'planner' : 'client';
 
         const newClientRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
           method: 'POST',
@@ -366,6 +376,7 @@ Only include this block once. Do not mention this block or its contents in the v
             event_type: leadEventType,
             event_date: leadEventDate,
             guests: leadGuests,
+            contact_type: leadContactType,
             status: pricingRequested ? 'pricing_requested' : 'chatting',
             lead_source: 'Website',
             last_channel: 'email',
