@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shine, The Mentalist — Booking Assistant</title>
-
-    <!-- Home screen / PWA setup -->
+    <title>Shine, The Mentalist — Booking Pipeline</title>
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icons/icon-180.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
@@ -29,143 +27,389 @@
         --card-bg: #1e2235;
     }
 
-    * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0 }
 
     body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         background: var(--bg);
         color: var(--text);
-        font-size: 15px;
+        font-size: 14px;
         min-height: 100vh;
-        padding: 0
+        display: flex;
+        flex-direction: column
     }
 
-    /* ── Topbar (matches gig-dashboard) ── */
+    /* ── Topbar ── */
     .topbar {
         background: var(--surface);
         border-bottom: 1px solid var(--border);
-        padding: 14px 28px;
+        padding: 0 24px;
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 12px
+        gap: 16px;
+        height: 52px;
+        flex-shrink: 0;
+        position: sticky;
+        top: 0;
+        z-index: 50
     }
 
-    .topbar h1 { font-size: 17px; font-weight: 600 }
-    .topbar .sub { font-size: 11px; color: var(--muted); margin-top: 2px }
+    .topbar-brand {
+        font-size: 15px;
+        font-weight: 600;
+        white-space: nowrap
+    }
+
+    .topbar-brand span { color: var(--muted); font-weight: 400 }
 
     .topbar-tabs {
         display: flex;
+        gap: 2px;
         background: var(--surface2);
         border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 3px;
-        gap: 2px
+        border-radius: 8px;
+        padding: 3px
     }
 
-    /* ── Main content area ── */
-    .main {
-        padding: 22px 28px;
-        max-width: 1400px;
-        margin: 0 auto
-    }
-
-    /* Legacy .app wrapper — now a passthrough */
-    .app { width: 100% }
-
-    /* Tab bar (hidden on desktop, used on mobile) */
-    .header { display: none }
-
-    .tab-bar {
-        display: none
-    }
-
-    .tab {
-        flex: 1;
-        padding: 8px 18px;
-        text-align: center;
+    .ttab {
+        padding: 5px 14px;
         font-size: 13px;
         font-weight: 500;
-        border-radius: 8px;
-        cursor: pointer;
-        color: var(--muted);
+        border-radius: 6px;
         border: none;
-        background: none;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
         font-family: inherit;
         transition: all .15s;
         white-space: nowrap
     }
 
-    .tab.active {
+    .ttab.active {
         background: var(--card-bg);
         color: var(--text);
         border: 1px solid var(--border)
     }
 
-    /* ── Desktop: 2-col dashboard layout ── */
-    .dashboard-inner {
-        display: grid;
-        grid-template-columns: 280px 1fr;
-        gap: 20px;
-        align-items: start
+    .topbar-spacer { flex: 1 }
+
+    .topbar button.primary {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 7px;
+        padding: 7px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        white-space: nowrap;
+        transition: opacity .15s
     }
 
-    .dashboard-sidebar {
-        position: sticky;
-        top: 20px
+    .topbar button.primary:hover { opacity: .85 }
+
+    .topbar-refresh {
+        background: transparent;
+        color: var(--muted);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        padding: 6px 12px;
+        font-size: 13px;
+        cursor: pointer;
+        font-family: inherit;
+        transition: background .15s
     }
 
-    .dashboard-leads {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-        gap: 12px
+    .topbar-refresh:hover { background: var(--surface2) }
+
+    /* ── Views ── */
+    #dashboard-view { flex: 1; overflow: hidden; display: flex; flex-direction: column }
+    #new-lead-view  { display: none; flex: 1; overflow-y: auto; padding: 24px }
+
+    /* ── Pending replies banner ── */
+    .pending-banner {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        padding: 10px 24px;
+        display: none
     }
 
-    /* ── New lead: centered column on desktop ── */
-    .new-lead-inner {
-        max-width: 680px;
-        margin: 0 auto
+    .pending-banner.has-items { display: block }
+
+    .pending-banner-title {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .8px;
+        color: var(--amber);
+        margin-bottom: 8px
     }
 
-    @media (max-width: 700px) {
-        .topbar { padding: 12px 16px }
-        .topbar-tabs { display: none }
-        .header { display: block; text-align: center; padding: 20px 0 12px }
-        .header h1 { font-size: 20px; font-weight: 600 }
-        .header p { font-size: 13px; color: var(--muted); margin-top: 4px }
-        .tab-bar {
-            display: flex;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 4px;
-            margin-bottom: 16px
-        }
-        .main { padding: 12px 14px }
-        .dashboard-inner { display: block }
-        .dashboard-leads { display: block }
-        .new-lead-inner { max-width: 100% }
+    .pending-list-row { display: flex; gap: 8px; flex-wrap: wrap }
+
+    .pending-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--amber);
+        border-radius: 10px;
+        padding: 12px 14px;
+        min-width: 280px;
+        max-width: 400px;
+        flex: 1
     }
+
+    .pending-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 6px
+    }
+
+    .pending-client { font-size: 13px; font-weight: 600 }
+
+    .pending-channel {
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase
+    }
+
+    .pending-draft {
+        width: 100%;
+        min-height: 56px;
+        padding: 8px 10px;
+        font-size: 13px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-family: inherit;
+        line-height: 1.4;
+        resize: vertical;
+        margin-bottom: 8px;
+        background: var(--surface2);
+        color: var(--text)
+    }
+
+    .pending-draft:focus { outline: none; border-color: var(--accent) }
+
+    .pending-actions { display: flex; gap: 6px }
+
+    .pending-actions button {
+        flex: 1;
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        font-family: inherit
+    }
+
+    .pending-send    { background: var(--accent); color: #fff }
+    .pending-discard { background: rgba(224,82,82,.18); color: var(--red) }
+
+    /* ── Kanban board ── */
+    .kanban-board {
+        flex: 1;
+        overflow-x: auto;
+        padding: 20px 24px 28px;
+        display: flex;
+        gap: 14px;
+        align-items: flex-start
+    }
+
+    .kanban-col {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        width: 260px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 160px);
+        overflow: hidden
+    }
+
+    .col-header {
+        padding: 12px 14px 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0
+    }
+
+    .col-title {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .8px;
+        color: var(--muted)
+    }
+
+    .col-count {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 20px;
+        background: var(--surface2);
+        color: var(--muted)
+    }
+
+    .col-count.has-cards {
+        background: var(--accent);
+        color: #fff
+    }
+
+    .col-accent-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0
+    }
+
+    .col-cards {
+        padding: 10px 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        overflow-y: auto;
+        flex: 1
+    }
+
+    .col-empty {
+        padding: 20px 10px;
+        text-align: center;
+        color: #4a5272;
+        font-size: 12px
+    }
+
+    /* ── Lead cards ── */
+    .k-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 13px;
+        cursor: pointer;
+        transition: transform .12s, box-shadow .12s, border-color .12s;
+        position: relative;
+        overflow: hidden
+    }
+
+    .k-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 2px
+    }
+
+    .k-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 18px rgba(0,0,0,.45);
+        border-color: #3a3f58
+    }
+
+    .k-name {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    .k-meta {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.6;
+        margin-bottom: 8px
+    }
+
+    .k-badges {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+        margin-bottom: 8px
+    }
+
+    .k-badge {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 7px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: .4px
+    }
+
+    .k-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap
+    }
+
+    .k-btn {
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        font-family: inherit;
+        transition: opacity .12s
+    }
+
+    .k-btn:hover { opacity: .8 }
+
+    .k-btn.primary  { background: var(--accent); color: #fff }
+    .k-btn.blue     { background: rgba(91,138,245,.2); color: var(--accent2) }
+    .k-btn.purple   { background: rgba(124,106,245,.2); color: var(--accent) }
+    .k-btn.green    { background: rgba(76,175,135,.2); color: var(--green) }
+    .k-btn.amber    { background: rgba(240,165,0,.2); color: var(--amber) }
+    .k-btn.ghost    { background: var(--surface2); color: var(--muted); border: 1px solid var(--border) }
+    .k-btn.danger   { background: rgba(224,82,82,.15); color: var(--red) }
+
+    .k-time {
+        font-size: 10px;
+        color: #3d4668;
+        margin-top: 6px
+    }
+
+    /* Column accent colors */
+    .col-new    .col-accent-dot { background: var(--accent2) }
+    .col-new    .k-card::before { background: var(--accent2) }
+    .col-price  .col-accent-dot { background: var(--amber) }
+    .col-price  .k-card::before { background: var(--amber) }
+    .col-sel    .col-accent-dot { background: var(--accent) }
+    .col-sel    .k-card::before { background: var(--accent) }
+    .col-booked .col-accent-dot { background: var(--green) }
+    .col-booked .k-card::before { background: var(--green) }
+    .col-cont   .col-accent-dot { background: #22c7a0 }
+    .col-cont   .k-card::before { background: #22c7a0 }
+    .col-lost   .col-accent-dot { background: #3a3f58 }
+    .col-lost   .k-card::before { background: #3a3f58 }
+    .col-lost   { opacity: .75 }
+
+    /* ── New lead form ── */
+    .new-lead-inner { max-width: 680px; margin: 0 auto }
 
     .card {
         background: var(--card-bg);
         border: 1px solid var(--border);
         border-radius: 14px;
-        padding: 16px;
-        margin-bottom: 12px
-    }
-
-    .field {
+        padding: 18px;
         margin-bottom: 14px
     }
 
-    .field:last-child {
-        margin-bottom: 0
+    .section-label {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        margin-bottom: 14px
     }
+
+    .field { margin-bottom: 14px }
+    .field:last-child { margin-bottom: 0 }
 
     .field label {
         display: block;
@@ -174,15 +418,15 @@
         margin-bottom: 5px;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.06em
+        letter-spacing: .06em
     }
 
     .field input, .field select, .field textarea {
         width: 100%;
-        padding: 10px 12px;
+        padding: 9px 12px;
         font-size: 14px;
         border: 1px solid var(--border);
-        border-radius: 10px;
+        border-radius: 9px;
         background: var(--surface2);
         color: var(--text);
         font-family: inherit;
@@ -195,38 +439,19 @@
         background: #2a2f45
     }
 
-    .field select option {
-        background: var(--surface2);
-        color: var(--text)
-    }
+    .field select option { background: var(--surface2); color: var(--text) }
 
-    .field textarea {
-        resize: vertical;
-        min-height: 80px;
-        line-height: 1.5
-    }
+    .field textarea { resize: vertical; min-height: 80px; line-height: 1.5 }
 
-    .two-col {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px
-    }
-
-    .section-label {
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin-bottom: 12px
-    }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+    .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px }
 
     .generate-btn {
         width: 100%;
         padding: 10px;
         background: transparent;
         border: 1px solid var(--border);
-        border-radius: 10px;
+        border-radius: 9px;
         font-size: 14px;
         cursor: pointer;
         color: var(--accent);
@@ -236,39 +461,23 @@
         transition: background .15s
     }
 
-    .generate-btn:hover {
-        background: var(--surface2)
-    }
-
-    .generate-btn:disabled {
-        color: var(--muted);
-        cursor: not-allowed
-    }
+    .generate-btn:hover { background: var(--surface2) }
+    .generate-btn:disabled { color: var(--muted); cursor: not-allowed }
 
     .msg-label {
         font-size: 11px;
-        font-weight: 600;
+        font-weight: 700;
         color: var(--muted);
         text-transform: uppercase;
-        letter-spacing: 0.06em;
+        letter-spacing: .06em;
         margin-bottom: 6px;
         margin-top: 14px
     }
 
-    .msg-label:first-of-type {
-        margin-top: 0
-    }
+    .msg-label:first-of-type { margin-top: 0 }
 
-    .char-count {
-        font-size: 11px;
-        color: var(--muted);
-        text-align: right;
-        margin-top: 4px
-    }
-
-    .char-count.over {
-        color: var(--red)
-    }
+    .char-count { font-size: 11px; color: var(--muted); text-align: right; margin-top: 4px }
+    .char-count.over { color: var(--red) }
 
     .followup-row {
         display: flex;
@@ -277,27 +486,17 @@
         margin-top: 14px
     }
 
-    .followup-row input[type=checkbox] {
-        width: 18px;
-        height: 18px;
-        cursor: pointer;
-        accent-color: var(--accent)
-    }
-
-    .followup-row label {
-        font-size: 13px;
-        color: var(--muted);
-        cursor: pointer
-    }
+    .followup-row input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent) }
+    .followup-row label { font-size: 13px; color: var(--muted); cursor: pointer }
 
     .send-btn {
         width: 100%;
-        padding: 14px;
+        padding: 13px;
         background: var(--accent);
         color: #fff;
         border: none;
-        border-radius: 12px;
-        font-size: 16px;
+        border-radius: 10px;
+        font-size: 15px;
         font-weight: 600;
         cursor: pointer;
         margin-top: 4px;
@@ -305,440 +504,23 @@
         transition: opacity .15s
     }
 
-    .send-btn:hover {
-        opacity: .85
-    }
+    .send-btn:hover { opacity: .85 }
+    .send-btn:disabled { opacity: .4; cursor: not-allowed }
 
-    .send-btn:disabled {
-        opacity: .4;
-        cursor: not-allowed
-    }
-
-    .status {
-        margin-top: 16px;
-        padding: 14px;
-        border-radius: 12px;
+    .status-msg {
+        margin-top: 14px;
+        padding: 12px 14px;
+        border-radius: 10px;
         font-size: 13px;
         line-height: 1.7;
         display: none
     }
 
-    .status.success {
-        background: #1a3a28;
-        border: 1px solid #2a5a38;
-        color: #6ee0a4;
-        display: block
-    }
+    .status-msg.success { background: #1a3a28; border: 1px solid #2a5a38; color: #6ee0a4; display: block }
+    .status-msg.error   { background: #3a1a1a; border: 1px solid #7a2a2a; color: #f8a0a0; display: block }
+    .status-msg.loading { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); display: block }
 
-    .status.error {
-        background: #3a1a1a;
-        border: 1px solid #7a2a2a;
-        color: #f8a0a0;
-        display: block
-    }
-
-    .status.loading {
-        background: var(--surface2);
-        border: 1px solid var(--border);
-        color: var(--muted);
-        display: block
-    }
-
-    .edit-note {
-        font-size: 12px;
-        color: var(--muted);
-        margin-top: 6px;
-        font-style: italic
-    }
-
-    #dashboard-view {
-        display: none
-    }
-
-    /* ── Lead cards ── */
-    .lead-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 14px 16px;
-        margin-bottom: 10px;
-        border-left: 3px solid var(--border);
-        cursor: pointer;
-        transition: transform .12s, box-shadow .12s
-    }
-
-    .lead-card:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 16px rgba(0,0,0,.4)
-    }
-
-    .lead-card.status-new           { border-left-color: var(--accent2) }
-    .lead-card.status-chatting      { border-left-color: var(--green) }
-    .lead-card.status-pricing_requested { border-left-color: var(--amber) }
-    .lead-card.status-pricing_sent  { border-left-color: var(--accent) }
-    .lead-card.status-package_selected { border-left-color: var(--accent) }
-    .lead-card.status-booked        { border-left-color: var(--green) }
-    .lead-card.status-intake_sent   { border-left-color: var(--accent) }
-    .lead-card.status-intake_completed { border-left-color: var(--amber) }
-    .lead-card.status-contract_sent { border-left-color: var(--accent2) }
-    .lead-card.status-contract_signed { border-left-color: var(--green) }
-    .lead-card.status-lost          { border-left-color: var(--border) }
-
-    .lead-top {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 4px
-    }
-
-    .lead-name {
-        font-size: 15px;
-        font-weight: 600;
-        color: var(--text)
-    }
-
-    .lead-status {
-        font-size: 11px;
-        font-weight: 600;
-        padding: 3px 8px;
-        border-radius: 20px;
-        background: var(--surface2);
-        color: var(--muted)
-    }
-
-    .lead-status.status-new           { background: rgba(91,138,245,.15); color: var(--accent2) }
-    .lead-status.status-chatting      { background: rgba(76,175,135,.15); color: var(--green) }
-    .lead-status.status-pricing_requested { background: rgba(240,165,0,.15); color: var(--amber) }
-    .lead-status.status-pricing_sent  { background: rgba(124,106,245,.15); color: var(--accent) }
-    .lead-status.status-package_selected { background: rgba(124,106,245,.15); color: var(--accent) }
-    .lead-status.status-booked        { background: rgba(76,175,135,.15); color: var(--green) }
-    .lead-status.status-intake_sent   { background: rgba(124,106,245,.15); color: var(--accent) }
-    .lead-status.status-intake_completed { background: rgba(240,165,0,.15); color: var(--amber) }
-    .lead-status.status-contract_sent { background: rgba(91,138,245,.15); color: var(--accent2) }
-    .lead-status.status-contract_signed { background: rgba(76,175,135,.15); color: var(--green) }
-    .lead-status.status-lost          { background: var(--surface2); color: var(--muted) }
-
-    .lead-detail {
-        font-size: 13px;
-        color: var(--muted)
-    }
-
-    .lead-time {
-        font-size: 11px;
-        color: #4a5272;
-        margin-top: 4px
-    }
-
-    .lead-actions {
-        display: flex;
-        gap: 8px;
-        margin-top: 10px;
-        flex-wrap: wrap
-    }
-
-    .action-btn {
-        padding: 7px 14px;
-        border-radius: 8px;
-        font-size: 13px;
-        font-weight: 500;
-        border: none;
-        cursor: pointer;
-        font-family: inherit;
-        transition: opacity .15s
-    }
-
-    .action-btn:hover { opacity: .8 }
-
-    .action-btn.pricing   { background: rgba(240,165,0,.18); color: var(--amber) }
-    .action-btn.contract  { background: rgba(91,138,245,.18); color: var(--accent2) }
-    .action-btn.answers   { background: rgba(124,106,245,.18); color: var(--accent) }
-    .action-btn.edit      { background: rgba(76,175,135,.18); color: var(--green) }
-    .action-btn.delete    { background: rgba(224,82,82,.18); color: var(--red) }
-
-    .lead-pricing-link {
-        font-size: 12px;
-        color: var(--accent);
-        margin-top: 4px
-    }
-
-    .lead-pricing-link a {
-        color: var(--accent);
-        text-decoration: none
-    }
-
-    .lead-selected-package {
-        font-size: 12px;
-        color: var(--green);
-        margin-top: 4px;
-        font-weight: 600
-    }
-
-    .empty-state {
-        text-align: center;
-        padding: 40px 20px;
-        color: var(--muted);
-        grid-column: 1 / -1
-    }
-
-    .refresh-btn {
-        width: 100%;
-        padding: 10px;
-        background: transparent;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        font-size: 14px;
-        cursor: pointer;
-        color: var(--muted);
-        font-family: inherit;
-        margin-bottom: 12px;
-        transition: background .15s
-    }
-
-    .refresh-btn:hover { background: var(--surface2) }
-
-    /* ── Review toggle ── */
-    .review-toggle-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 14px 16px;
-        margin-bottom: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px
-    }
-
-    .review-toggle-text { flex: 1 }
-
-    .review-toggle-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--text);
-        margin-bottom: 2px
-    }
-
-    .review-toggle-desc {
-        font-size: 12px;
-        color: var(--muted);
-        line-height: 1.4
-    }
-
-    .switch {
-        position: relative;
-        display: inline-block;
-        width: 48px;
-        height: 28px;
-        flex-shrink: 0
-    }
-
-    .switch input {
-        opacity: 0;
-        width: 0;
-        height: 0
-    }
-
-    .switch-slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: var(--surface2);
-        border: 1px solid var(--border);
-        border-radius: 28px;
-        transition: 0.2s
-    }
-
-    .switch-slider::before {
-        position: absolute;
-        content: "";
-        height: 22px;
-        width: 22px;
-        left: 2px;
-        bottom: 2px;
-        background-color: var(--muted);
-        border-radius: 50%;
-        transition: 0.2s
-    }
-
-    .switch input:checked + .switch-slider {
-        background-color: var(--accent);
-        border-color: var(--accent)
-    }
-
-    .switch input:checked + .switch-slider::before {
-        background-color: #fff;
-        transform: translateX(20px)
-    }
-
-    /* ── Pending replies ── */
-    .pending-section { margin-bottom: 16px }
-
-    .pending-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-left: 3px solid var(--amber);
-        border-radius: 14px;
-        padding: 16px;
-        margin-bottom: 10px
-    }
-
-    .pending-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        margin-bottom: 8px
-    }
-
-    .pending-client {
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--text)
-    }
-
-    .pending-channel {
-        font-size: 11px;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: 0.03em
-    }
-
-    .pending-draft {
-        width: 100%;
-        min-height: 80px;
-        padding: 10px 12px;
-        font-size: 14px;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        font-family: inherit;
-        line-height: 1.5;
-        resize: vertical;
-        margin-bottom: 10px;
-        background: var(--surface2);
-        color: var(--text)
-    }
-
-    .pending-draft:focus {
-        outline: none;
-        border-color: var(--accent)
-    }
-
-    .pending-actions {
-        display: flex;
-        gap: 8px
-    }
-
-    .pending-actions button {
-        flex: 1;
-        padding: 9px;
-        border-radius: 8px;
-        font-size: 13px;
-        font-weight: 600;
-        border: none;
-        cursor: pointer;
-        font-family: inherit
-    }
-
-    .pending-send    { background: var(--accent); color: #fff }
-    .pending-discard { background: rgba(224,82,82,.18); color: var(--red) }
-
-    /* ── Modals ── */
-    .modal-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.72);
-        z-index: 100;
-        align-items: flex-end;
-        justify-content: center
-    }
-
-    .modal-overlay.show { display: flex }
-
-    .modal {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 20px 20px 0 0;
-        padding: 24px 16px;
-        width: 100%;
-        max-width: 460px;
-        max-height: 85vh;
-        overflow-y: auto
-    }
-
-    .modal h2 {
-        font-size: 18px;
-        font-weight: 600;
-        margin-bottom: 6px;
-        color: var(--text)
-    }
-
-    .modal p {
-        font-size: 13px;
-        color: var(--muted);
-        margin-bottom: 16px
-    }
-
-    .pricing-option {
-        display: flex;
-        align-items: center;
-        padding: 14px;
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        margin-bottom: 10px;
-        cursor: pointer;
-        gap: 12px;
-        background: var(--card-bg);
-        transition: border-color .15s, background .15s
-    }
-
-    .pricing-option:hover {
-        border-color: var(--accent);
-        background: rgba(124,106,245,.08)
-    }
-
-    .pricing-option.selected {
-        border-color: var(--accent);
-        background: rgba(124,106,245,.12)
-    }
-
-    .pricing-option-icon { font-size: 22px }
-
-    .pricing-option-text { flex: 1 }
-
-    .pricing-option-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--text)
-    }
-
-    .pricing-option-desc {
-        font-size: 12px;
-        color: var(--muted);
-        margin-top: 2px
-    }
-
-    .custom-price-inputs {
-        display: none;
-        margin-top: 12px;
-        padding: 14px;
-        background: var(--surface2);
-        border: 1px solid var(--border);
-        border-radius: 12px
-    }
-
-    .custom-price-inputs.show { display: block }
-
-    .three-col {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 8px
-    }
+    .edit-note { font-size: 12px; color: var(--muted); margin-top: 6px; font-style: italic }
 
     .price-field label {
         font-size: 11px;
@@ -747,7 +529,7 @@
         margin-bottom: 4px;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.04em
+        letter-spacing: .04em
     }
 
     .price-field input {
@@ -761,33 +543,90 @@
         font-family: inherit
     }
 
-    .price-field input:focus {
-        outline: none;
-        border-color: var(--accent)
+    .price-field input:focus { outline: none; border-color: var(--accent) }
+
+    /* ── Modals ── */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,.72);
+        z-index: 200;
+        align-items: center;
+        justify-content: center;
+        padding: 20px
     }
+
+    .modal-overlay.show { display: flex }
+
+    .modal {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 24px;
+        width: 100%;
+        max-width: 480px;
+        max-height: 85vh;
+        overflow-y: auto
+    }
+
+    .modal h2 { font-size: 17px; font-weight: 600; margin-bottom: 6px }
+    .modal > p { font-size: 13px; color: var(--muted); margin-bottom: 16px }
+
+    .pricing-option {
+        display: flex;
+        align-items: center;
+        padding: 13px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        gap: 12px;
+        background: var(--card-bg);
+        transition: border-color .12s, background .12s
+    }
+
+    .pricing-option:hover { border-color: var(--accent); background: rgba(124,106,245,.08) }
+    .pricing-option.selected { border-color: var(--accent); background: rgba(124,106,245,.12) }
+
+    .pricing-option-icon { font-size: 20px }
+    .pricing-option-text { flex: 1 }
+    .pricing-option-title { font-size: 14px; font-weight: 600 }
+    .pricing-option-desc { font-size: 12px; color: var(--muted); margin-top: 2px }
+
+    .custom-price-inputs {
+        display: none;
+        margin-top: 10px;
+        padding: 12px;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 10px
+    }
+
+    .custom-price-inputs.show { display: block }
 
     .format-toggle {
         display: flex;
-        gap: 8px;
-        margin-bottom: 16px;
+        gap: 6px;
+        margin-bottom: 14px;
         background: var(--surface2);
         border: 1px solid var(--border);
-        padding: 4px;
-        border-radius: 12px
+        padding: 3px;
+        border-radius: 10px
     }
 
     .format-toggle-btn {
         flex: 1;
-        padding: 10px;
+        padding: 8px;
         border: none;
         background: transparent;
-        border-radius: 9px;
-        font-size: 13.5px;
+        border-radius: 8px;
+        font-size: 13px;
         font-weight: 600;
         color: var(--muted);
         cursor: pointer;
         font-family: inherit;
-        transition: all .15s
+        transition: all .12s
     }
 
     .format-toggle-btn.active {
@@ -799,1748 +638,1243 @@
     .format-section { display: none }
     .format-section.show { display: block }
 
-    .modal-actions {
-        display: flex;
-        gap: 10px;
-        margin-top: 16px
-    }
+    .modal-actions { display: flex; gap: 10px; margin-top: 16px }
 
     .modal-cancel {
         flex: 1;
-        padding: 12px;
+        padding: 11px;
         background: var(--surface2);
         border: 1px solid var(--border);
-        border-radius: 10px;
-        font-size: 15px;
+        border-radius: 9px;
+        font-size: 14px;
         cursor: pointer;
         font-family: inherit;
         color: var(--muted);
-        transition: background .15s
+        transition: background .12s
     }
 
     .modal-cancel:hover { background: var(--border) }
 
     .modal-send {
         flex: 2;
-        padding: 12px;
+        padding: 11px;
         background: var(--accent);
         color: #fff;
         border: none;
-        border-radius: 10px;
-        font-size: 15px;
+        border-radius: 9px;
+        font-size: 14px;
         font-weight: 600;
         cursor: pointer;
         font-family: inherit;
-        transition: opacity .15s
+        transition: opacity .12s
     }
 
     .modal-send:hover { opacity: .85 }
+    .modal-send:disabled { opacity: .4; cursor: not-allowed }
 
-    .modal-send:disabled {
-        opacity: .4;
-        cursor: not-allowed
-    }
-
-    /* ── Questionnaire answers ── */
-    .answer-row {
-        padding: 10px 0;
-        border-bottom: 1px solid var(--border)
-    }
-
+    .answer-row { padding: 9px 0; border-bottom: 1px solid var(--border) }
     .answer-row:last-child { border-bottom: none }
+    .answer-row .q { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px }
+    .answer-row .a { font-size: 14px; color: var(--text); line-height: 1.5; white-space: pre-wrap }
 
-    .answer-row .q {
-        font-size: 11px;
-        color: var(--muted);
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin-bottom: 3px
+    .answers-loading { text-align: center; padding: 28px; color: var(--muted); font-size: 14px }
+
+    /* ── Toggle switch ── */
+    .switch {
+        position: relative;
+        display: inline-block;
+        width: 44px;
+        height: 26px;
+        flex-shrink: 0
     }
 
-    .answer-row .a {
-        font-size: 14.5px;
-        color: var(--text);
-        line-height: 1.5;
-        white-space: pre-wrap
-    }
+    .switch input { opacity: 0; width: 0; height: 0 }
 
-    .answers-loading {
-        text-align: center;
-        padding: 30px;
-        color: var(--muted);
-        font-size: 14px
-    }
-
-    /* ── Screenshot upload status ── */
-    #screenshot-status { color: var(--muted) }
-
-    /* ── Edit modal fields (mirror .field for inline price-field) ── */
-    #edit-modal-form .field input,
-    #edit-modal-form .field select,
-    #edit-modal-form .field textarea {
+    .switch-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0; left: 0; right: 0; bottom: 0;
         background: var(--surface2);
-        color: var(--text);
-        border-color: var(--border)
+        border: 1px solid var(--border);
+        border-radius: 26px;
+        transition: .2s
+    }
+
+    .switch-slider::before {
+        position: absolute;
+        content: "";
+        height: 20px;
+        width: 20px;
+        left: 2px;
+        bottom: 2px;
+        background: var(--muted);
+        border-radius: 50%;
+        transition: .2s
+    }
+
+    .switch input:checked + .switch-slider { background: var(--accent); border-color: var(--accent) }
+    .switch input:checked + .switch-slider::before { background: #fff; transform: translateX(18px) }
+
+    /* ── Review mode row in topbar ── */
+    .review-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted)
+    }
+
+    /* ── Scrollbar ── */
+    .kanban-board::-webkit-scrollbar { height: 6px }
+    .kanban-board::-webkit-scrollbar-track { background: transparent }
+    .kanban-board::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px }
+
+    .col-cards::-webkit-scrollbar { width: 4px }
+    .col-cards::-webkit-scrollbar-track { background: transparent }
+    .col-cards::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px }
+
+    /* ── Mobile ── */
+    @media (max-width: 700px) {
+        .topbar { padding: 0 14px; gap: 10px }
+        .review-row { display: none }
+        .kanban-board { padding: 14px 12px 20px }
+        .kanban-col { width: 230px }
+        #new-lead-view { padding: 14px }
     }
     </style>
 </head>
 <body>
-    <!-- Topbar -->
-    <div class="topbar">
-        <div>
-            <div class="topbar h1" style="font-size:17px;font-weight:600">&#10022; Shine, The Mentalist</div>
-            <div class="sub">Booking assistant</div>
+
+<!-- Topbar -->
+<div class="topbar">
+    <div class="topbar-brand">&#10022; Shine <span>/ Pipeline</span></div>
+    <div class="topbar-tabs">
+        <button class="ttab active" onclick="showView('dashboard')">Pipeline</button>
+        <button class="ttab" onclick="messagingExistingClientId=null;showView('new-lead')">+ New Lead</button>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="review-row">
+        <span id="review-toggle-desc">Auto-send on</span>
+        <label class="switch">
+            <input type="checkbox" id="review-mode-toggle" onchange="onReviewModeToggle()">
+            <span class="switch-slider"></span>
+        </label>
+    </div>
+    <button class="topbar-refresh" onclick="loadPipeline();loadPendingReplies();">&#8635;</button>
+</div>
+
+<!-- Pending replies banner -->
+<div class="pending-banner" id="pending-banner">
+    <div class="pending-banner-title">&#9888; Pending replies</div>
+    <div class="pending-list-row" id="pending-list"></div>
+</div>
+
+<!-- Dashboard view: Kanban board -->
+<div id="dashboard-view">
+    <div class="kanban-board" id="kanban-board">
+        <!-- columns injected by JS -->
+    </div>
+</div>
+
+<!-- New lead view -->
+<div id="new-lead-view">
+<div class="new-lead-inner">
+    <div class="card">
+        <div class="section-label">Quick fill from screenshot</div>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 10px 0">Upload screenshots from Bark, GigSalad, or another platform — the assistant will fill in what it finds.</p>
+        <input type="file" id="lead-screenshot-input" accept="image/*" multiple style="display:none" onchange="handleScreenshotUpload(this.files)">
+        <button class="generate-btn" id="upload-screenshot-btn" onclick="document.getElementById('lead-screenshot-input').click()">Upload screenshot(s)</button>
+        <div id="screenshot-status" style="font-size:13px;color:var(--muted);margin-top:8px;display:none"></div>
+    </div>
+
+    <div class="card">
+        <div class="section-label">Client details</div>
+        <div class="field">
+            <label>Client name</label>
+            <input type="text" id="name" placeholder="e.g. Abigail">
         </div>
-        <div class="topbar-tabs">
-            <button class="tab active" onclick="showTab('dashboard')">Dashboard</button>
-            <button class="tab" onclick="messagingExistingClientId=null;showTab('new-lead')">+ New Lead</button>
+        <div class="two-col">
+            <div class="field">
+                <label>Phone</label>
+                <input type="tel" id="phone" placeholder="(909) 283-2141">
+            </div>
+            <div class="field">
+                <label>Email</label>
+                <input type="email" id="email" placeholder="abigail@gmail.com">
+            </div>
+        </div>
+        <div class="field">
+            <label>Lead source</label>
+            <select id="lead_source" onchange="toggleOtherSource()">
+                <option value="Bark">Bark</option>
+                <option value="GigSalad">GigSalad</option>
+                <option value="TheBash">TheBash</option>
+                <option value="Website">Website</option>
+                <option value="Referral">Referral</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+        <div class="field" id="other-source-field" style="display:none">
+            <label>Source name</label>
+            <input type="text" id="other_source_name" placeholder="e.g. Instagram, friend...">
         </div>
     </div>
 
-    <!-- Mobile header + tabs (shown only on small screens) -->
-    <div class="app">
-    <div class="main">
-        <div class="header">
-            <h1>&#10022; Shine, The Mentalist</h1>
-            <p>Booking assistant</p>
+    <div class="card">
+        <div class="section-label">Event details</div>
+        <div class="field">
+            <label>Event type</label>
+            <select id="event_type">
+                <option value="">Select event type</option>
+                <option value="Birthday party">Birthday party</option>
+                <option value="Bachelorette party">Bachelorette party</option>
+                <option value="Bachelor party">Bachelor party</option>
+                <option value="Corporate event">Corporate event</option>
+                <option value="Graduation">Graduation</option>
+                <option value="Baby Shower">Baby Shower</option>
+                <option value="Private celebration">Private celebration</option>
+                <option value="Anniversary">Anniversary</option>
+                <option value="Other">Other</option>
+            </select>
         </div>
-        <div class="tab-bar">
-            <button class="tab active" onclick="showTab('dashboard')">Dashboard</button>
-            <button class="tab" onclick="messagingExistingClientId=null;showTab('new-lead')">+ New Lead</button>
-        </div>
-
-        <div id="dashboard-view">
-            <div class="dashboard-inner">
-                <!-- Sidebar: controls -->
-                <div class="dashboard-sidebar">
-                    <div class="review-toggle-card">
-                        <div class="review-toggle-text">
-                            <div class="review-toggle-title">Review replies before sending</div>
-                            <div class="review-toggle-desc" id="review-toggle-desc">AI replies send automatically</div>
-                        </div>
-                        <label class="switch">
-                            <input type="checkbox" id="review-mode-toggle" onchange="onReviewModeToggle()">
-                            <span class="switch-slider"></span>
-                        </label>
-                    </div>
-
-                    <div class="pending-section" id="pending-section" style="display:none">
-                        <div id="pending-list"></div>
-                    </div>
-
-                    <button class="refresh-btn" onclick="loadDashboard();loadPendingReplies();">&#8635; Refresh</button>
-                </div>
-
-                <!-- Main: lead grid -->
-                <div>
-                    <div id="leads-list" class="dashboard-leads">
-                        <div class="empty-state">
-                            <p>Loading...</p>
-                        </div>
-                    </div>
-                </div>
+        <div class="two-col">
+            <div class="field">
+                <label>Event date</label>
+                <input type="date" id="date">
+            </div>
+            <div class="field">
+                <label>Guests</label>
+                <select id="guests">
+                    <option value="">How many?</option>
+                    <option value="Under 10">Under 10</option>
+                    <option value="10-25">10-25</option>
+                    <option value="25-50">25-50</option>
+                    <option value="50-100">50-100</option>
+                    <option value="100+">100+</option>
+                </select>
             </div>
         </div>
-
-        <div id="new-lead-view">
-        <div class="new-lead-inner">
-            <div class="card">
-                <div class="section-label">Quick fill from screenshot</div>
-                <p style="font-size:13px;color:var(--muted);margin:0 0 10px 0">Upload one or more screenshots from Bark, GigSalad, or another platform — Shine's assistant will read them and fill in what it can find below.</p>
-                <input type="file" id="lead-screenshot-input" accept="image/*" multiple style="display:none" onchange="handleScreenshotUpload(this.files)">
-                <button class="generate-btn" id="upload-screenshot-btn" onclick="document.getElementById('lead-screenshot-input').click()">Upload screenshot(s)</button>
-                <div id="screenshot-status" style="font-size:13px;margin-top:8px;display:none"></div>
-            </div>
-
-            <div class="card">
-                <div class="section-label">Client details</div>
-                <div class="field">
-                    <label>Client name</label>
-                    <input type="text" id="name" placeholder="e.g. Abigail">
-                </div>
-                <div class="two-col">
-                    <div class="field">
-                        <label>Phone</label>
-                        <input type="tel" id="phone" placeholder="(909) 283-2141">
-                    </div>
-                    <div class="field">
-                        <label>Email</label>
-                        <input type="email" id="email" placeholder="abigail@gmail.com">
-                    </div>
-                </div>
-                <div class="field">
-                    <label>Lead source</label>
-                    <select id="lead_source" onchange="toggleOtherSource()">
-                        <option value="Bark">Bark</option>
-                        <option value="GigSalad">GigSalad</option>
-                        <option value="TheBash">TheBash</option>
-                        <option value="Website">Website</option>
-                        <option value="Referral">Referral</option>
-                        <option value="Other">Other</option>
-                    </select>
-                </div>
-                <div class="field" id="other-source-field" style="display:none">
-                    <label>Source name</label>
-                    <input type="text" id="other_source_name" placeholder="e.g. Instagram, Facebook, friend...">
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="section-label">Event details</div>
-                <div class="field">
-                    <label>Event type</label>
-                    <select id="event_type">
-                        <option value="">Select event type</option>
-                        <option value="Birthday party">Birthday party</option>
-                        <option value="Bachelorette party">Bachelorette party</option>
-                        <option value="Bachelor party">Bachelor party</option>
-                        <option value="Corporate event">Corporate event</option>
-                        <option value="Graduation">Graduation</option>
-                        <option value="Baby Shower">Baby Shower</option>
-                        <option value="Private celebration">Private celebration</option>
-                        <option value="Anniversary">Anniversary</option>
-                        <option value="Other">Other</option>
-                    </select>
-                </div>
-                <div class="two-col">
-                    <div class="field">
-                        <label>Event date</label>
-                        <input type="date" id="date">
-                    </div>
-                    <div class="field">
-                        <label>Guests</label>
-                        <select id="guests">
-                            <option value="">How many?</option>
-                            <option value="Under 10">Under 10</option>
-                            <option value="10-25">10-25</option>
-                            <option value="25-50">25-50</option>
-                            <option value="50-100">50-100</option>
-                            <option value="100+">100+</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>Venue</label>
-                    <input type="text" id="venue" placeholder="e.g. Home, hotel ballroom, country club...">
-                </div>
-                <div class="field">
-                    <label>Other entertainment?</label>
-                    <input type="text" id="other_entertainment" placeholder="e.g. DJ, photo booth, none...">
-                </div>
-                <div class="field">
-                    <label>Notes (optional)</label>
-                    <textarea id="notes" placeholder="e.g. Surprise party, evening event..."></textarea>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="section-label">Preview and edit messages</div>
-                <button class="generate-btn" onclick="generateMessages()" id="gen-btn">Generate AI messages</button>
-                <div id="messages-area" style="display:none">
-                    <div class="msg-label">SMS message</div>
-                    <div class="field">
-                        <textarea id="sms-text" rows="3" oninput="updateCharCount()"></textarea>
-                    </div>
-                    <div class="char-count" id="char-count">0 / 160 characters</div>
-                    <div class="msg-label" style="margin-top:16px">Email subject</div>
-                    <div class="field">
-                        <input type="text" id="email-subject">
-                    </div>
-                    <div class="msg-label">Email body</div>
-                    <div class="field">
-                        <textarea id="email-body" rows="8"></textarea>
-                    </div>
-                    <p class="edit-note">Edit any message above before sending.</p>
-                    <div class="followup-row">
-                        <input type="checkbox" id="followup" checked>
-                        <label for="followup">Auto follow-up if no reply in 24 hours</label>
-                    </div>
-                </div>
-            </div>
-
-            <button class="send-btn" onclick="sendMessages()" id="send-btn" disabled>Send messages</button>
-            <button class="generate-btn" onclick="saveLeadOnly()" id="save-lead-btn" style="margin-top:10px">Save lead (no message yet)</button>
-            <div class="status" id="status"></div>
+        <div class="field">
+            <label>Venue</label>
+            <input type="text" id="venue" placeholder="e.g. Home, hotel ballroom...">
         </div>
-        </div><!-- /.new-lead-inner -->
-        </div><!-- /#new-lead-view -->
-    </div><!-- /.main -->
-    </div><!-- /.app -->
+        <div class="field">
+            <label>Other entertainment?</label>
+            <input type="text" id="other_entertainment" placeholder="e.g. DJ, photo booth, none...">
+        </div>
+        <div class="field">
+            <label>Notes (optional)</label>
+            <textarea id="notes" placeholder="e.g. Surprise party, evening event..."></textarea>
+        </div>
+    </div>
 
-    <!-- Pricing modal -->
-    <div class="modal-overlay" id="pricing-modal">
-        <div class="modal">
-            <h2>Send pricing</h2>
-            <p id="modal-client-name">Choose which packages to send</p>
-
-            <div class="format-toggle">
-                <button class="format-toggle-btn active" id="format-btn-stage" onclick="switchFormat('stage')">Stage Show</button>
-                <button class="format-toggle-btn" id="format-btn-strolling" onclick="switchFormat('strolling')">Strolling</button>
-            </div>
-
-            <div class="format-section show" id="format-section-stage">
-                <div class="pricing-option" onclick="selectPricingOption('private-standard')" id="opt-private-standard">
-                    <div class="pricing-option-icon">&#127874;</div>
-                    <div class="pricing-option-text">
-                        <div class="pricing-option-title">Private — Standard</div>
-                        <div class="pricing-option-desc">Deluxe $400 · Signature $500 · Premium $600</div>
-                    </div>
-                </div>
-
-                <div class="pricing-option" onclick="selectPricingOption('private-custom')" id="opt-private-custom">
-                    <div class="pricing-option-icon">&#10024;</div>
-                    <div class="pricing-option-text">
-                        <div class="pricing-option-title">Private — Custom pricing</div>
-                        <div class="pricing-option-desc">Set your own prices for this client</div>
-                    </div>
-                </div>
-                <div class="custom-price-inputs" id="private-custom-inputs">
-                    <div class="three-col">
-                        <div class="price-field">
-                            <label>Deluxe</label>
-                            <input type="number" id="pc-d1" placeholder="400">
-                        </div>
-                        <div class="price-field">
-                            <label>Signature</label>
-                            <input type="number" id="pc-d2" placeholder="500">
-                        </div>
-                        <div class="price-field">
-                            <label>Premium</label>
-                            <input type="number" id="pc-d3" placeholder="600">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="pricing-option" onclick="selectPricingOption('corporate-standard')" id="opt-corporate-standard">
-                    <div class="pricing-option-icon">&#127970;</div>
-                    <div class="pricing-option-text">
-                        <div class="pricing-option-title">Corporate — Standard</div>
-                        <div class="pricing-option-desc">Deluxe $1,000 · Signature $1,200 · Premium $1,500</div>
-                    </div>
-                </div>
-
-                <div class="pricing-option" onclick="selectPricingOption('corporate-custom')" id="opt-corporate-custom">
-                    <div class="pricing-option-icon">&#128188;</div>
-                    <div class="pricing-option-text">
-                        <div class="pricing-option-title">Corporate — Custom pricing</div>
-                        <div class="pricing-option-desc">Set your own prices for this client</div>
-                    </div>
-                </div>
-                <div class="custom-price-inputs" id="corporate-custom-inputs">
-                    <div class="three-col">
-                        <div class="price-field">
-                            <label>Deluxe</label>
-                            <input type="number" id="pc-c1" placeholder="1000">
-                        </div>
-                        <div class="price-field">
-                            <label>Signature</label>
-                            <input type="number" id="pc-c2" placeholder="1200">
-                        </div>
-                        <div class="price-field">
-                            <label>Premium</label>
-                            <input type="number" id="pc-c3" placeholder="1500">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="format-section" id="format-section-strolling">
-                <div class="pricing-option" onclick="selectPricingOption('strolling-private-standard')" id="opt-strolling-private-standard">
-                    <div class="pricing-option-icon">&#127874;</div>
-                    <div class="pricing-option-text">
-                        <div class="pricing-option-title">Private — Standard</div>
-                        <div class="pricing-option-desc">$400/hr · +$200 add-on for Grand Finale</div>
-                    </div>
-                </div>
-
-                <div class="pricing-option" onclick="selectPricingOption('strolling-private-custom')" id="opt-strolling-private-custom">
-                    <div class="pricing-option-icon">&#10024;</div>
-                    <div class="pricing-option-text">
-                        <div class="pricing-option-title">Private — Custom pricing</div>
-                        <div class="pricing-option-desc">Set your own strolling rates for this client</div>
-                    </div>
-                </div>
-                <div class="custom-price-inputs" id="strolling-private-custom-inputs">
-                    <div class="two-col">
-                        <div class="price-field">
-                            <label>Rate per hour</label>
-                            <input type="number" id="ps-rate" placeholder="400">
-                        </div>
-                        <div class="price-field">
-                            <label>Grand Finale add-on</label>
-                            <input type="number" id="ps-finale" placeholder="200">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="pricing-option" onclick="selectPricingOption('strolling-corporate-standard')" id="opt-strolling-corporate-standard">
-                    <div class="pricing-option-icon">&#127970;</div>
-                    <div class="pricing-option-text">
-                        <div class="pricing-option-title">Corporate — Standard</div>
-                        <div class="pricing-option-desc">$1,000/hr · +$300 add-on for Grand Finale</div>
-                    </div>
-                </div>
-
-                <div class="pricing-option" onclick="selectPricingOption('strolling-corporate-custom')" id="opt-strolling-corporate-custom">
-                    <div class="pricing-option-icon">&#128188;</div>
-                    <div class="pricing-option-text">
-                        <div class="pricing-option-title">Corporate — Custom pricing</div>
-                        <div class="pricing-option-desc">Set your own strolling rates for this client</div>
-                    </div>
-                </div>
-                <div class="custom-price-inputs" id="strolling-corporate-custom-inputs">
-                    <div class="two-col">
-                        <div class="price-field">
-                            <label>Rate per hour</label>
-                            <input type="number" id="ps-c-rate" placeholder="1000">
-                        </div>
-                        <div class="price-field">
-                            <label>Grand Finale add-on</label>
-                            <input type="number" id="ps-c-finale" placeholder="300">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="modal-actions">
-                <button class="modal-cancel" onclick="closeModal()">Cancel</button>
-                <button class="modal-send" id="modal-send-btn" onclick="sendPricing()" disabled>Send pricing</button>
+    <div class="card">
+        <div class="section-label">Preview and edit messages</div>
+        <button class="generate-btn" onclick="generateMessages()" id="gen-btn">Generate AI messages</button>
+        <div id="messages-area" style="display:none">
+            <div class="msg-label">SMS message</div>
+            <div class="field"><textarea id="sms-text" rows="3" oninput="updateCharCount()"></textarea></div>
+            <div class="char-count" id="char-count">0 / 160 characters</div>
+            <div class="msg-label" style="margin-top:16px">Email subject</div>
+            <div class="field"><input type="text" id="email-subject"></div>
+            <div class="msg-label">Email body</div>
+            <div class="field"><textarea id="email-body" rows="8"></textarea></div>
+            <p class="edit-note">Edit any message above before sending.</p>
+            <div class="followup-row">
+                <input type="checkbox" id="followup" checked>
+                <label for="followup">Auto follow-up if no reply in 24 hours</label>
             </div>
         </div>
     </div>
 
-    <!-- Contract modal -->
-    <div class="modal-overlay" id="contract-modal">
-        <div class="modal">
-            <h2>Send contract</h2>
-            <p id="contract-modal-client-name">Fill in the event details</p>
-            <div class="field">
-                <label>Event title</label>
-                <input type="text" id="ct-title" placeholder="e.g. Sarah's 30th Birthday">
+    <button class="send-btn" onclick="sendMessages()" id="send-btn" disabled>Send messages</button>
+    <button class="generate-btn" onclick="saveLeadOnly()" id="save-lead-btn" style="margin-top:10px">Save lead (no message yet)</button>
+    <div class="status-msg" id="status"></div>
+</div>
+</div>
+
+<!-- Pricing modal -->
+<div class="modal-overlay" id="pricing-modal">
+    <div class="modal">
+        <h2>Send pricing</h2>
+        <p id="modal-client-name">Choose which packages to send</p>
+        <div class="format-toggle">
+            <button class="format-toggle-btn active" id="format-btn-stage" onclick="switchFormat('stage')">Stage Show</button>
+            <button class="format-toggle-btn" id="format-btn-strolling" onclick="switchFormat('strolling')">Strolling</button>
+        </div>
+        <div class="format-section show" id="format-section-stage">
+            <div class="pricing-option" onclick="selectPricingOption('private-standard')" id="opt-private-standard">
+                <div class="pricing-option-icon">&#127874;</div>
+                <div class="pricing-option-text">
+                    <div class="pricing-option-title">Private — Standard</div>
+                    <div class="pricing-option-desc">Deluxe $400 · Signature $500 · Premium $600</div>
+                </div>
+            </div>
+            <div class="pricing-option" onclick="selectPricingOption('private-custom')" id="opt-private-custom">
+                <div class="pricing-option-icon">&#10024;</div>
+                <div class="pricing-option-text">
+                    <div class="pricing-option-title">Private — Custom pricing</div>
+                    <div class="pricing-option-desc">Set your own prices for this client</div>
+                </div>
+            </div>
+            <div class="custom-price-inputs" id="private-custom-inputs">
+                <div class="three-col">
+                    <div class="price-field"><label>Deluxe</label><input type="number" id="pc-d1" placeholder="400"></div>
+                    <div class="price-field"><label>Signature</label><input type="number" id="pc-d2" placeholder="500"></div>
+                    <div class="price-field"><label>Premium</label><input type="number" id="pc-d3" placeholder="600"></div>
+                </div>
+            </div>
+            <div class="pricing-option" onclick="selectPricingOption('corporate-standard')" id="opt-corporate-standard">
+                <div class="pricing-option-icon">&#127970;</div>
+                <div class="pricing-option-text">
+                    <div class="pricing-option-title">Corporate — Standard</div>
+                    <div class="pricing-option-desc">Deluxe $1,000 · Signature $1,200 · Premium $1,500</div>
+                </div>
+            </div>
+            <div class="pricing-option" onclick="selectPricingOption('corporate-custom')" id="opt-corporate-custom">
+                <div class="pricing-option-icon">&#128188;</div>
+                <div class="pricing-option-text">
+                    <div class="pricing-option-title">Corporate — Custom pricing</div>
+                    <div class="pricing-option-desc">Set your own prices for this client</div>
+                </div>
+            </div>
+            <div class="custom-price-inputs" id="corporate-custom-inputs">
+                <div class="three-col">
+                    <div class="price-field"><label>Deluxe</label><input type="number" id="pc-c1" placeholder="1000"></div>
+                    <div class="price-field"><label>Signature</label><input type="number" id="pc-c2" placeholder="1200"></div>
+                    <div class="price-field"><label>Premium</label><input type="number" id="pc-c3" placeholder="1500"></div>
+                </div>
+            </div>
+        </div>
+        <div class="format-section" id="format-section-strolling">
+            <div class="pricing-option" onclick="selectPricingOption('strolling-private-standard')" id="opt-strolling-private-standard">
+                <div class="pricing-option-icon">&#127874;</div>
+                <div class="pricing-option-text">
+                    <div class="pricing-option-title">Private — Standard</div>
+                    <div class="pricing-option-desc">$400/hr · +$200 Grand Finale</div>
+                </div>
+            </div>
+            <div class="pricing-option" onclick="selectPricingOption('strolling-private-custom')" id="opt-strolling-private-custom">
+                <div class="pricing-option-icon">&#10024;</div>
+                <div class="pricing-option-text">
+                    <div class="pricing-option-title">Private — Custom</div>
+                    <div class="pricing-option-desc">Set your own strolling rates</div>
+                </div>
+            </div>
+            <div class="custom-price-inputs" id="strolling-private-custom-inputs">
+                <div class="two-col">
+                    <div class="price-field"><label>Rate/hr</label><input type="number" id="ps-rate" placeholder="400"></div>
+                    <div class="price-field"><label>Grand Finale</label><input type="number" id="ps-finale" placeholder="200"></div>
+                </div>
+            </div>
+            <div class="pricing-option" onclick="selectPricingOption('strolling-corporate-standard')" id="opt-strolling-corporate-standard">
+                <div class="pricing-option-icon">&#127970;</div>
+                <div class="pricing-option-text">
+                    <div class="pricing-option-title">Corporate — Standard</div>
+                    <div class="pricing-option-desc">$1,000/hr · +$300 Grand Finale</div>
+                </div>
+            </div>
+            <div class="pricing-option" onclick="selectPricingOption('strolling-corporate-custom')" id="opt-strolling-corporate-custom">
+                <div class="pricing-option-icon">&#128188;</div>
+                <div class="pricing-option-text">
+                    <div class="pricing-option-title">Corporate — Custom</div>
+                    <div class="pricing-option-desc">Set your own strolling rates</div>
+                </div>
+            </div>
+            <div class="custom-price-inputs" id="strolling-corporate-custom-inputs">
+                <div class="two-col">
+                    <div class="price-field"><label>Rate/hr</label><input type="number" id="ps-c-rate" placeholder="1000"></div>
+                    <div class="price-field"><label>Grand Finale</label><input type="number" id="ps-c-finale" placeholder="300"></div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="modal-cancel" onclick="closeModal()">Cancel</button>
+            <button class="modal-send" id="modal-send-btn" onclick="sendPricing()" disabled>Send pricing</button>
+        </div>
+    </div>
+</div>
+
+<!-- Contract modal -->
+<div class="modal-overlay" id="contract-modal">
+    <div class="modal">
+        <h2>Send contract</h2>
+        <p id="contract-modal-client-name">Fill in the event details</p>
+        <div class="field"><label>Event title</label><input type="text" id="ct-title" placeholder="e.g. Sarah's 30th Birthday"></div>
+        <div class="field"><label>Venue address</label><input type="text" id="ct-address" placeholder="Full address"></div>
+        <div class="two-col">
+            <div class="price-field"><label>Event date</label><input type="date" id="ct-date"></div>
+            <div class="price-field"><label>Start time</label><input type="time" id="ct-start"></div>
+        </div>
+        <div class="two-col" style="margin-top:12px">
+            <div class="price-field"><label>Duration</label><input type="text" id="ct-duration" placeholder="e.g. 45 minutes"></div>
+            <div class="price-field"><label>Fee ($)</label><input type="number" id="ct-fee"></div>
+        </div>
+        <div class="modal-actions">
+            <button class="modal-cancel" onclick="closeContractModal()">Cancel</button>
+            <button class="modal-send" id="contract-send-btn" onclick="sendContract()">Send contract</button>
+        </div>
+    </div>
+</div>
+
+<!-- Answers modal -->
+<div class="modal-overlay" id="answers-modal">
+    <div class="modal">
+        <h2>Event questionnaire</h2>
+        <p id="answers-modal-subtitle">Loading...</p>
+        <div id="answers-content"></div>
+        <div class="modal-actions">
+            <button class="modal-cancel" style="flex:1" onclick="closeAnswersModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- View modal -->
+<div class="modal-overlay" id="view-modal">
+    <div class="modal">
+        <h2 id="view-name">Client details</h2>
+        <p id="view-status-line" style="color:var(--muted);font-size:14px;margin-top:-4px"></p>
+        <div id="view-content" style="margin-top:10px"></div>
+        <div class="modal-actions">
+            <button class="modal-cancel" onclick="deleteClientFromView()">Delete</button>
+            <button class="modal-send" onclick="editFromView()">Edit</button>
+        </div>
+        <button class="generate-btn" id="view-message-btn" style="margin-top:10px;display:none" onclick="messageClientFromView()">Generate &amp; send first message</button>
+    </div>
+</div>
+
+<!-- Edit modal -->
+<div class="modal-overlay" id="edit-modal">
+    <div class="modal">
+        <h2>Edit client</h2>
+        <p id="edit-modal-status" style="color:var(--muted);font-size:14px">Loading...</p>
+        <div id="edit-modal-form" style="display:none">
+            <div class="field"><label>Name</label><input type="text" id="edit-name"></div>
+            <div class="two-col">
+                <div class="field"><label>Phone</label><input type="tel" id="edit-phone"></div>
+                <div class="field"><label>Email</label><input type="email" id="edit-email"></div>
             </div>
             <div class="field">
-                <label>Venue address</label>
-                <input type="text" id="ct-address" placeholder="Full address">
+                <label>Event type</label>
+                <select id="edit-event_type">
+                    <option value="">Not specified</option>
+                    <option value="Birthday party">Birthday party</option>
+                    <option value="Bachelorette party">Bachelorette party</option>
+                    <option value="Bachelor party">Bachelor party</option>
+                    <option value="Corporate event">Corporate event</option>
+                    <option value="Graduation">Graduation</option>
+                    <option value="Baby Shower">Baby Shower</option>
+                    <option value="Private celebration">Private celebration</option>
+                    <option value="Anniversary">Anniversary</option>
+                    <option value="Other">Other</option>
+                </select>
             </div>
             <div class="two-col">
-                <div class="price-field">
-                    <label>Event date</label>
-                    <input type="date" id="ct-date">
-                </div>
-                <div class="price-field">
-                    <label>Start time</label>
-                    <input type="time" id="ct-start">
-                </div>
+                <div class="field"><label>Event date</label><input type="date" id="edit-event_date"></div>
+                <div class="field"><label>Guests</label><input type="text" id="edit-guests" placeholder="e.g. 25-50"></div>
             </div>
-            <div class="two-col" style="margin-top:14px">
-                <div class="price-field">
-                    <label>Duration</label>
-                    <input type="text" id="ct-duration" placeholder="e.g. 45 minutes">
-                </div>
-                <div class="price-field">
-                    <label>Fee ($)</label>
-                    <input type="number" id="ct-fee">
-                </div>
+            <div class="field"><label>Venue</label><input type="text" id="edit-venue"></div>
+            <div class="field">
+                <label>Lead source</label>
+                <select id="edit-lead_source">
+                    <option value="Bark">Bark</option>
+                    <option value="GigSalad">GigSalad</option>
+                    <option value="TheBash">TheBash</option>
+                    <option value="Website">Website</option>
+                    <option value="Referral">Referral</option>
+                    <option value="Other">Other</option>
+                </select>
             </div>
-            <div class="modal-actions">
-                <button class="modal-cancel" onclick="closeContractModal()">Cancel</button>
-                <button class="modal-send" id="contract-send-btn" onclick="sendContract()">Send contract</button>
-            </div>
+            <div class="field"><label>Notes</label><textarea id="edit-notes" rows="3"></textarea></div>
+        </div>
+        <div class="modal-actions">
+            <button class="modal-cancel" onclick="closeEditModal()">Cancel</button>
+            <button class="modal-send" id="edit-save-btn" onclick="saveEditedClient()" style="display:none">Save</button>
         </div>
     </div>
+</div>
 
-    <!-- Answers modal -->
-    <div class="modal-overlay" id="answers-modal">
-        <div class="modal">
-            <h2>Event questionnaire</h2>
-            <p id="answers-modal-subtitle">Loading...</p>
-            <div id="answers-content"></div>
-            <div class="modal-actions">
-                <button class="modal-cancel" style="flex:1" onclick="closeAnswersModal()">Close</button>
-            </div>
-        </div>
-    </div>
+<script>
+var SUPABASE_URL = 'https://nkhwttlmtidtippylbzs.supabase.co';
+var SUPABASE_KEY = 'sb_publishable_jvudqPYcwnnqjO8w7DQd2g_SSyb-HJl';
+var currentClientId = null;
+var selectedPricingOption = null;
+var modalClient = {};
+var messagingExistingClientId = null;
 
-    <!-- View modal -->
-    <div class="modal-overlay" id="view-modal">
-        <div class="modal">
-            <h2 id="view-name">Client details</h2>
-            <p id="view-status-line" style="color:var(--muted);font-size:14px;margin-top:-4px"></p>
-            <div id="view-content" style="margin-top:10px"></div>
-            <div class="modal-actions">
-                <button class="action-btn delete" style="flex:1;padding:12px" onclick="deleteClientFromView()">Delete</button>
-                <button class="modal-send" style="flex:1" onclick="editFromView()">Edit</button>
-            </div>
-            <button class="generate-btn" id="view-message-btn" style="margin-top:10px;display:none" onclick="messageClientFromView()">Generate &amp; send first message</button>
-        </div>
-    </div>
+/* Pipeline column definitions */
+var PIPELINE = [
+    { cls: 'col-new',    label: 'New',              statuses: ['new', 'chatting'] },
+    { cls: 'col-price',  label: 'Pricing',          statuses: ['pricing_requested', 'pricing_sent'] },
+    { cls: 'col-sel',    label: 'Package Selected', statuses: ['package_selected'] },
+    { cls: 'col-booked', label: 'Booked',           statuses: ['booked', 'intake_sent', 'intake_completed'] },
+    { cls: 'col-cont',   label: 'Contract',         statuses: ['contract_sent', 'contract_signed'] },
+    { cls: 'col-lost',   label: 'Lost',             statuses: ['lost'] }
+];
 
-    <!-- Edit modal -->
-    <div class="modal-overlay" id="edit-modal">
-        <div class="modal">
-            <h2>Edit client</h2>
-            <p id="edit-modal-status" style="color:var(--muted);font-size:14px">Loading...</p>
-            <div id="edit-modal-form" style="display:none">
-                <div class="field">
-                    <label>Name</label>
-                    <input type="text" id="edit-name">
-                </div>
-                <div class="two-col">
-                    <div class="field">
-                        <label>Phone</label>
-                        <input type="tel" id="edit-phone">
-                    </div>
-                    <div class="field">
-                        <label>Email</label>
-                        <input type="email" id="edit-email">
-                    </div>
-                </div>
-                <div class="field">
-                    <label>Event type</label>
-                    <select id="edit-event_type">
-                        <option value="">Not specified</option>
-                        <option value="Birthday party">Birthday party</option>
-                        <option value="Bachelorette party">Bachelorette party</option>
-                        <option value="Bachelor party">Bachelor party</option>
-                        <option value="Corporate event">Corporate event</option>
-                        <option value="Graduation">Graduation</option>
-                        <option value="Baby Shower">Baby Shower</option>
-                        <option value="Private celebration">Private celebration</option>
-                        <option value="Anniversary">Anniversary</option>
-                        <option value="Other">Other</option>
-                    </select>
-                </div>
-                <div class="two-col">
-                    <div class="field">
-                        <label>Event date</label>
-                        <input type="date" id="edit-event_date">
-                    </div>
-                    <div class="field">
-                        <label>Guests</label>
-                        <input type="text" id="edit-guests" placeholder="e.g. 25-50">
-                    </div>
-                </div>
-                <div class="field">
-                    <label>Venue</label>
-                    <input type="text" id="edit-venue" placeholder="e.g. Home, hotel ballroom...">
-                </div>
-                <div class="field">
-                    <label>Lead source</label>
-                    <select id="edit-lead_source">
-                        <option value="Bark">Bark</option>
-                        <option value="GigSalad">GigSalad</option>
-                        <option value="TheBash">TheBash</option>
-                        <option value="Website">Website</option>
-                        <option value="Referral">Referral</option>
-                        <option value="Other">Other</option>
-                    </select>
-                </div>
-                <div class="field">
-                    <label>Notes</label>
-                    <textarea id="edit-notes" rows="3"></textarea>
-                </div>
-            </div>
-            <div class="modal-actions">
-                <button class="modal-cancel" onclick="closeEditModal()">Cancel</button>
-                <button class="modal-send" id="edit-save-btn" onclick="saveEditedClient()" style="display:none">Save</button>
-            </div>
-        </div>
-    </div>
+var STATUS_LABELS = {
+    new: 'New',
+    chatting: 'Chatting',
+    pricing_requested: 'Pricing requested',
+    pricing_sent: 'Pricing sent',
+    package_selected: 'Package selected',
+    booked: 'Booked',
+    intake_sent: 'Intake sent',
+    intake_completed: 'Ready for contract',
+    contract_sent: 'Contract sent',
+    contract_signed: 'Contract signed',
+    lost: 'Lost'
+};
 
-    <script>
-    var SUPABASE_URL = 'https://nkhwttlmtidtippylbzs.supabase.co';
-    var SUPABASE_KEY = 'sb_publishable_jvudqPYcwnnqjO8w7DQd2g_SSyb-HJl';
-    var currentClientId = null;
-    var selectedPricingOption = null;
-    var modalClient = {};
+function showView(view) {
+    document.getElementById('dashboard-view').style.display = view === 'dashboard' ? 'flex' : 'none';
+    document.getElementById('new-lead-view').style.display  = view === 'new-lead'   ? 'block' : 'none';
+    document.querySelectorAll('.ttab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.ttab').forEach(function(t) {
+        if ((view === 'dashboard' && t.textContent.trim() === 'Pipeline') ||
+            (view === 'new-lead'  && t.textContent.trim() === '+ New Lead'))
+            t.classList.add('active');
+    });
+    if (view === 'dashboard') {
+        loadPipeline();
+        loadReviewModeState();
+        loadPendingReplies();
+    }
+}
 
-    var STATUS_LABELS = {
-        new: 'New',
-        chatting: 'Chatting',
-        pricing_requested: 'Pricing requested',
-        pricing_sent: 'Pricing sent',
-        package_selected: 'Package selected',
-        booked: 'Booked',
-        intake_sent: 'Intake sent',
-        intake_completed: 'Ready for contract',
-        contract_sent: 'Contract sent',
-        contract_signed: 'Contract signed',
-        lost: 'Lost'
-    };
+function getTimeAgo(ts) {
+    if (!ts) return '';
+    var diff = Date.now() - new Date(ts).getTime();
+    var mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return mins + 'm ago';
+    var hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    return Math.floor(hrs / 24) + 'd ago';
+}
 
-    function showTab(tab) {
-        document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-        document.getElementById('dashboard-view').style.display = 'none';
-        document.getElementById('new-lead-view').style.display = 'none';
-        if (tab === 'dashboard') {
-            document.querySelectorAll('.tab:first-child, .tab:nth-child(1)').forEach(function(t) {});
-            document.querySelectorAll('.tab').forEach(function(t) {
-                if (t.textContent.trim() === 'Dashboard') t.classList.add('active');
+function fmtDate(d) {
+    if (!d) return '';
+    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function cardActions(c) {
+    var btns = '';
+    if (c.status === 'pricing_requested') {
+        btns += '<button class="k-btn primary" onclick="event.stopPropagation();openPricingModal(\'' + c.id + '\',\'' + esc(c.name) + '\',\'' + esc(c.phone||'') + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.last_channel||'email') + '\')">Send pricing</button>';
+    }
+    if (c.status === 'package_selected' || c.status === 'booked' || c.status === 'intake_sent') {
+        var label = c.status === 'package_selected' ? 'Send questionnaire' : 'Resend intake';
+        btns += '<button class="k-btn blue" onclick="event.stopPropagation();sendIntakeForm(\'' + c.id + '\',\'' + esc(c.name) + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.selected_category||'') + '\',' + (c.selected_price||0) + ')">' + label + '</button>';
+    }
+    if (c.status === 'intake_completed') {
+        btns += '<button class="k-btn primary" onclick="event.stopPropagation();openContractModal(\'' + c.id + '\',\'' + esc(c.name) + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.booking_id||'') + '\')">Send contract</button>';
+    }
+    if (c.booking_id && ['intake_completed','contract_sent','contract_signed'].indexOf(c.status) !== -1) {
+        btns += '<button class="k-btn purple" onclick="event.stopPropagation();openAnswersModal(\'' + c.booking_id + '\')">Answers</button>';
+    }
+    btns += '<button class="k-btn ghost" onclick="event.stopPropagation();openEditModal(\'' + c.id + '\')">Edit</button>';
+    return btns;
+}
+
+function esc(s) {
+    return String(s||'').replace(/'/g, "\\'");
+}
+
+function buildCard(c) {
+    var meta = [];
+    if (c.event_type) meta.push(c.event_type);
+    if (c.event_date) meta.push(fmtDate(c.event_date));
+    if (c.guests) meta.push(c.guests + ' guests');
+    var statusLabel = STATUS_LABELS[c.status] || c.status;
+    var sourceHtml = c.lead_source ? '<span class="k-badge" style="background:rgba(136,146,176,.12);color:var(--muted)">' + c.lead_source + '</span>' : '';
+    var pkgHtml = c.selected_package ? '<span class="k-badge" style="background:rgba(76,175,135,.12);color:var(--green)">' + c.selected_package + '</span>' : '';
+    return '<div class="k-card" onclick="openViewModal(\'' + c.id + '\')">' +
+        '<div class="k-name">' + escHtml(c.name) + '</div>' +
+        (meta.length ? '<div class="k-meta">' + meta.join(' · ') + '</div>' : '') +
+        '<div class="k-badges">' + sourceHtml + pkgHtml + '</div>' +
+        '<div class="k-actions">' + cardActions(c) + '</div>' +
+        '<div class="k-time">' + getTimeAgo(c.last_activity) + ' · ' + statusLabel + '</div>' +
+        '</div>';
+}
+
+function loadPipeline() {
+    var board = document.getElementById('kanban-board');
+    board.innerHTML = PIPELINE.map(function(col) {
+        return '<div class="kanban-col ' + col.cls + '" id="col-' + col.cls + '">' +
+            '<div class="col-header">' +
+            '<div class="col-accent-dot"></div>' +
+            '<div class="col-title">' + col.label + '</div>' +
+            '<div class="col-count" id="cnt-' + col.cls + '">—</div>' +
+            '</div>' +
+            '<div class="col-cards" id="cards-' + col.cls + '"><div class="col-empty">Loading…</div></div>' +
+            '</div>';
+    }).join('');
+
+    fetch(SUPABASE_URL + '/rest/v1/clients?select=*&order=last_activity.desc', {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(clients) {
+        PIPELINE.forEach(function(col) {
+            var colClients = clients.filter(function(c) {
+                return col.statuses.indexOf(c.status) !== -1;
             });
-            document.getElementById('dashboard-view').style.display = 'block';
-            loadDashboard();
-            loadReviewModeState();
-            loadPendingReplies();
-        } else {
-            document.querySelectorAll('.tab').forEach(function(t) {
-                if (t.textContent.trim() === '+ New Lead') t.classList.add('active');
-            });
-            document.getElementById('new-lead-view').style.display = 'block';
-        }
-    }
-
-    function getTimeAgo(ts) {
-        if (!ts)
-            return '';
-        var diff = Date.now() - new Date(ts).getTime();
-        var mins = Math.floor(diff / 60000);
-        if (mins < 1)
-            return 'Just now';
-        if (mins < 60)
-            return mins + ' min ago';
-        var hrs = Math.floor(mins / 60);
-        if (hrs < 24)
-            return hrs + 'h ago';
-        return Math.floor(hrs / 24) + 'd ago';
-    }
-
-    function loadDashboard() {
-        var list = document.getElementById('leads-list');
-        list.innerHTML = '<div class="empty-state"><p>Loading...</p></div>';
-        fetch(SUPABASE_URL + '/rest/v1/clients?select=*&order=last_activity.desc', {
-            headers: {
-                'apikey': SUPABASE_KEY,
-                'Authorization': 'Bearer ' + SUPABASE_KEY
-            }
-        })
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(clients) {
-            if (!clients.length) {
-                list.innerHTML = '<div class="empty-state"><p>No leads yet</p><small>Tap "+ New Lead" to add your first</small></div>';
-                return;
-            }
-            list.innerHTML = clients.map(function(c) {
-                var statusLabel = STATUS_LABELS[c.status] || c.status;
-                var timeAgo = getTimeAgo(c.last_activity);
-                var pricingLinkHtml = (c.notes && c.notes.indexOf('Pricing link sent:') > -1)
-                ? '<div class="lead-pricing-link">View pricing sent: <a href="' + c.notes.replace('Pricing link sent: ', '') + '" target="_blank">open link</a></div>'
-                : '';
-                var selectedPkgHtml = c.selected_package
-                ? '<div class="lead-selected-package">Selected: ' + (c.selected_category === 'corporate' ? 'Corporate' : 'Private') + ' — ' + c.selected_package + ' ($' + c.selected_price + ')</div>'
-                : '';
-                var eventDateStr = c.event_date ? new Date(c.event_date + 'T00:00:00').toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric'
-                }) : null;
-                var metaParts = [];
-                if (c.event_type)
-                    metaParts.push(c.event_type);
-                if (eventDateStr)
-                    metaParts.push(eventDateStr);
-                if (c.venue)
-                    metaParts.push(c.venue);
-                if (c.lead_source)
-                    metaParts.push('via ' + c.lead_source);
-                var metaHtml = metaParts.length ? '<div class="lead-detail">' + metaParts.join(' · ') + '</div>' : '<div class="lead-detail">Unknown event</div>';
-                var pricingBtn = (c.status === 'pricing_requested')
-                ? '<button class="action-btn pricing" onclick="openPricingModal(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.phone || '') + '\',\'' + (c.email || '') + '\',\'' + (c.last_channel || 'email') + '\')">Send pricing</button>'
-                : '';
-                var intakeBtn = '';
-                if (c.status === 'package_selected') {
-                    intakeBtn = '<button class="action-btn contract" onclick="sendIntakeForm(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.email || '') + '\',\'' + (c.selected_category || '') + '\',' + (c.selected_price || 0) + ')">Send questionnaire now</button>';
-                } else if (c.status === 'booked' || c.status === 'intake_sent') {
-                    intakeBtn = '<button class="action-btn contract" onclick="sendIntakeForm(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.email || '') + '\',\'' + (c.selected_category || '') + '\',' + (c.selected_price || 0) + ')">Resend intake form</button>';
-                }
-                var contractBtn = (c.status === 'intake_completed')
-                ? '<button class="action-btn contract" onclick="openContractModal(\'' + c.id + '\',\'' + c.name + '\',\'' + (c.email || '') + '\',\'' + (c.booking_id || '') + '\')">Review and send contract</button>'
-                : '';
-                var viewAnswersBtn = (c.booking_id && ['intake_completed', 'contract_sent', 'contract_signed'].indexOf(c.status) !== -1)
-                ? '<button class="action-btn answers" onclick="openAnswersModal(\'' + c.booking_id + '\')">View answers</button>'
-                : '';
-                var editBtn = '<button class="action-btn edit" onclick="event.stopPropagation();openEditModal(\'' + c.id + '\')">Edit</button>';
-                var pricingBtnEsc = pricingBtn.replace('onclick="', 'onclick="event.stopPropagation();');
-                var intakeBtnEsc = intakeBtn.replace('onclick="', 'onclick="event.stopPropagation();');
-                var contractBtnEsc = contractBtn.replace('onclick="', 'onclick="event.stopPropagation();');
-                var viewAnswersBtnEsc = viewAnswersBtn.replace('onclick="', 'onclick="event.stopPropagation();');
-                return '<div class="lead-card status-' + c.status + '" onclick="openViewModal(\'' + c.id + '\')">' +
-                '<div class="lead-top">' +
-                '<div class="lead-name">' + c.name + '</div>' +
-                '<div class="lead-status status-' + c.status + '">' + statusLabel + '</div>' +
-                '</div>' +
-                metaHtml +
-                pricingLinkHtml +
-                selectedPkgHtml +
-                '<div class="lead-time">' + timeAgo + '</div>' +
-                '<div class="lead-actions">' + pricingBtnEsc + intakeBtnEsc + contractBtnEsc + viewAnswersBtnEsc + editBtn +
-                '</div></div>';
-            }).join('');
-        })
-        .catch(function(e) {
-            list.innerHTML = '<div class="empty-state"><p>Error: ' + e.message + '</p></div>';
+            var countEl = document.getElementById('cnt-' + col.cls);
+            var cardsEl = document.getElementById('cards-' + col.cls);
+            countEl.textContent = colClients.length;
+            if (colClients.length > 0) countEl.classList.add('has-cards');
+            cardsEl.innerHTML = colClients.length
+                ? colClients.map(buildCard).join('')
+                : '<div class="col-empty">Empty</div>';
         });
-    }
+    })
+    .catch(function(e) {
+        board.innerHTML = '<div style="padding:40px;color:var(--red)">Error: ' + e.message + '</div>';
+    });
+}
 
-    function loadReviewModeState() {
-        fetch('/api/pending-replies?action=settings')
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(data) {
-            var toggle = document.getElementById('review-mode-toggle');
-            toggle.checked = !!data.reviewMode;
-            updateReviewToggleDesc(!!data.reviewMode);
-        })
-        .catch(function(e) {
-            console.error('Failed to load review mode state:', e);
-        });
-    }
-
-    function updateReviewToggleDesc(reviewMode) {
-        document.getElementById('review-toggle-desc').textContent = reviewMode
-        ? 'Replies wait for your approval before sending'
-        : 'AI replies send automatically';
-    }
-
-    function onReviewModeToggle() {
+function loadReviewModeState() {
+    fetch('/api/pending-replies?action=settings')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
         var toggle = document.getElementById('review-mode-toggle');
-        var newValue = toggle.checked;
-        toggle.disabled = true;
-        fetch('/api/pending-replies', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                action: 'toggle',
-                reviewMode: newValue
-            })
-        })
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(data) {
-            if (data.error)
-                throw new Error(data.error);
-            updateReviewToggleDesc(newValue);
-            loadPendingReplies();
-        })
-        .catch(function(e) {
-            alert('Error updating setting: ' + e.message);
-            toggle.checked = !newValue;
-        })
-        .finally(function() {
-            toggle.disabled = false;
-        });
-    }
+        toggle.checked = !!data.reviewMode;
+        updateReviewToggleDesc(!!data.reviewMode);
+    })
+    .catch(function() {});
+}
 
-    function loadPendingReplies() {
-        fetch('/api/pending-replies')
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(data) {
-            var section = document.getElementById('pending-section');
-            var list = document.getElementById('pending-list');
-            var pending = data.pending || [];
-            if (!pending.length) {
-                section.style.display = 'none';
-                list.innerHTML = '';
-                return;
-            }
-            section.style.display = 'block';
-            list.innerHTML = pending.map(function(p) {
-                var channelLabel = p.channel === 'sms' ? 'SMS' : 'Email';
-                var timeAgo = getTimeAgo(p.createdAt);
-                return '<div class="pending-card" id="pending-' + p.id + '">' +
-                '<div class="pending-header">' +
-                '<div class="pending-client">' + p.clientName + '</div>' +
-                '<div class="pending-channel">' + channelLabel + ' · ' + timeAgo + '</div>' +
-                '</div>' +
-                '<textarea class="pending-draft" id="pending-draft-' + p.id + '">' + escapeHtml(p.draft) + '</textarea>' +
+function updateReviewToggleDesc(reviewMode) {
+    document.getElementById('review-toggle-desc').textContent = reviewMode ? 'Review on' : 'Auto-send on';
+}
+
+function onReviewModeToggle() {
+    var toggle = document.getElementById('review-mode-toggle');
+    var newValue = toggle.checked;
+    toggle.disabled = true;
+    fetch('/api/pending-replies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggle', reviewMode: newValue })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error);
+        updateReviewToggleDesc(newValue);
+        loadPendingReplies();
+    })
+    .catch(function(e) {
+        alert('Error: ' + e.message);
+        toggle.checked = !newValue;
+    })
+    .finally(function() { toggle.disabled = false; });
+}
+
+function loadPendingReplies() {
+    fetch('/api/pending-replies')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var banner = document.getElementById('pending-banner');
+        var list   = document.getElementById('pending-list');
+        var pending = data.pending || [];
+        if (!pending.length) {
+            banner.classList.remove('has-items');
+            list.innerHTML = '';
+            return;
+        }
+        banner.classList.add('has-items');
+        list.innerHTML = pending.map(function(p) {
+            var channelLabel = p.channel === 'sms' ? 'SMS' : 'Email';
+            return '<div class="pending-card" id="pending-' + p.id + '">' +
+                '<div class="pending-header"><div class="pending-client">' + p.clientName + '</div>' +
+                '<div class="pending-channel">' + channelLabel + ' · ' + getTimeAgo(p.createdAt) + '</div></div>' +
+                '<textarea class="pending-draft" id="pending-draft-' + p.id + '">' + escHtml(p.draft) + '</textarea>' +
                 '<div class="pending-actions">' +
                 '<button class="pending-discard" onclick="discardPendingReply(\'' + p.id + '\')">Discard</button>' +
                 '<button class="pending-send" onclick="approvePendingReply(\'' + p.id + '\')">Send</button>' +
                 '</div></div>';
-            }).join('');
-        })
-        .catch(function(e) {
-            console.error('Failed to load pending replies:', e);
-        });
-    }
+        }).join('');
+    })
+    .catch(function() {});
+}
 
-    function escapeHtml(str) {
-        var div = document.createElement('div');
-        div.textContent = str || '';
-        return div.innerHTML;
-    }
+function escHtml(str) {
+    var d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML;
+}
 
-    function approvePendingReply(id) {
-        var textarea = document.getElementById('pending-draft-' + id);
-        var editedText = textarea.value.trim();
-        if (!editedText) {
-            alert('Reply text cannot be empty.');
-            return;
-        }
+function approvePendingReply(id) {
+    var editedText = document.getElementById('pending-draft-' + id).value.trim();
+    if (!editedText) { alert('Reply text cannot be empty.'); return; }
+    var card = document.getElementById('pending-' + id);
+    card.querySelectorAll('button').forEach(function(b) { b.disabled = true; });
+    fetch('/api/pending-replies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve', messageId: id, editedText: editedText })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error);
+        loadPendingReplies();
+    })
+    .catch(function(e) {
+        alert('Error: ' + e.message);
+        card.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
+    });
+}
 
-        var card = document.getElementById('pending-' + id);
-        var buttons = card.querySelectorAll('button');
-        buttons.forEach(function(b) {
-            b.disabled = true;
-        });
+function discardPendingReply(id) {
+    if (!confirm('Discard this draft without sending?')) return;
+    var card = document.getElementById('pending-' + id);
+    card.querySelectorAll('button').forEach(function(b) { b.disabled = true; });
+    fetch('/api/pending-replies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'discard', messageId: id })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error);
+        loadPendingReplies();
+    })
+    .catch(function(e) {
+        alert('Error: ' + e.message);
+        card.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
+    });
+}
 
-        fetch('/api/pending-replies', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                action: 'approve',
-                messageId: id,
-                editedText: editedText
-            })
-        })
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(data) {
-            if (data.error)
-                throw new Error(data.error);
-            loadPendingReplies();
-        })
-        .catch(function(e) {
-            alert('Error sending reply: ' + e.message);
-            buttons.forEach(function(b) {
-                b.disabled = false;
-            });
-        });
-    }
+function deleteClient(id, name) {
+    if (!confirm('Delete ' + name + '? This cannot be undone.')) return;
+    fetch('/api/delete-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: id })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error);
+        loadPipeline();
+    })
+    .catch(function(e) { alert('Error: ' + e.message); });
+}
 
-    function discardPendingReply(id) {
-        if (!confirm('Discard this draft without sending it?'))
-            return;
+function openPricingModal(id, name, phone, email, lastChannel) {
+    currentClientId = id;
+    modalClient = { id: id, name: name, phone: phone, email: email, lastChannel: lastChannel };
+    selectedPricingOption = null;
+    document.getElementById('modal-client-name').textContent = 'Sending to ' + name;
+    document.querySelectorAll('.pricing-option').forEach(function(o) { o.classList.remove('selected'); });
+    document.querySelectorAll('.custom-price-inputs').forEach(function(el) { el.classList.remove('show'); });
+    document.getElementById('modal-send-btn').disabled = true;
+    switchFormat('stage');
+    document.getElementById('pricing-modal').classList.add('show');
+}
 
-        var card = document.getElementById('pending-' + id);
-        var buttons = card.querySelectorAll('button');
-        buttons.forEach(function(b) {
-            b.disabled = true;
-        });
+function closeModal() {
+    document.getElementById('pricing-modal').classList.remove('show');
+    currentClientId = null;
+    selectedPricingOption = null;
+}
 
-        fetch('/api/pending-replies', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                action: 'discard',
-                messageId: id
-            })
-        })
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(data) {
-            if (data.error)
-                throw new Error(data.error);
-            loadPendingReplies();
-        })
-        .catch(function(e) {
-            alert('Error discarding reply: ' + e.message);
-            buttons.forEach(function(b) {
-                b.disabled = false;
-            });
-        });
-    }
+var contractClient = {};
 
-    function deleteClient(id, name) {
-        if (!confirm('Delete ' + name + '? This cannot be undone.'))
-            return;
-        fetch('/api/delete-client', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                clientId: id
-            })
-        })
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(data) {
-            if (data.error)
-                throw new Error(data.error);
-            loadDashboard();
-        })
-        .catch(function(e) {
-            alert('Error deleting: ' + e.message);
-        });
-    }
+function sendIntakeForm(id, name, email, eventType, price) {
+    if (!email) { alert('No email on file — intake form needs an email to send.'); return; }
+    if (!confirm('Send intake questionnaire to ' + name + '?')) return;
+    fetch('/api/send-intake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: id, clientName: name, clientEmail: email, eventType: eventType, fee: price || null })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error);
+        alert('Intake form sent to ' + name + '!');
+        loadPipeline();
+    })
+    .catch(function(e) { alert('Error: ' + e.message); });
+}
 
-    function openPricingModal(id, name, phone, email, lastChannel) {
-        currentClientId = id;
-        modalClient = {
-            id: id,
-            name: name,
-            phone: phone,
-            email: email,
-            lastChannel: lastChannel
-        };
-        selectedPricingOption = null;
-        document.getElementById('modal-client-name').textContent = 'Sending to ' + name;
-        document.querySelectorAll('.pricing-option').forEach(function(o) {
-            o.classList.remove('selected');
-        });
-        document.querySelectorAll('.custom-price-inputs').forEach(function(el) {
-            el.classList.remove('show');
-        });
-        document.getElementById('modal-send-btn').disabled = true;
-        switchFormat('stage');
-        document.getElementById('pricing-modal').classList.add('show');
-    }
-
-    function closeModal() {
-        document.getElementById('pricing-modal').classList.remove('show');
-        currentClientId = null;
-        selectedPricingOption = null;
-    }
-
-    var contractClient = {};
-
-    function sendIntakeForm(id, name, email, eventType, price) {
-        if (!email) {
-            alert('This client has no email on file — intake form needs an email to send.');
-            return;
-        }
-        if (!confirm('Send intake questionnaire to ' + name + '?'))
-            return;
-
-        fetch('/api/send-intake', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                clientId: id,
-                clientName: name,
-                clientEmail: email,
-                eventType: eventType,
-                fee: price || null
-            })
-        })
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(data) {
-            if (data.error)
-                throw new Error(data.error);
-            alert('Intake form sent to ' + name + '!');
-            loadDashboard();
-        })
-        .catch(function(e) {
-            alert('Error sending intake form: ' + e.message);
-        });
-    }
-
-    function openContractModal(id, name, email, bookingId) {
-        contractClient = {
-            id: id,
-            name: name,
-            email: email,
-            bookingId: bookingId
-        };
-        document.getElementById('contract-modal-client-name').textContent = 'Sending to ' + name;
-        if (bookingId) {
-            fetch(SUPABASE_URL + '/rest/v1/bookings?id=eq.' + bookingId + '&select=*', {
-                headers: {
-                    'apikey': SUPABASE_KEY,
-                    'Authorization': 'Bearer ' + SUPABASE_KEY
-                }
-            })
-            .then(function(r) {
-                return r.json();
-            })
-            .then(function(rows) {
-                var b = rows[0] || {};
-                if (b.event_date) document.getElementById('ct-date').value = b.event_date;
-                if (b.start_time) document.getElementById('ct-start').value = b.start_time;
-                if (b.duration) document.getElementById('ct-duration').value = b.duration;
-                if (b.fee) document.getElementById('ct-fee').value = b.fee;
-                if (b.venue_address) document.getElementById('ct-address').value = b.venue_address;
-                if (b.event_title) document.getElementById('ct-title').value = b.event_title;
-            })
-            .catch(function() {});
-        }
-        document.getElementById('contract-modal').classList.add('show');
-    }
-
-    function closeContractModal() {
-        document.getElementById('contract-modal').classList.remove('show');
-        contractClient = {};
-    }
-
-    function sendContract() {
-        var title    = document.getElementById('ct-title').value.trim();
-        var address  = document.getElementById('ct-address').value.trim();
-        var date     = document.getElementById('ct-date').value;
-        var start    = document.getElementById('ct-start').value;
-        var duration = document.getElementById('ct-duration').value.trim();
-        var fee      = document.getElementById('ct-fee').value;
-
-        if (!title || !address || !date || !start || !duration || !fee) {
-            alert('Please fill in all contract fields.');
-            return;
-        }
-
-        var btn = document.getElementById('contract-send-btn');
-        btn.disabled = true;
-        btn.textContent = 'Sending...';
-
-        fetch('/api/send-contract', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                clientId: contractClient.id,
-                clientName: contractClient.name,
-                clientEmail: contractClient.email,
-                bookingId: contractClient.bookingId || null,
-                eventTitle: title,
-                venueAddress: address,
-                eventDate: date,
-                startTime: start,
-                duration: duration,
-                fee: parseFloat(fee)
-            })
-        })
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(data) {
-            if (data.error)
-                throw new Error(data.error);
-            closeContractModal();
-            loadDashboard();
-        })
-        .catch(function(e) {
-            alert('Error sending contract: ' + e.message);
-        })
-        .finally(function() {
-            btn.disabled = false;
-            btn.textContent = 'Send contract';
-        });
-    }
-
-    var QUESTION_LABELS = {
-        q_honoree: 'Guest of Honour',
-        q_honoree_dob: 'Date of Birth',
-        q_trivia: 'Trivia / Personal Details',
-        q_vips: 'VIP Guests',
-        q_crowd: 'Crowd Type',
-        q_vibe: 'Show Vibe',
-        q_guests: 'Guest Count',
-        q_address: 'Venue Address',
-        q_indoor_outdoor: 'Indoor / Outdoor',
-        q_power: 'Power Available',
-        q_clear_area: 'Clear Area',
-        q_exclude: 'Exclusions / Sensitivities',
-        q_event_date: 'Event Date',
-        q_start_time: 'Start Time',
-        q_photo_honoree: 'Photo of Honouree'
-    };
-
-    function openAnswersModal(bookingId) {
-        document.getElementById('answers-modal').classList.add('show');
-        document.getElementById('answers-modal-subtitle').textContent = 'Loading...';
-        document.getElementById('answers-content').innerHTML = '<div class="answers-loading">Fetching answers...</div>';
-
+function openContractModal(id, name, email, bookingId) {
+    contractClient = { id: id, name: name, email: email, bookingId: bookingId };
+    document.getElementById('contract-modal-client-name').textContent = 'Sending to ' + name;
+    if (bookingId) {
         fetch(SUPABASE_URL + '/rest/v1/bookings?id=eq.' + bookingId + '&select=*', {
-            headers: {
-                'apikey': SUPABASE_KEY,
-                'Authorization': 'Bearer ' + SUPABASE_KEY
-            }
+            headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
         })
-        .then(function(r) {
-            return r.json();
-        })
+        .then(function(r) { return r.json(); })
         .then(function(rows) {
             var b = rows[0] || {};
-            var answers = b.intake_answers || {};
-            document.getElementById('answers-modal-subtitle').textContent = b.event_title || 'Questionnaire answers';
-            var keys = Object.keys(answers).filter(function(k) {
-                return answers[k] && String(answers[k]).trim() !== '';
-            });
-            if (!keys.length) {
-                document.getElementById('answers-content').innerHTML = '<div class="answers-loading">No answers on file yet.</div>';
-                return;
-            }
-            document.getElementById('answers-content').innerHTML = keys.map(function(k) {
-                var label = QUESTION_LABELS[k] || k;
-                var val = answers[k];
-                if (typeof val === 'object') val = JSON.stringify(val);
-                return '<div class="answer-row"><div class="q">' + label + '</div><div class="a">' + escapeHtml(String(val)) + '</div></div>';
-            }).join('');
+            if (b.event_date)     document.getElementById('ct-date').value = b.event_date;
+            if (b.start_time)     document.getElementById('ct-start').value = b.start_time;
+            if (b.duration)       document.getElementById('ct-duration').value = b.duration;
+            if (b.fee)            document.getElementById('ct-fee').value = b.fee;
+            if (b.venue_address)  document.getElementById('ct-address').value = b.venue_address;
+            if (b.event_title)    document.getElementById('ct-title').value = b.event_title;
         })
-        .catch(function(e) {
-            document.getElementById('answers-content').innerHTML = '<div class="answers-loading">Error: ' + e.message + '</div>';
-        });
+        .catch(function() {});
     }
+    document.getElementById('contract-modal').classList.add('show');
+}
 
-    function closeAnswersModal() {
-        document.getElementById('answers-modal').classList.remove('show');
+function closeContractModal() {
+    document.getElementById('contract-modal').classList.remove('show');
+    contractClient = {};
+}
+
+function sendContract() {
+    var title    = document.getElementById('ct-title').value.trim();
+    var address  = document.getElementById('ct-address').value.trim();
+    var date     = document.getElementById('ct-date').value;
+    var start    = document.getElementById('ct-start').value;
+    var duration = document.getElementById('ct-duration').value.trim();
+    var fee      = document.getElementById('ct-fee').value;
+    if (!title || !address || !date || !start || !duration || !fee) {
+        alert('Please fill in all contract fields.'); return;
     }
-
-    var viewClientId = null;
-
-    function openViewModal(id) {
-        viewClientId = id;
-        document.getElementById('view-modal').classList.add('show');
-        document.getElementById('view-name').textContent = 'Loading...';
-        document.getElementById('view-status-line').textContent = '';
-        document.getElementById('view-content').innerHTML = '';
-        document.getElementById('view-message-btn').style.display = 'none';
-
-        fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id + '&select=*', {
-            headers: {
-                'apikey': SUPABASE_KEY,
-                'Authorization': 'Bearer ' + SUPABASE_KEY
-            }
+    var btn = document.getElementById('contract-send-btn');
+    btn.disabled = true; btn.textContent = 'Sending...';
+    fetch('/api/send-contract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            clientId: contractClient.id, clientName: contractClient.name,
+            clientEmail: contractClient.email, bookingId: contractClient.bookingId || null,
+            eventTitle: title, venueAddress: address, eventDate: date,
+            startTime: start, duration: duration, fee: parseFloat(fee)
         })
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(rows) {
-            var c = rows[0];
-            if (!c) {
-                document.getElementById('view-name').textContent = 'Not found';
-                return;
-            }
-            document.getElementById('view-name').textContent = c.name;
-            document.getElementById('view-status-line').textContent = STATUS_LABELS[c.status] || c.status;
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error);
+        closeContractModal();
+        loadPipeline();
+    })
+    .catch(function(e) { alert('Error: ' + e.message); })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Send contract'; });
+}
 
-            var fields = [];
-            if (c.phone)    fields.push(['Phone', c.phone]);
-            if (c.email)    fields.push(['Email', c.email]);
-            if (c.event_type) fields.push(['Event type', c.event_type]);
-            if (c.event_date) fields.push(['Event date', new Date(c.event_date + 'T00:00:00').toLocaleDateString('en-US', {weekday:'long',month:'long',day:'numeric',year:'numeric'})]);
-            if (c.guests)   fields.push(['Guests', c.guests]);
-            if (c.venue)    fields.push(['Venue', c.venue]);
-            if (c.lead_source) fields.push(['Source', c.lead_source]);
-            if (c.other_entertainment) fields.push(['Other entertainment', c.other_entertainment]);
-            if (c.selected_package) fields.push(['Package selected', (c.selected_category === 'corporate' ? 'Corporate' : 'Private') + ' — ' + c.selected_package + ' ($' + c.selected_price + ')']);
-            if (c.notes && !c.notes.startsWith('Pricing link sent:') && !c.notes.startsWith('Contract sent:')) fields.push(['Notes', c.notes]);
+var QUESTION_LABELS = {
+    q_honoree: 'Guest of Honour', q_honoree_dob: 'Date of Birth',
+    q_trivia: 'Trivia / Personal Details', q_vips: 'VIP Guests',
+    q_crowd: 'Crowd Type', q_vibe: 'Show Vibe', q_guests: 'Guest Count',
+    q_address: 'Venue Address', q_indoor_outdoor: 'Indoor / Outdoor',
+    q_power: 'Power Available', q_clear_area: 'Clear Area',
+    q_exclude: 'Exclusions / Sensitivities', q_event_date: 'Event Date',
+    q_start_time: 'Start Time', q_photo_honoree: 'Photo of Honouree'
+};
 
-            document.getElementById('view-content').innerHTML = fields.map(function(f) {
-                return '<div class="answer-row"><div class="q">' + f[0] + '</div><div class="a">' + escapeHtml(f[1]) + '</div></div>';
-            }).join('');
-
-            if (!c.phone && !c.last_activity) {
-                document.getElementById('view-message-btn').style.display = 'block';
-            }
-        })
-        .catch(function(e) {
-            document.getElementById('view-name').textContent = 'Error';
-            document.getElementById('view-content').innerHTML = e.message;
-        });
-    }
-
-    function closeViewModal() {
-        document.getElementById('view-modal').classList.remove('show');
-        viewClientId = null;
-    }
-
-    function deleteClientFromView() {
-        if (!viewClientId) return;
-        var name = document.getElementById('view-name').textContent;
-        closeViewModal();
-        deleteClient(viewClientId, name);
-    }
-
-    function editFromView() {
-        var id = viewClientId;
-        closeViewModal();
-        openEditModal(id);
-    }
-
-    var messagingExistingClientId = null;
-
-    function messageClientFromView() {
-        messagingExistingClientId = viewClientId;
-        closeViewModal();
-        showTab('new-lead');
-    }
-
-    function openEditModal(id) {
-        document.getElementById('edit-modal').classList.add('show');
-        document.getElementById('edit-modal-status').textContent = 'Loading...';
-        document.getElementById('edit-modal-form').style.display = 'none';
-        document.getElementById('edit-save-btn').style.display = 'none';
-
-        fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id + '&select=*', {
-            headers: {
-                'apikey': SUPABASE_KEY,
-                'Authorization': 'Bearer ' + SUPABASE_KEY
-            }
-        })
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(rows) {
-            var c = rows[0];
-            if (!c) {
-                document.getElementById('edit-modal-status').textContent = 'Client not found.';
-                return;
-            }
-            document.getElementById('edit-modal-status').textContent = 'Editing ' + c.name;
-            document.getElementById('edit-name').value = c.name || '';
-            document.getElementById('edit-phone').value = c.phone || '';
-            document.getElementById('edit-email').value = c.email || '';
-            document.getElementById('edit-event_type').value = c.event_type || '';
-            document.getElementById('edit-event_date').value = c.event_date || '';
-            document.getElementById('edit-guests').value = c.guests || '';
-            document.getElementById('edit-venue').value = c.venue || '';
-            document.getElementById('edit-lead_source').value = c.lead_source || 'Bark';
-            document.getElementById('edit-notes').value = c.notes || '';
-            document.getElementById('edit-modal-form').style.display = 'block';
-            document.getElementById('edit-save-btn').style.display = 'block';
-            currentClientId = id;
-        })
-        .catch(function(e) {
-            document.getElementById('edit-modal-status').textContent = 'Error: ' + e.message;
-        });
-    }
-
-    function closeEditModal() {
-        document.getElementById('edit-modal').classList.remove('show');
-        currentClientId = null;
-    }
-
-    function saveEditedClient() {
-        if (!currentClientId) return;
-        var btn = document.getElementById('edit-save-btn');
-        btn.disabled = true;
-        btn.textContent = 'Saving...';
-
-        var leadSource = document.getElementById('edit-lead_source').value;
-        fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + currentClientId, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': SUPABASE_KEY,
-                'Authorization': 'Bearer ' + SUPABASE_KEY,
-                'Prefer': 'return=minimal'
-            },
-            body: JSON.stringify({
-                name: document.getElementById('edit-name').value.trim(),
-                phone: document.getElementById('edit-phone').value.trim() || null,
-                email: document.getElementById('edit-email').value.trim() || null,
-                event_type: document.getElementById('edit-event_type').value || null,
-                event_date: document.getElementById('edit-event_date').value || null,
-                guests: document.getElementById('edit-guests').value.trim() || null,
-                venue: document.getElementById('edit-venue').value.trim() || null,
-                lead_source: leadSource || null,
-                notes: document.getElementById('edit-notes').value.trim() || null,
-                last_activity: new Date().toISOString()
-            })
-        })
-        .then(function(r) {
-            if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
-            closeEditModal();
-            loadDashboard();
-        })
-        .catch(function(e) {
-            alert('Error saving: ' + e.message);
-        })
-        .finally(function() {
-            btn.disabled = false;
-            btn.textContent = 'Save';
-        });
-    }
-
-    var currentFormat = 'stage';
-
-    function switchFormat(format) {
-        currentFormat = format;
-        document.getElementById('format-btn-stage').classList.toggle('active', format === 'stage');
-        document.getElementById('format-btn-strolling').classList.toggle('active', format === 'strolling');
-        document.getElementById('format-section-stage').classList.toggle('show', format === 'stage');
-        document.getElementById('format-section-strolling').classList.toggle('show', format === 'strolling');
-        selectedPricingOption = null;
-        document.querySelectorAll('.pricing-option').forEach(function(o) {
-            o.classList.remove('selected');
-        });
-        document.querySelectorAll('.custom-price-inputs').forEach(function(el) {
-            el.classList.remove('show');
-        });
-        document.getElementById('modal-send-btn').disabled = true;
-    }
-
-    function selectPricingOption(option) {
-        selectedPricingOption = option;
-        document.querySelectorAll('.pricing-option').forEach(function(o) {
-            o.classList.remove('selected');
-        });
-        document.getElementById('opt-' + option).classList.add('selected');
-        document.querySelectorAll('.custom-price-inputs').forEach(function(el) {
-            el.classList.remove('show');
-        });
-        if (option === 'private-custom')
-            document.getElementById('private-custom-inputs').classList.add('show');
-        if (option === 'corporate-custom')
-            document.getElementById('corporate-custom-inputs').classList.add('show');
-        if (option === 'strolling-private-custom')
-            document.getElementById('strolling-private-custom-inputs').classList.add('show');
-        if (option === 'strolling-corporate-custom')
-            document.getElementById('strolling-corporate-custom-inputs').classList.add('show');
-        document.getElementById('modal-send-btn').disabled = false;
-    }
-
-    function sendPricing() {
-        if (!selectedPricingOption || !currentClientId)
-            return;
-        var btn = document.getElementById('modal-send-btn');
-        btn.disabled = true;
-        btn.textContent = 'Sending...';
-
-        var pricingLink = '';
-        if (selectedPricingOption === 'private-standard') {
-            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=private&cid=' + currentClientId;
-        } else if (selectedPricingOption === 'corporate-standard') {
-            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=corporate&cid=' + currentClientId;
-        } else if (selectedPricingOption === 'private-custom') {
-            var d1 = document.getElementById('pc-d1').value || 400;
-            var d2 = document.getElementById('pc-d2').value || 500;
-            var d3 = document.getElementById('pc-d3').value || 600;
-            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=private&cid=' + currentClientId + '&d1=' + d1 + '&d2=' + d2 + '&d3=' + d3;
-        } else if (selectedPricingOption === 'corporate-custom') {
-            var c1 = document.getElementById('pc-c1').value || 1000;
-            var c2 = document.getElementById('pc-c2').value || 1200;
-            var c3 = document.getElementById('pc-c3').value || 1500;
-            pricingLink = 'https://shine-booking.vercel.app/pricing.html?type=corporate&cid=' + currentClientId + '&d1=' + c1 + '&d2=' + c2 + '&d3=' + c3;
-        } else if (selectedPricingOption === 'strolling-private-standard') {
-            pricingLink = 'https://shine-booking.vercel.app/pricing.html?format=strolling&type=private&cid=' + currentClientId;
-        } else if (selectedPricingOption === 'strolling-corporate-standard') {
-            pricingLink = 'https://shine-booking.vercel.app/pricing.html?format=strolling&type=corporate&cid=' + currentClientId;
-        } else if (selectedPricingOption === 'strolling-private-custom') {
-            var sr = document.getElementById('ps-rate').value || 400;
-            var sf = document.getElementById('ps-finale').value || 200;
-            pricingLink = 'https://shine-booking.vercel.app/pricing.html?format=strolling&type=private&cid=' + currentClientId + '&sr=' + sr + '&sf=' + sf;
-        } else if (selectedPricingOption === 'strolling-corporate-custom') {
-            var scr = document.getElementById('ps-c-rate').value || 1000;
-            var scf = document.getElementById('ps-c-finale').value || 300;
-            pricingLink = 'https://shine-booking.vercel.app/pricing.html?format=strolling&type=corporate&cid=' + currentClientId + '&sr=' + scr + '&sf=' + scf;
-        }
-
-        fetch('/api/chat?mode=pricing', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                clientId: currentClientId,
-                clientName: modalClient.name,
-                phone: modalClient.phone,
-                email: modalClient.email,
-                lastChannel: modalClient.lastChannel,
-                pricingLink: pricingLink
-            })
-        })
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(data) {
-            if (data.error)
-                throw new Error(data.error);
-            closeModal();
-            loadDashboard();
-        })
-        .catch(function(e) {
-            alert('Error: ' + e.message);
-        })
-        .finally(function() {
-            btn.disabled = false;
-            btn.textContent = 'Send pricing';
-        });
-    }
-
-    var SYSTEM_PROMPT = 'You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic show performer in Texas. Performs 45-60 min interactive shows. Write a warm, personalized first contact SMS to a potential client from a Bark lead. Rules: under 160 characters total, use client first name, mention the event type naturally, sign off as "- Shine, The Mentalist", do NOT mention pricing, ask ONE natural question about their venue or plans. Return ONLY the SMS text, nothing else.';
-
-    function formatDate(d) {
-        if (!d)
-            return 'not specified';
-        var dt = new Date(d + 'T00:00:00');
-        return dt.toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric'
-        });
-    }
-
-    function toggleOtherSource() {
-        var src = document.getElementById('lead_source').value;
-        document.getElementById('other-source-field').style.display = src === 'Other' ? 'block' : 'none';
-    }
-
-    function fileToBase64(file) {
-        return new Promise(function(resolve, reject) {
-            var reader = new FileReader();
-            reader.onload = function() {
-                var result = reader.result;
-                var commaIndex = result.indexOf(',');
-                resolve(result.substring(commaIndex + 1));
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
-    function mapGuestsToOption(guestsValue) {
-        if (!guestsValue)
-            return '';
-        var str = String(guestsValue).toLowerCase();
-
-        if (str.includes('under 10') || str.includes('<10') || str.includes('< 10'))
-            return 'Under 10';
-        if (str.includes('100+') || str.includes('100 +') || str.includes('over 100') || str.includes('more than 100'))
-            return '100+';
-
-        var match = str.match(/\d+/);
-        if (!match)
-            return '';
-        var num = parseInt(match[0], 10);
-        if (isNaN(num))
-            return '';
-
-        if (num < 10)
-            return 'Under 10';
-        if (num <= 25)
-            return '10-25';
-        if (num <= 50)
-            return '25-50';
-        if (num <= 100)
-            return '50-100';
-        return '100+';
-    }
-
-    function handleScreenshotUpload(fileList) {
-        if (!fileList || fileList.length === 0)
-            return;
-        var files = Array.prototype.slice.call(fileList);
-        if (files.length > 4) {
-            alert('Please upload at most 4 screenshots at a time.');
+function openAnswersModal(bookingId) {
+    document.getElementById('answers-modal').classList.add('show');
+    document.getElementById('answers-modal-subtitle').textContent = 'Loading...';
+    document.getElementById('answers-content').innerHTML = '<div class="answers-loading">Fetching answers...</div>';
+    fetch(SUPABASE_URL + '/rest/v1/bookings?id=eq.' + bookingId + '&select=*', {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(rows) {
+        var b = rows[0] || {};
+        var answers = b.intake_answers || {};
+        document.getElementById('answers-modal-subtitle').textContent = b.event_title || 'Questionnaire answers';
+        var keys = Object.keys(answers).filter(function(k) { return answers[k] && String(answers[k]).trim(); });
+        if (!keys.length) {
+            document.getElementById('answers-content').innerHTML = '<div class="answers-loading">No answers on file yet.</div>';
             return;
         }
+        document.getElementById('answers-content').innerHTML = keys.map(function(k) {
+            var val = answers[k];
+            if (typeof val === 'object') val = JSON.stringify(val);
+            return '<div class="answer-row"><div class="q">' + (QUESTION_LABELS[k] || k) + '</div><div class="a">' + escHtml(String(val)) + '</div></div>';
+        }).join('');
+    })
+    .catch(function(e) {
+        document.getElementById('answers-content').innerHTML = '<div class="answers-loading">Error: ' + e.message + '</div>';
+    });
+}
 
-        var statusEl = document.getElementById('screenshot-status');
-        var btn = document.getElementById('upload-screenshot-btn');
-        statusEl.style.display = 'block';
-        statusEl.textContent = 'Reading screenshot(s)...';
-        btn.disabled = true;
+function closeAnswersModal() { document.getElementById('answers-modal').classList.remove('show'); }
 
-        Promise.all(files.map(function(file) {
-            return fileToBase64(file).then(function(base64) {
-                return {
-                    data: base64,
-                    mediaType: file.type || 'image/png'
-                };
-            });
-        }))
-        .then(function(images) {
-            statusEl.textContent = 'Extracting details...';
-            return fetch('/api/extract-lead-screenshot', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    images: images
-                })
-            });
+var viewClientId = null;
+
+function openViewModal(id) {
+    viewClientId = id;
+    document.getElementById('view-modal').classList.add('show');
+    document.getElementById('view-name').textContent = 'Loading...';
+    document.getElementById('view-status-line').textContent = '';
+    document.getElementById('view-content').innerHTML = '';
+    document.getElementById('view-message-btn').style.display = 'none';
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id + '&select=*', {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(rows) {
+        var c = rows[0];
+        if (!c) { document.getElementById('view-name').textContent = 'Not found'; return; }
+        document.getElementById('view-name').textContent = c.name;
+        document.getElementById('view-status-line').textContent = STATUS_LABELS[c.status] || c.status;
+        var fields = [];
+        if (c.phone)    fields.push(['Phone', c.phone]);
+        if (c.email)    fields.push(['Email', c.email]);
+        if (c.event_type) fields.push(['Event type', c.event_type]);
+        if (c.event_date) fields.push(['Event date', new Date(c.event_date + 'T00:00:00').toLocaleDateString('en-US', {weekday:'long',month:'long',day:'numeric',year:'numeric'})]);
+        if (c.guests)   fields.push(['Guests', c.guests]);
+        if (c.venue)    fields.push(['Venue', c.venue]);
+        if (c.lead_source) fields.push(['Source', c.lead_source]);
+        if (c.other_entertainment) fields.push(['Other entertainment', c.other_entertainment]);
+        if (c.selected_package) fields.push(['Package', (c.selected_category === 'corporate' ? 'Corporate' : 'Private') + ' — ' + c.selected_package + ' ($' + c.selected_price + ')']);
+        if (c.notes && !c.notes.startsWith('Pricing link sent:') && !c.notes.startsWith('Contract sent:')) fields.push(['Notes', c.notes]);
+        document.getElementById('view-content').innerHTML = fields.map(function(f) {
+            return '<div class="answer-row"><div class="q">' + f[0] + '</div><div class="a">' + escHtml(f[1]) + '</div></div>';
+        }).join('');
+    })
+    .catch(function(e) { document.getElementById('view-name').textContent = 'Error: ' + e.message; });
+}
+
+function closeViewModal() { document.getElementById('view-modal').classList.remove('show'); viewClientId = null; }
+
+function deleteClientFromView() {
+    var name = document.getElementById('view-name').textContent;
+    var id = viewClientId;
+    closeViewModal();
+    deleteClient(id, name);
+}
+
+function editFromView() {
+    var id = viewClientId;
+    closeViewModal();
+    openEditModal(id);
+}
+
+function messageClientFromView() {
+    messagingExistingClientId = viewClientId;
+    closeViewModal();
+    showView('new-lead');
+}
+
+function openEditModal(id) {
+    document.getElementById('edit-modal').classList.add('show');
+    document.getElementById('edit-modal-status').textContent = 'Loading...';
+    document.getElementById('edit-modal-form').style.display = 'none';
+    document.getElementById('edit-save-btn').style.display = 'none';
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id + '&select=*', {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(rows) {
+        var c = rows[0];
+        if (!c) { document.getElementById('edit-modal-status').textContent = 'Not found.'; return; }
+        document.getElementById('edit-modal-status').textContent = 'Editing ' + c.name;
+        document.getElementById('edit-name').value = c.name || '';
+        document.getElementById('edit-phone').value = c.phone || '';
+        document.getElementById('edit-email').value = c.email || '';
+        document.getElementById('edit-event_type').value = c.event_type || '';
+        document.getElementById('edit-event_date').value = c.event_date || '';
+        document.getElementById('edit-guests').value = c.guests || '';
+        document.getElementById('edit-venue').value = c.venue || '';
+        document.getElementById('edit-lead_source').value = c.lead_source || 'Bark';
+        document.getElementById('edit-notes').value = c.notes || '';
+        document.getElementById('edit-modal-form').style.display = 'block';
+        document.getElementById('edit-save-btn').style.display = 'block';
+        currentClientId = id;
+    })
+    .catch(function(e) { document.getElementById('edit-modal-status').textContent = 'Error: ' + e.message; });
+}
+
+function closeEditModal() { document.getElementById('edit-modal').classList.remove('show'); currentClientId = null; }
+
+function saveEditedClient() {
+    if (!currentClientId) return;
+    var btn = document.getElementById('edit-save-btn');
+    btn.disabled = true; btn.textContent = 'Saving...';
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + currentClientId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+            name: document.getElementById('edit-name').value.trim(),
+            phone: document.getElementById('edit-phone').value.trim() || null,
+            email: document.getElementById('edit-email').value.trim() || null,
+            event_type: document.getElementById('edit-event_type').value || null,
+            event_date: document.getElementById('edit-event_date').value || null,
+            guests: document.getElementById('edit-guests').value.trim() || null,
+            venue: document.getElementById('edit-venue').value.trim() || null,
+            lead_source: document.getElementById('edit-lead_source').value || null,
+            notes: document.getElementById('edit-notes').value.trim() || null,
+            last_activity: new Date().toISOString()
         })
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(data) {
-            if (data.error)
-                throw new Error(data.error);
-            var ex = data.extracted || {};
+    })
+    .then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
+        closeEditModal();
+        loadPipeline();
+    })
+    .catch(function(e) { alert('Error saving: ' + e.message); })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Save'; });
+}
 
-            if (ex.name)
-                document.getElementById('name').value = ex.name;
-            if (ex.phone)
-                document.getElementById('phone').value = ex.phone;
-            if (ex.email)
-                document.getElementById('email').value = ex.email;
-            if (ex.event_type) {
-                var typeSelect = document.getElementById('event_type');
-                var matched = Array.prototype.find.call(typeSelect.options, function(o) {
-                    return o.value.toLowerCase() === String(ex.event_type).toLowerCase();
-                });
-                if (matched)
-                    typeSelect.value = matched.value;
-            }
-            if (ex.event_date)
-                document.getElementById('date').value = ex.event_date;
-            if (ex.guests) {
-                var guestOption = mapGuestsToOption(ex.guests);
-                if (guestOption)
-                    document.getElementById('guests').value = guestOption;
-            }
-            if (ex.venue)
-                document.getElementById('venue').value = ex.venue;
-            if (ex.notes)
-                document.getElementById('notes').value = ex.notes;
+/* ── Pricing modal logic ── */
+var currentFormat = 'stage';
 
-            statusEl.textContent = '✓ Filled in what we could find — please review before creating the lead.';
-        })
-        .catch(function(err) {
-            statusEl.textContent = 'Could not extract details: ' + err.message + ' — you can still fill in the form manually.';
-        })
-        .finally(function() {
-            btn.disabled = false;
-            document.getElementById('lead-screenshot-input').value = '';
-        });
-    }
+function switchFormat(format) {
+    currentFormat = format;
+    document.getElementById('format-btn-stage').classList.toggle('active', format === 'stage');
+    document.getElementById('format-btn-strolling').classList.toggle('active', format === 'strolling');
+    document.getElementById('format-section-stage').classList.toggle('show', format === 'stage');
+    document.getElementById('format-section-strolling').classList.toggle('show', format === 'strolling');
+    selectedPricingOption = null;
+    document.querySelectorAll('.pricing-option').forEach(function(o) { o.classList.remove('selected'); });
+    document.querySelectorAll('.custom-price-inputs').forEach(function(el) { el.classList.remove('show'); });
+    document.getElementById('modal-send-btn').disabled = true;
+}
 
-    function getFormData() {
-        var leadSource = document.getElementById('lead_source').value;
-        if (leadSource === 'Other') {
-            var otherName = document.getElementById('other_source_name').value.trim();
-            if (otherName)
-                leadSource = otherName;
-        }
-        return {
-            name: document.getElementById('name').value.trim(),
-            phone: document.getElementById('phone').value.trim(),
-            email: document.getElementById('email').value.trim(),
-            leadSource: leadSource,
-            eventType: document.getElementById('event_type').value,
-            date: document.getElementById('date').value,
-            guests: document.getElementById('guests').value,
-            venue: document.getElementById('venue').value.trim(),
-            otherEntertainment: document.getElementById('other_entertainment').value.trim(),
-            notes: document.getElementById('notes').value.trim()
+function selectPricingOption(option) {
+    selectedPricingOption = option;
+    document.querySelectorAll('.pricing-option').forEach(function(o) { o.classList.remove('selected'); });
+    document.getElementById('opt-' + option).classList.add('selected');
+    document.querySelectorAll('.custom-price-inputs').forEach(function(el) { el.classList.remove('show'); });
+    if (option === 'private-custom')              document.getElementById('private-custom-inputs').classList.add('show');
+    if (option === 'corporate-custom')            document.getElementById('corporate-custom-inputs').classList.add('show');
+    if (option === 'strolling-private-custom')    document.getElementById('strolling-private-custom-inputs').classList.add('show');
+    if (option === 'strolling-corporate-custom')  document.getElementById('strolling-corporate-custom-inputs').classList.add('show');
+    document.getElementById('modal-send-btn').disabled = false;
+}
+
+function sendPricing() {
+    if (!selectedPricingOption || !currentClientId) return;
+    var btn = document.getElementById('modal-send-btn');
+    btn.disabled = true; btn.textContent = 'Sending...';
+    var base = 'https://shine-booking.vercel.app/pricing.html';
+    var link = '';
+    if (selectedPricingOption === 'private-standard')           link = base + '?type=private&cid=' + currentClientId;
+    else if (selectedPricingOption === 'corporate-standard')    link = base + '?type=corporate&cid=' + currentClientId;
+    else if (selectedPricingOption === 'private-custom')        link = base + '?type=private&cid=' + currentClientId + '&d1=' + (document.getElementById('pc-d1').value||400) + '&d2=' + (document.getElementById('pc-d2').value||500) + '&d3=' + (document.getElementById('pc-d3').value||600);
+    else if (selectedPricingOption === 'corporate-custom')      link = base + '?type=corporate&cid=' + currentClientId + '&d1=' + (document.getElementById('pc-c1').value||1000) + '&d2=' + (document.getElementById('pc-c2').value||1200) + '&d3=' + (document.getElementById('pc-c3').value||1500);
+    else if (selectedPricingOption === 'strolling-private-standard')   link = base + '?format=strolling&type=private&cid=' + currentClientId;
+    else if (selectedPricingOption === 'strolling-corporate-standard') link = base + '?format=strolling&type=corporate&cid=' + currentClientId;
+    else if (selectedPricingOption === 'strolling-private-custom')     link = base + '?format=strolling&type=private&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-rate').value||400) + '&sf=' + (document.getElementById('ps-finale').value||200);
+    else if (selectedPricingOption === 'strolling-corporate-custom')   link = base + '?format=strolling&type=corporate&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-c-rate').value||1000) + '&sf=' + (document.getElementById('ps-c-finale').value||300);
+    fetch('/api/chat?mode=pricing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: currentClientId, clientName: modalClient.name, phone: modalClient.phone, email: modalClient.email, lastChannel: modalClient.lastChannel, pricingLink: link })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error);
+        closeModal();
+        loadPipeline();
+    })
+    .catch(function(e) { alert('Error: ' + e.message); })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Send pricing'; });
+}
+
+/* ── New lead form ── */
+var SYSTEM_PROMPT = 'You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic show performer in Texas. Performs 45-60 min interactive shows. Write a warm, personalized first contact SMS to a potential client from a Bark lead. Rules: under 160 characters total, use client first name, mention the event type naturally, sign off as "- Shine, The Mentalist", do NOT mention pricing, ask ONE natural question about their venue or plans. Return ONLY the SMS text, nothing else.';
+
+function formatDate(d) {
+    if (!d) return 'not specified';
+    var dt = new Date(d + 'T00:00:00');
+    return dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function toggleOtherSource() {
+    document.getElementById('other-source-field').style.display =
+        document.getElementById('lead_source').value === 'Other' ? 'block' : 'none';
+}
+
+function fileToBase64(file) {
+    return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function() {
+            var result = reader.result;
+            resolve(result.substring(result.indexOf(',') + 1));
         };
-    }
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
 
-    function saveLeadOnly() {
-        var d = getFormData();
-        if (!d.name) {
-            alert('Please enter a client name first.');
-            return;
-        }
+function mapGuestsToOption(v) {
+    if (!v) return '';
+    var s = String(v).toLowerCase();
+    if (s.includes('under 10') || s.includes('<10')) return 'Under 10';
+    if (s.includes('100+') || s.includes('over 100')) return '100+';
+    var m = s.match(/\d+/);
+    if (!m) return '';
+    var n = parseInt(m[0], 10);
+    if (n < 10) return 'Under 10';
+    if (n <= 25) return '10-25';
+    if (n <= 50) return '25-50';
+    if (n <= 100) return '50-100';
+    return '100+';
+}
 
-        var btn = document.getElementById('save-lead-btn');
-        btn.disabled = true;
-        btn.textContent = 'Saving...';
-
-        fetch(SUPABASE_URL + '/rest/v1/clients', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': SUPABASE_KEY,
-                'Authorization': 'Bearer ' + SUPABASE_KEY,
-                'Prefer': 'return=representation'
-            },
-            body: JSON.stringify({
-                name: d.name,
-                phone: d.phone || null,
-                email: d.email || null,
-                event_type: d.eventType || null,
-                event_date: d.date || null,
-                guests: d.guests || null,
-                venue: d.venue || null,
-                other_entertainment: d.otherEntertainment || null,
-                lead_source: d.leadSource || null,
-                notes: d.notes || null,
-                status: 'new',
-                last_activity: new Date().toISOString()
-            })
-        })
-        .then(function(r) {
-            if (!r.ok)
-                return r.text().then(function(t) {
-                    throw new Error('Save failed (' + r.status + '): ' + t);
-                });
-            return r.json();
-        })
-        .then(function() {
-            showTab('dashboard');
-        })
-        .catch(function(err) {
-            alert('Could not save lead: ' + err.message);
-        })
-        .finally(function() {
-            btn.disabled = false;
-            btn.textContent = 'Save lead (no message yet)';
+function handleScreenshotUpload(fileList) {
+    if (!fileList || !fileList.length) return;
+    var files = Array.prototype.slice.call(fileList);
+    if (files.length > 4) { alert('Please upload at most 4 screenshots at a time.'); return; }
+    var statusEl = document.getElementById('screenshot-status');
+    var btn = document.getElementById('upload-screenshot-btn');
+    statusEl.style.display = 'block';
+    statusEl.textContent = 'Reading screenshot(s)...';
+    btn.disabled = true;
+    Promise.all(files.map(function(file) {
+        return fileToBase64(file).then(function(base64) { return { data: base64, mediaType: file.type || 'image/png' }; });
+    }))
+    .then(function(images) {
+        statusEl.textContent = 'Extracting details...';
+        return fetch('/api/extract-lead-screenshot', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ images: images })
         });
-    }
-
-    function buildPrompt(d) {
-        return 'Bark lead:\nName: ' + d.name + '\nEvent: ' + (d.eventType || 'not specified') + '\nDate: ' + formatDate(d.date) + '\nGuests: ' + (d.guests || 'not specified') + '\nVenue: ' + (d.venue || 'not specified') + '\nOther entertainment: ' + (d.otherEntertainment || 'not specified') + '\nNotes: ' + (d.notes || 'none');
-    }
-
-    function updateCharCount() {
-        var txt = document.getElementById('sms-text').value;
-        var el = document.getElementById('char-count');
-        el.textContent = txt.length + ' / 160 characters';
-        el.className = txt.length > 160 ? 'char-count over' : 'char-count';
-    }
-
-    function showStatus(msg, type) {
-        var el = document.getElementById('status');
-        el.className = 'status ' + type;
-        el.innerHTML = msg;
-    }
-
-    function generateMessages() {
-        var d = getFormData();
-        if (!d.name || !d.eventType) {
-            showStatus('Please fill in client name and event type first.', 'error');
-            return;
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error);
+        var ex = data.extracted || {};
+        if (ex.name)  document.getElementById('name').value = ex.name;
+        if (ex.phone) document.getElementById('phone').value = ex.phone;
+        if (ex.email) document.getElementById('email').value = ex.email;
+        if (ex.event_type) {
+            var sel = document.getElementById('event_type');
+            var m = Array.prototype.find.call(sel.options, function(o) { return o.value.toLowerCase() === String(ex.event_type).toLowerCase(); });
+            if (m) sel.value = m.value;
         }
-        var btn = document.getElementById('gen-btn');
-        btn.disabled = true;
-        btn.textContent = 'Writing messages...';
-        showStatus('Claude is writing personalized SMS and email...', 'loading');
-        fetch('/api/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: 'claude-sonnet-4-6',
-                max_tokens: 200,
-                system: SYSTEM_PROMPT,
-                messages: [{
-                    role: 'user',
-                    content: buildPrompt(d)
-                }],
-                clientName: d.name,
-                eventType: d.eventType
-            })
-        })
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(data) {
-            if (data.error)
-                throw new Error(data.error.message);
-            document.getElementById('sms-text').value = data.smsMessage;
-            document.getElementById('email-subject').value = data.emailSubject;
-            document.getElementById('email-body').value = data.emailBody;
-            document.getElementById('messages-area').style.display = 'block';
-            document.getElementById('send-btn').disabled = false;
-            updateCharCount();
-            showStatus('Messages ready — review and edit if needed, then hit Send.', 'success');
-        })
-        .catch(function(e) {
-            showStatus('Error: ' + e.message, 'error');
-        })
-        .finally(function() {
-            btn.disabled = false;
-            btn.textContent = 'Regenerate messages';
-        });
+        if (ex.event_date) document.getElementById('date').value = ex.event_date;
+        if (ex.guests) { var g = mapGuestsToOption(ex.guests); if (g) document.getElementById('guests').value = g; }
+        if (ex.venue) document.getElementById('venue').value = ex.venue;
+        if (ex.notes) document.getElementById('notes').value = ex.notes;
+        statusEl.textContent = '✓ Filled in what we could find — please review before creating the lead.';
+    })
+    .catch(function(err) { statusEl.textContent = 'Could not extract: ' + err.message; })
+    .finally(function() { btn.disabled = false; document.getElementById('lead-screenshot-input').value = ''; });
+}
+
+function getFormData() {
+    var src = document.getElementById('lead_source').value;
+    if (src === 'Other') {
+        var other = document.getElementById('other_source_name').value.trim();
+        if (other) src = other;
     }
+    return {
+        name: document.getElementById('name').value.trim(),
+        phone: document.getElementById('phone').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        leadSource: src,
+        eventType: document.getElementById('event_type').value,
+        date: document.getElementById('date').value,
+        guests: document.getElementById('guests').value,
+        venue: document.getElementById('venue').value.trim(),
+        otherEntertainment: document.getElementById('other_entertainment').value.trim(),
+        notes: document.getElementById('notes').value.trim()
+    };
+}
 
-    function sendMessages() {
-        var d = getFormData();
-        if (!d.name || !d.phone || !d.eventType) {
-            showStatus('Please fill in client name, phone, and event type.', 'error');
-            return;
+function saveLeadOnly() {
+    var d = getFormData();
+    if (!d.name) { alert('Please enter a client name first.'); return; }
+    var btn = document.getElementById('save-lead-btn');
+    btn.disabled = true; btn.textContent = 'Saving...';
+    fetch(SUPABASE_URL + '/rest/v1/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
+        body: JSON.stringify({ name: d.name, phone: d.phone||null, email: d.email||null, event_type: d.eventType||null, event_date: d.date||null, guests: d.guests||null, venue: d.venue||null, other_entertainment: d.otherEntertainment||null, lead_source: d.leadSource||null, notes: d.notes||null, status: 'new', last_activity: new Date().toISOString() })
+    })
+    .then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
+        return r.json();
+    })
+    .then(function() { showView('dashboard'); })
+    .catch(function(e) { alert('Could not save: ' + e.message); })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Save lead (no message yet)'; });
+}
+
+function buildPrompt(d) {
+    return 'Bark lead:\nName: ' + d.name + '\nEvent: ' + (d.eventType||'not specified') + '\nDate: ' + formatDate(d.date) + '\nGuests: ' + (d.guests||'not specified') + '\nVenue: ' + (d.venue||'not specified') + '\nOther entertainment: ' + (d.otherEntertainment||'not specified') + '\nNotes: ' + (d.notes||'none');
+}
+
+function updateCharCount() {
+    var txt = document.getElementById('sms-text').value;
+    var el = document.getElementById('char-count');
+    el.textContent = txt.length + ' / 160 characters';
+    el.className = txt.length > 160 ? 'char-count over' : 'char-count';
+}
+
+function showStatus(msg, type) {
+    var el = document.getElementById('status');
+    el.className = 'status-msg ' + type;
+    el.innerHTML = msg;
+}
+
+function generateMessages() {
+    var d = getFormData();
+    if (!d.name || !d.eventType) { showStatus('Please fill in client name and event type first.', 'error'); return; }
+    var btn = document.getElementById('gen-btn');
+    btn.disabled = true; btn.textContent = 'Writing messages...';
+    showStatus('Claude is writing personalized SMS and email...', 'loading');
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 200, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: buildPrompt(d) }], clientName: d.name, eventType: d.eventType })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error.message);
+        document.getElementById('sms-text').value = data.smsMessage;
+        document.getElementById('email-subject').value = data.emailSubject;
+        document.getElementById('email-body').value = data.emailBody;
+        document.getElementById('messages-area').style.display = 'block';
+        document.getElementById('send-btn').disabled = false;
+        updateCharCount();
+        showStatus('Messages ready — review and edit, then hit Send.', 'success');
+    })
+    .catch(function(e) { showStatus('Error: ' + e.message, 'error'); })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Regenerate messages'; });
+}
+
+function sendMessages() {
+    var d = getFormData();
+    if (!d.name || !d.phone || !d.eventType) { showStatus('Please fill in client name, phone, and event type.', 'error'); return; }
+    var smsText      = document.getElementById('sms-text').value.trim();
+    var emailSubject = document.getElementById('email-subject').value.trim();
+    var emailBody    = document.getElementById('email-body').value.trim();
+    if (!smsText) { showStatus('Please generate messages first.', 'error'); return; }
+    var btn = document.getElementById('send-btn');
+    btn.disabled = true; btn.textContent = 'Sending...';
+    showStatus('Sending messages...', 'loading');
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 200, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: buildPrompt(d) }], toPhone: d.phone||null, toEmail: d.email||null, clientName: d.name, eventType: d.eventType, venue: d.venue, otherEntertainment: d.otherEntertainment, leadSource: d.leadSource, eventDate: d.date, guests: d.guests, smsOverride: smsText, emailOverride: 'Subject: ' + emailSubject + '\n\n' + emailBody, existingClientId: messagingExistingClientId || undefined })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error.message);
+        var followup = document.getElementById('followup').checked;
+        showStatus((data.smsSent ? 'SMS sent to ' + d.phone : 'SMS pending A2P approval') + '<br>' + (data.emailSent ? 'Email sent to ' + d.email : (d.email ? 'Email not sent' : '')) + '<br>' + (followup ? 'Follow-up scheduled in 24 hours if no reply.' : ''), 'success');
+        messagingExistingClientId = null;
+        if (data.smsSent || data.emailSent) setTimeout(function() { showView('dashboard'); }, 2000);
+    })
+    .catch(function(e) { showStatus('Error: ' + e.message, 'error'); })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Send messages'; });
+}
+
+/* ── Modal backdrop clicks ── */
+['pricing-modal','contract-modal','answers-modal','edit-modal','view-modal'].forEach(function(id) {
+    document.getElementById(id).addEventListener('click', function(e) {
+        if (e.target === this) {
+            if (id === 'pricing-modal') closeModal();
+            else if (id === 'contract-modal') closeContractModal();
+            else if (id === 'answers-modal') closeAnswersModal();
+            else if (id === 'edit-modal') closeEditModal();
+            else if (id === 'view-modal') closeViewModal();
         }
-        var smsText = document.getElementById('sms-text').value.trim();
-        var emailSubject = document.getElementById('email-subject').value.trim();
-        var emailBody = document.getElementById('email-body').value.trim();
-        if (!smsText) {
-            showStatus('Please generate messages first.', 'error');
-            return;
-        }
-        var btn = document.getElementById('send-btn');
-        btn.disabled = true;
-        btn.textContent = 'Sending...';
-        showStatus('Sending messages...', 'loading');
-        fetch('/api/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: 'claude-sonnet-4-6',
-                max_tokens: 200,
-                system: SYSTEM_PROMPT,
-                messages: [{
-                    role: 'user',
-                    content: buildPrompt(d)
-                }],
-                toPhone: d.phone || null,
-                toEmail: d.email || null,
-                clientName: d.name,
-                eventType: d.eventType,
-                venue: d.venue,
-                otherEntertainment: d.otherEntertainment,
-                leadSource: d.leadSource,
-                eventDate: d.date,
-                guests: d.guests,
-                smsOverride: smsText,
-                emailOverride: 'Subject: ' + emailSubject + '\n\n' + emailBody,
-                existingClientId: messagingExistingClientId || undefined
-            })
-        })
-        .then(function(r) {
-            return r.json();
-        })
-        .then(function(data) {
-            if (data.error)
-                throw new Error(data.error.message);
-            var followup = document.getElementById('followup').checked;
-            showStatus((data.smsSent ? 'SMS sent to ' + d.phone : 'SMS pending A2P approval') + '<br>' + (data.emailSent ? 'Email sent to ' + d.email : (d.email ? 'Email not sent' : '')) + '<br>' + (followup ? 'Follow-up scheduled in 24 hours if no reply.' : ''), 'success');
-            messagingExistingClientId = null;
-            if (data.smsSent || data.emailSent)
-                setTimeout(function() {
-                    showTab('dashboard');
-                }, 2000);
-        })
-        .catch(function(e) {
-            showStatus('Error: ' + e.message, 'error');
-        })
-        .finally(function() {
-            btn.disabled = false;
-            btn.textContent = 'Send messages';
-        });
-    }
-
-    document.getElementById('pricing-modal').addEventListener('click', function(e) {
-        if (e.target === this)
-            closeModal();
     });
+});
 
-    document.getElementById('contract-modal').addEventListener('click', function(e) {
-        if (e.target === this)
-            closeContractModal();
-    });
-
-    document.getElementById('answers-modal').addEventListener('click', function(e) {
-        if (e.target === this)
-            closeAnswersModal();
-    });
-
-    document.getElementById('edit-modal').addEventListener('click', function(e) {
-        if (e.target === this)
-            closeEditModal();
-    });
-
-    document.getElementById('view-modal').addEventListener('click', function(e) {
-        if (e.target === this)
-            closeViewModal();
-    });
-
-    showTab('dashboard');
-    </script>
+showView('dashboard');
+</script>
 </body>
 </html>
