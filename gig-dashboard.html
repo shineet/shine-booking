@@ -702,27 +702,24 @@ function renderUpcoming() {
 
 // ── Detail modal ─────────────────────────────────────────────────────────────
 
-// Human-readable labels for known field names
-const FIELD_LABELS = {
-  name: null,                    // shown in header
-  id: null, created_at: null, status: null, last_activity: null,
-  last_channel: null, pricing_type: null, booking_id: null,
-  custom_price_deluxe: null, custom_price_signature: null, custom_price_premium: null,
-  selected_price: null,          // shown in fee block
-  selected_package: null, selected_category: null,
-  // shown in primary grid — handled explicitly
-  event_date: null, phone: null, email: null, venue: null,
-  guests: null, lead_source: null, event_type: null,
-  notes: null,                   // shown in notes block
-  // everything else gets auto-labelled
-  other_entertainment:  'Other Entertainment',
-  bookings:             null,    // handled separately as booking block
+// Labels for intake questionnaire keys
+const INTAKE_LABELS = {
+  q_honoree:       'Guest of Honour',
+  q_honoree_dob:   'Date of Birth',
+  q_trivia:        'Trivia / Personal Details',
+  q_vips:          'VIP Guests',
+  q_crowd:         'Crowd Type',
+  q_vibe:          'Show Vibe',
+  q_guests:        'Guest Count',
+  q_address:       'Venue Address',
+  q_indoor_outdoor:'Indoor / Outdoor',
+  q_power:         'Power Available',
+  q_clear_area:    'Clear Area',
+  q_exclude:       'Exclusions / Sensitivities',
+  q_event_date:    'Event Date',
+  q_start_time:    'Start Time',
+  q_photo_honoree: 'Photo of Honouree',
 };
-
-function labelFor(key) {
-  if (key in FIELD_LABELS) return FIELD_LABELS[key];
-  return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-}
 
 function openDetail(clientId) {
   const c = upcoming.find(x => x.id === clientId);
@@ -734,39 +731,41 @@ function openDetail(clientId) {
   const fee     = c.selected_price ? `$${Number(c.selected_price).toLocaleString()}` : 'TBD';
   const pkg     = [c.selected_category, c.selected_package].filter(Boolean).join(' · ');
 
-  // Primary grid fields (always shown first, even if null)
-  const primaryFields = [
-    { lbl: 'Date',    val: fmtDate(c.event_date), link: null },
-    { lbl: 'Source',  val: c.lead_source || '—',  link: null },
-    { lbl: 'Venue',   val: c.venue || '—',         link: null },
-    { lbl: 'Guests',  val: c.guests || '—',         link: null },
-    { lbl: 'Phone',   val: c.phone || '—',          link: c.phone ? `tel:${c.phone}` : null },
-    { lbl: 'Email',   val: c.email || '—',          link: c.email ? `mailto:${c.email}` : null },
-  ];
+  // bookings comes back as an array from the join
+  const booking = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings;
 
-  // Extra fields — anything in the record not already handled and not null/empty
-  const skipKeys = new Set(['id','name','created_at','status','last_activity','last_channel',
-    'pricing_type','booking_id','custom_price_deluxe','custom_price_signature',
-    'custom_price_premium','selected_price','selected_package','selected_category',
-    'event_date','phone','email','venue','guests','lead_source','event_type','notes','bookings']);
-
-  const extraFields = Object.entries(c)
-    .filter(([k, v]) => !skipKeys.has(k) && v !== null && v !== '' && labelFor(k) !== null)
-    .map(([k, v]) => ({ lbl: labelFor(k), val: String(v) }));
-
-  // Booking record fields (questionnaire answers live here)
-  const booking = c.bookings;
-  const bookingFields = booking && typeof booking === 'object'
-    ? Object.entries(booking)
-        .filter(([k, v]) => !['id','created_at','client_id'].includes(k) && v !== null && v !== '')
-        .map(([k, v]) => ({ lbl: labelFor(k), val: String(v) }))
-    : [];
+  // Primary contact & event grid
+  const startTime = booking?.start_time || '';
+  const duration  = booking?.duration   || '';
+  const venue     = booking?.venue_address || c.venue || '—';
 
   const renderField = f => `
-    <div class="detail-field">
+    <div class="detail-field${f.full ? ' full' : ''}">
       <div class="lbl">${esc(f.lbl)}</div>
       <div class="val">${f.link ? `<a href="${esc(f.link)}">${esc(f.val)}</a>` : esc(f.val)}</div>
     </div>`;
+
+  const primaryFields = [
+    { lbl: 'Date',      val: fmtDate(c.event_date) || '—' },
+    { lbl: 'Start Time',val: startTime || '—' },
+    { lbl: 'Duration',  val: duration  || '—' },
+    { lbl: 'Guests',    val: c.guests  || '—' },
+    { lbl: 'Phone',     val: c.phone   || '—', link: c.phone ? `tel:${c.phone}` : null },
+    { lbl: 'Email',     val: c.email   || '—', link: c.email ? `mailto:${c.email}` : null },
+    { lbl: 'Venue',     val: venue,              full: true },
+  ];
+
+  // Other entertainment, source, etc.
+  const extraFields = [];
+  if (c.lead_source)          extraFields.push({ lbl: 'Lead Source',         val: c.lead_source });
+  if (c.other_entertainment)  extraFields.push({ lbl: 'Other Entertainment', val: c.other_entertainment });
+  if (booking?.contract_status) extraFields.push({ lbl: 'Contract',          val: booking.contract_status });
+
+  // Intake / questionnaire answers
+  const intake = booking?.intake_answers || {};
+  const intakeFields = Object.entries(intake)
+    .filter(([k, v]) => v !== null && v !== '' && INTAKE_LABELS[k])
+    .map(([k, v]) => ({ lbl: INTAKE_LABELS[k], val: String(v), full: k === 'q_trivia' }));
 
   document.getElementById('detail-content').innerHTML = `
     <div class="detail-header">
@@ -787,13 +786,13 @@ function openDetail(clientId) {
     </div>
 
     ${extraFields.length ? `
-      <div style="margin:16px 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Additional Details</div>
+      <div style="margin:16px 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Booking Details</div>
       <div class="detail-grid">${extraFields.map(renderField).join('')}</div>
     ` : ''}
 
-    ${bookingFields.length ? `
-      <div style="margin:16px 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Questionnaire / Booking Details</div>
-      <div class="detail-grid">${bookingFields.map(renderField).join('')}</div>
+    ${intakeFields.length ? `
+      <div style="margin:16px 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Questionnaire Answers</div>
+      <div class="detail-grid">${intakeFields.map(renderField).join('')}</div>
     ` : ''}
 
     ${c.notes ? `
