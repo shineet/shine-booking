@@ -34,33 +34,28 @@
         background: var(--bg);
         color: var(--text);
         font-size: 14px;
-        min-height: 100vh;
+        height: 100dvh;
         display: flex;
-        flex-direction: column
+        flex-direction: column;
+        overflow: hidden
     }
 
     /* ── Topbar ── */
     .topbar {
         background: var(--surface);
         border-bottom: 1px solid var(--border);
-        padding: 0 24px;
+        padding: 0 20px;
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 14px;
         height: 52px;
         flex-shrink: 0;
-        position: sticky;
-        top: 0;
-        z-index: 50
+        z-index: 10
     }
 
-    .topbar-brand {
-        font-size: 15px;
-        font-weight: 600;
-        white-space: nowrap
-    }
-
+    .topbar-brand { font-size: 15px; font-weight: 600; white-space: nowrap }
     .topbar-brand span { color: var(--muted); font-weight: 400 }
+    .topbar-spacer { flex: 1 }
 
     .topbar-tabs {
         display: flex;
@@ -85,60 +80,397 @@
         white-space: nowrap
     }
 
-    .ttab.active {
-        background: var(--card-bg);
-        color: var(--text);
-        border: 1px solid var(--border)
+    .ttab.active { background: var(--card-bg); color: var(--text); border: 1px solid var(--border) }
+
+    .review-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted)
     }
 
-    .topbar-spacer { flex: 1 }
-
-    .topbar button.primary {
-        background: var(--accent);
-        color: #fff;
-        border: none;
-        border-radius: 7px;
-        padding: 7px 14px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        font-family: inherit;
-        white-space: nowrap;
-        transition: opacity .15s
-    }
-
-    .topbar button.primary:hover { opacity: .85 }
-
-    .topbar-refresh {
+    .topbar-icon-btn {
         background: transparent;
-        color: var(--muted);
         border: 1px solid var(--border);
+        color: var(--muted);
         border-radius: 7px;
-        padding: 6px 12px;
+        padding: 6px 10px;
         font-size: 13px;
         cursor: pointer;
         font-family: inherit;
         transition: background .15s
     }
 
-    .topbar-refresh:hover { background: var(--surface2) }
+    .topbar-icon-btn:hover { background: var(--surface2) }
 
-    /* ── Views ── */
-    #dashboard-view { flex: 1; overflow: hidden; display: flex; flex-direction: column }
-    #new-lead-view  { display: none; flex: 1; overflow-y: auto; padding: 24px }
+    /* ── Main layout: shell holds everything below topbar ── */
+    .shell {
+        flex: 1;
+        display: flex;
+        overflow: hidden;
+        position: relative
+    }
+
+    /* ── Views: pipeline and new-lead ── */
+    #pipeline-shell {
+        display: flex;
+        width: 100%;
+        height: 100%;
+        overflow: hidden
+    }
+
+    #new-lead-shell {
+        display: none;
+        width: 100%;
+        height: 100%;
+        overflow-y: auto;
+        padding: 24px
+    }
+
+    /* ── LIST PANE ── */
+    .list-pane {
+        display: flex;
+        flex-direction: column;
+        width: 380px;
+        flex-shrink: 0;
+        border-right: 1px solid var(--border);
+        height: 100%;
+        overflow: hidden
+    }
+
+    .list-pane-header {
+        padding: 14px 16px 10px;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0
+    }
+
+    .list-pane-title {
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between
+    }
+
+    .lead-count-badge {
+        font-size: 11px;
+        font-weight: 700;
+        background: var(--surface2);
+        color: var(--muted);
+        padding: 2px 8px;
+        border-radius: 20px
+    }
+
+    /* Filter pills */
+    .filter-row {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none
+    }
+
+    .filter-row::-webkit-scrollbar { display: none }
+
+    .filter-pill {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        border: 1px solid var(--border);
+        background: var(--surface2);
+        color: var(--muted);
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all .12s;
+        font-family: inherit
+    }
+
+    .filter-pill.active { background: var(--accent); border-color: var(--accent); color: #fff }
+
+    /* Lead list */
+    .lead-list {
+        overflow-y: auto;
+        flex: 1
+    }
+
+    .lead-list::-webkit-scrollbar { width: 4px }
+    .lead-list::-webkit-scrollbar-track { background: transparent }
+    .lead-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px }
+
+    .lead-row {
+        padding: 13px 16px;
+        border-bottom: 1px solid var(--border);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        transition: background .1s;
+        position: relative
+    }
+
+    .lead-row:hover { background: var(--surface2) }
+    .lead-row.selected { background: rgba(124,106,245,.1) }
+    .lead-row.selected::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 3px;
+        background: var(--accent)
+    }
+
+    .lead-row-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex-shrink: 0
+    }
+
+    .lead-row-body { flex: 1; min-width: 0 }
+
+    .lead-row-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 3px
+    }
+
+    .lead-row-name {
+        font-size: 14px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1
+    }
+
+    .lead-row-time {
+        font-size: 11px;
+        color: var(--muted);
+        flex-shrink: 0;
+        margin-left: 8px
+    }
+
+    .lead-row-meta {
+        font-size: 12px;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    .lead-row-status {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 7px;
+        border-radius: 12px;
+        flex-shrink: 0;
+        margin-left: 6px
+    }
+
+    /* Status dot and badge colors */
+    .s-new            { background: var(--accent2) }
+    .s-chatting       { background: var(--green) }
+    .s-pricing_requested { background: var(--amber) }
+    .s-pricing_sent   { background: var(--accent) }
+    .s-package_selected { background: var(--accent) }
+    .s-booked         { background: var(--green) }
+    .s-intake_sent    { background: var(--accent) }
+    .s-intake_completed { background: var(--amber) }
+    .s-contract_sent  { background: var(--accent2) }
+    .s-contract_signed { background: var(--green) }
+    .s-lost           { background: #3a3f58 }
+
+    .badge-new            { background: rgba(91,138,245,.15); color: var(--accent2) }
+    .badge-chatting       { background: rgba(76,175,135,.15); color: var(--green) }
+    .badge-pricing_requested { background: rgba(240,165,0,.15); color: var(--amber) }
+    .badge-pricing_sent   { background: rgba(124,106,245,.15); color: var(--accent) }
+    .badge-package_selected { background: rgba(124,106,245,.15); color: var(--accent) }
+    .badge-booked         { background: rgba(76,175,135,.15); color: var(--green) }
+    .badge-intake_sent    { background: rgba(124,106,245,.15); color: var(--accent) }
+    .badge-intake_completed { background: rgba(240,165,0,.15); color: var(--amber) }
+    .badge-contract_sent  { background: rgba(91,138,245,.15); color: var(--accent2) }
+    .badge-contract_signed { background: rgba(76,175,135,.15); color: var(--green) }
+    .badge-lost           { background: rgba(58,63,88,.4); color: var(--muted) }
+
+    .list-empty {
+        padding: 60px 20px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px
+    }
+
+    /* ── DETAIL PANE ── */
+    .detail-pane {
+        flex: 1;
+        height: 100%;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column
+    }
+
+    .detail-pane::-webkit-scrollbar { width: 5px }
+    .detail-pane::-webkit-scrollbar-track { background: transparent }
+    .detail-pane::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px }
+
+    .detail-placeholder {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: var(--muted);
+        gap: 10px
+    }
+
+    .detail-placeholder-icon { font-size: 36px; opacity: .3 }
+    .detail-placeholder-text { font-size: 13px }
+
+    .detail-content { padding: 28px 32px; flex: 1 }
+
+    .detail-back-btn {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--accent);
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-family: inherit;
+        padding: 14px 16px 0;
+        flex-shrink: 0
+    }
+
+    .detail-header {
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--border)
+    }
+
+    .detail-name {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 6px
+    }
+
+    .detail-status-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap
+    }
+
+    .detail-status-badge {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 20px
+    }
+
+    .detail-time { font-size: 12px; color: var(--muted) }
+
+    /* Detail action buttons */
+    .detail-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 24px
+    }
+
+    .d-btn {
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        font-family: inherit;
+        transition: opacity .12s
+    }
+
+    .d-btn:hover { opacity: .8 }
+    .d-btn.primary  { background: var(--accent); color: #fff }
+    .d-btn.blue     { background: rgba(91,138,245,.2); color: var(--accent2) }
+    .d-btn.purple   { background: rgba(124,106,245,.2); color: var(--accent) }
+    .d-btn.green    { background: rgba(76,175,135,.2); color: var(--green) }
+    .d-btn.ghost    { background: var(--surface2); color: var(--muted); border: 1px solid var(--border) }
+    .d-btn.danger   { background: rgba(224,82,82,.12); color: var(--red); border: 1px solid rgba(224,82,82,.2) }
+
+    /* Detail fields */
+    .detail-section-label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--muted);
+        margin-bottom: 10px
+    }
+
+    .detail-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-bottom: 24px
+    }
+
+    .detail-field { }
+    .detail-field .label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: var(--muted);
+        margin-bottom: 3px
+    }
+
+    .detail-field .value {
+        font-size: 14px;
+        color: var(--text);
+        line-height: 1.4
+    }
+
+    .detail-field.full { grid-column: 1 / -1 }
+
+    /* Answers section */
+    .answers-section { margin-top: 8px }
+
+    .answer-row { padding: 10px 0; border-bottom: 1px solid var(--border) }
+    .answer-row:last-child { border-bottom: none }
+    .answer-row .q { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px }
+    .answer-row .a { font-size: 14px; color: var(--text); line-height: 1.5; white-space: pre-wrap }
+
+    /* Selected package banner */
+    .pkg-banner {
+        background: rgba(76,175,135,.1);
+        border: 1px solid rgba(76,175,135,.25);
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px
+    }
+
+    .pkg-banner-icon { font-size: 18px }
+    .pkg-banner-text { font-size: 13px; color: var(--green); font-weight: 600 }
 
     /* ── Pending replies banner ── */
     .pending-banner {
         background: var(--surface);
         border-bottom: 1px solid var(--border);
-        padding: 10px 24px;
-        display: none
+        padding: 10px 16px;
+        display: none;
+        flex-shrink: 0
     }
 
     .pending-banner.has-items { display: block }
 
     .pending-banner-title {
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: .8px;
@@ -146,56 +478,44 @@
         margin-bottom: 8px
     }
 
-    .pending-list-row { display: flex; gap: 8px; flex-wrap: wrap }
+    .pending-cards-row { display: flex; gap: 8px; flex-wrap: wrap }
 
     .pending-card {
         background: var(--card-bg);
         border: 1px solid var(--border);
         border-left: 3px solid var(--amber);
         border-radius: 10px;
-        padding: 12px 14px;
-        min-width: 280px;
-        max-width: 400px;
+        padding: 12px;
+        min-width: 260px;
+        max-width: 380px;
         flex: 1
     }
 
-    .pending-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        margin-bottom: 6px
-    }
-
+    .pending-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px }
     .pending-client { font-size: 13px; font-weight: 600 }
-
-    .pending-channel {
-        font-size: 11px;
-        color: var(--muted);
-        text-transform: uppercase
-    }
+    .pending-channel { font-size: 11px; color: var(--muted); text-transform: uppercase }
 
     .pending-draft {
         width: 100%;
-        min-height: 56px;
-        padding: 8px 10px;
+        min-height: 52px;
+        padding: 7px 10px;
         font-size: 13px;
         border: 1px solid var(--border);
-        border-radius: 8px;
+        border-radius: 7px;
         font-family: inherit;
         line-height: 1.4;
         resize: vertical;
-        margin-bottom: 8px;
+        margin-bottom: 7px;
         background: var(--surface2);
         color: var(--text)
     }
 
     .pending-draft:focus { outline: none; border-color: var(--accent) }
-
     .pending-actions { display: flex; gap: 6px }
 
     .pending-actions button {
         flex: 1;
-        padding: 6px 10px;
+        padding: 6px;
         border-radius: 6px;
         font-size: 12px;
         font-weight: 600;
@@ -207,345 +527,31 @@
     .pending-send    { background: var(--accent); color: #fff }
     .pending-discard { background: rgba(224,82,82,.18); color: var(--red) }
 
-    /* ── Kanban board ── */
-    .kanban-board {
-        flex: 1;
-        overflow-x: auto;
-        padding: 20px 24px 28px;
-        display: flex;
-        gap: 14px;
-        align-items: flex-start
-    }
-
-    .kanban-col {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        width: 260px;
-        flex-shrink: 0;
-        display: flex;
-        flex-direction: column;
-        max-height: calc(100vh - 160px);
-        overflow: hidden
-    }
-
-    .col-header {
-        padding: 12px 14px 10px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        border-bottom: 1px solid var(--border);
-        flex-shrink: 0
-    }
-
-    .col-title {
-        font-size: 12px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .8px;
-        color: var(--muted)
-    }
-
-    .col-count {
-        font-size: 11px;
-        font-weight: 700;
-        padding: 2px 7px;
-        border-radius: 20px;
-        background: var(--surface2);
-        color: var(--muted)
-    }
-
-    .col-count.has-cards {
-        background: var(--accent);
-        color: #fff
-    }
-
-    .col-accent-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        flex-shrink: 0
-    }
-
-    .col-cards {
-        padding: 10px 10px 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        overflow-y: auto;
-        flex: 1
-    }
-
-    .col-empty {
-        padding: 20px 10px;
-        text-align: center;
-        color: #4a5272;
-        font-size: 12px
-    }
-
-    /* ── Lead cards ── */
-    .k-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 12px 13px;
-        cursor: pointer;
-        transition: transform .12s, box-shadow .12s, border-color .12s;
-        position: relative;
-        overflow: hidden
-    }
-
-    .k-card::before {
-        content: '';
+    /* ── Toggle switch ── */
+    .switch { position: relative; display: inline-block; width: 44px; height: 26px; flex-shrink: 0 }
+    .switch input { opacity: 0; width: 0; height: 0 }
+    .switch-slider {
         position: absolute;
-        top: 0; left: 0; right: 0;
-        height: 2px
-    }
-
-    .k-card:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 18px rgba(0,0,0,.45);
-        border-color: #3a3f58
-    }
-
-    .k-name {
-        font-size: 14px;
-        font-weight: 700;
-        margin-bottom: 4px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis
-    }
-
-    .k-meta {
-        font-size: 12px;
-        color: var(--muted);
-        line-height: 1.6;
-        margin-bottom: 8px
-    }
-
-    .k-badges {
-        display: flex;
-        gap: 5px;
-        flex-wrap: wrap;
-        margin-bottom: 8px
-    }
-
-    .k-badge {
-        font-size: 10px;
-        font-weight: 600;
-        padding: 2px 7px;
-        border-radius: 4px;
-        text-transform: uppercase;
-        letter-spacing: .4px
-    }
-
-    .k-actions {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap
-    }
-
-    .k-btn {
-        padding: 5px 10px;
-        border-radius: 6px;
-        font-size: 11px;
-        font-weight: 600;
-        border: none;
         cursor: pointer;
-        font-family: inherit;
-        transition: opacity .12s
-    }
-
-    .k-btn:hover { opacity: .8 }
-
-    .k-btn.primary  { background: var(--accent); color: #fff }
-    .k-btn.blue     { background: rgba(91,138,245,.2); color: var(--accent2) }
-    .k-btn.purple   { background: rgba(124,106,245,.2); color: var(--accent) }
-    .k-btn.green    { background: rgba(76,175,135,.2); color: var(--green) }
-    .k-btn.amber    { background: rgba(240,165,0,.2); color: var(--amber) }
-    .k-btn.ghost    { background: var(--surface2); color: var(--muted); border: 1px solid var(--border) }
-    .k-btn.danger   { background: rgba(224,82,82,.15); color: var(--red) }
-
-    .k-time {
-        font-size: 10px;
-        color: #3d4668;
-        margin-top: 6px
-    }
-
-    /* Column accent colors */
-    .col-new    .col-accent-dot { background: var(--accent2) }
-    .col-new    .k-card::before { background: var(--accent2) }
-    .col-price  .col-accent-dot { background: var(--amber) }
-    .col-price  .k-card::before { background: var(--amber) }
-    .col-sel    .col-accent-dot { background: var(--accent) }
-    .col-sel    .k-card::before { background: var(--accent) }
-    .col-booked .col-accent-dot { background: var(--green) }
-    .col-booked .k-card::before { background: var(--green) }
-    .col-cont   .col-accent-dot { background: #22c7a0 }
-    .col-cont   .k-card::before { background: #22c7a0 }
-    .col-lost   .col-accent-dot { background: #3a3f58 }
-    .col-lost   .k-card::before { background: #3a3f58 }
-    .col-lost   { opacity: .75 }
-
-    /* ── New lead form ── */
-    .new-lead-inner { max-width: 680px; margin: 0 auto }
-
-    .card {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 18px;
-        margin-bottom: 14px
-    }
-
-    .section-label {
-        font-size: 11px;
-        font-weight: 700;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: .06em;
-        margin-bottom: 14px
-    }
-
-    .field { margin-bottom: 14px }
-    .field:last-child { margin-bottom: 0 }
-
-    .field label {
-        display: block;
-        font-size: 11px;
-        color: var(--muted);
-        margin-bottom: 5px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: .06em
-    }
-
-    .field input, .field select, .field textarea {
-        width: 100%;
-        padding: 9px 12px;
-        font-size: 14px;
-        border: 1px solid var(--border);
-        border-radius: 9px;
+        top: 0; left: 0; right: 0; bottom: 0;
         background: var(--surface2);
-        color: var(--text);
-        font-family: inherit;
-        -webkit-appearance: none
-    }
-
-    .field input:focus, .field select:focus, .field textarea:focus {
-        outline: none;
-        border-color: var(--accent);
-        background: #2a2f45
-    }
-
-    .field select option { background: var(--surface2); color: var(--text) }
-
-    .field textarea { resize: vertical; min-height: 80px; line-height: 1.5 }
-
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
-    .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px }
-
-    .generate-btn {
-        width: 100%;
-        padding: 10px;
-        background: transparent;
         border: 1px solid var(--border);
-        border-radius: 9px;
-        font-size: 14px;
-        cursor: pointer;
-        color: var(--accent);
-        font-weight: 500;
-        margin-bottom: 14px;
-        font-family: inherit;
-        transition: background .15s
+        border-radius: 26px;
+        transition: .2s
     }
-
-    .generate-btn:hover { background: var(--surface2) }
-    .generate-btn:disabled { color: var(--muted); cursor: not-allowed }
-
-    .msg-label {
-        font-size: 11px;
-        font-weight: 700;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: .06em;
-        margin-bottom: 6px;
-        margin-top: 14px
+    .switch-slider::before {
+        position: absolute;
+        content: "";
+        height: 20px; width: 20px;
+        left: 2px; bottom: 2px;
+        background: var(--muted);
+        border-radius: 50%;
+        transition: .2s
     }
+    .switch input:checked + .switch-slider { background: var(--accent); border-color: var(--accent) }
+    .switch input:checked + .switch-slider::before { background: #fff; transform: translateX(18px) }
 
-    .msg-label:first-of-type { margin-top: 0 }
-
-    .char-count { font-size: 11px; color: var(--muted); text-align: right; margin-top: 4px }
-    .char-count.over { color: var(--red) }
-
-    .followup-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-top: 14px
-    }
-
-    .followup-row input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent) }
-    .followup-row label { font-size: 13px; color: var(--muted); cursor: pointer }
-
-    .send-btn {
-        width: 100%;
-        padding: 13px;
-        background: var(--accent);
-        color: #fff;
-        border: none;
-        border-radius: 10px;
-        font-size: 15px;
-        font-weight: 600;
-        cursor: pointer;
-        margin-top: 4px;
-        font-family: inherit;
-        transition: opacity .15s
-    }
-
-    .send-btn:hover { opacity: .85 }
-    .send-btn:disabled { opacity: .4; cursor: not-allowed }
-
-    .status-msg {
-        margin-top: 14px;
-        padding: 12px 14px;
-        border-radius: 10px;
-        font-size: 13px;
-        line-height: 1.7;
-        display: none
-    }
-
-    .status-msg.success { background: #1a3a28; border: 1px solid #2a5a38; color: #6ee0a4; display: block }
-    .status-msg.error   { background: #3a1a1a; border: 1px solid #7a2a2a; color: #f8a0a0; display: block }
-    .status-msg.loading { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); display: block }
-
-    .edit-note { font-size: 12px; color: var(--muted); margin-top: 6px; font-style: italic }
-
-    .price-field label {
-        font-size: 11px;
-        color: var(--muted);
-        display: block;
-        margin-bottom: 4px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: .04em
-    }
-
-    .price-field input {
-        width: 100%;
-        padding: 8px 10px;
-        font-size: 14px;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        background: var(--card-bg);
-        color: var(--text);
-        font-family: inherit
-    }
-
-    .price-field input:focus { outline: none; border-color: var(--accent) }
-
-    /* ── Modals ── */
+    /* ── Modals (centered on desktop, slide-up on mobile) ── */
     .modal-overlay {
         display: none;
         position: fixed;
@@ -576,7 +582,7 @@
     .pricing-option {
         display: flex;
         align-items: center;
-        padding: 13px;
+        padding: 12px;
         border: 1px solid var(--border);
         border-radius: 10px;
         margin-bottom: 8px;
@@ -588,7 +594,6 @@
 
     .pricing-option:hover { border-color: var(--accent); background: rgba(124,106,245,.08) }
     .pricing-option.selected { border-color: var(--accent); background: rgba(124,106,245,.12) }
-
     .pricing-option-icon { font-size: 20px }
     .pricing-option-text { flex: 1 }
     .pricing-option-title { font-size: 14px; font-weight: 600 }
@@ -629,12 +634,7 @@
         transition: all .12s
     }
 
-    .format-toggle-btn.active {
-        background: var(--card-bg);
-        color: var(--accent);
-        border: 1px solid var(--border)
-    }
-
+    .format-toggle-btn.active { background: var(--card-bg); color: var(--accent); border: 1px solid var(--border) }
     .format-section { display: none }
     .format-section.show { display: block }
 
@@ -672,74 +672,83 @@
     .modal-send:hover { opacity: .85 }
     .modal-send:disabled { opacity: .4; cursor: not-allowed }
 
-    .answer-row { padding: 9px 0; border-bottom: 1px solid var(--border) }
-    .answer-row:last-child { border-bottom: none }
-    .answer-row .q { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px }
-    .answer-row .a { font-size: 14px; color: var(--text); line-height: 1.5; white-space: pre-wrap }
+    /* ── Edit modal fields ── */
+    .field { margin-bottom: 14px }
+    .field:last-child { margin-bottom: 0 }
+    .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em }
+    .field input, .field select, .field textarea { width: 100%; padding: 9px 12px; font-size: 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface2); color: var(--text); font-family: inherit; -webkit-appearance: none }
+    .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--accent); background: #2a2f45 }
+    .field select option { background: var(--surface2); color: var(--text) }
+    .field textarea { resize: vertical; min-height: 70px; line-height: 1.5 }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+    .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px }
 
-    .answers-loading { text-align: center; padding: 28px; color: var(--muted); font-size: 14px }
+    .price-field label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
+    .price-field input { width: 100%; padding: 8px 10px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); color: var(--text); font-family: inherit }
+    .price-field input:focus { outline: none; border-color: var(--accent) }
 
-    /* ── Toggle switch ── */
-    .switch {
-        position: relative;
-        display: inline-block;
-        width: 44px;
-        height: 26px;
-        flex-shrink: 0
-    }
+    /* ── New lead form ── */
+    .new-lead-inner { max-width: 680px; margin: 0 auto }
 
-    .switch input { opacity: 0; width: 0; height: 0 }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 14px }
 
-    .switch-slider {
-        position: absolute;
-        cursor: pointer;
-        top: 0; left: 0; right: 0; bottom: 0;
-        background: var(--surface2);
+    .section-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px }
+
+    .generate-btn {
+        width: 100%;
+        padding: 10px;
+        background: transparent;
         border: 1px solid var(--border);
-        border-radius: 26px;
-        transition: .2s
+        border-radius: 9px;
+        font-size: 14px;
+        cursor: pointer;
+        color: var(--accent);
+        font-weight: 500;
+        margin-bottom: 14px;
+        font-family: inherit;
+        transition: background .15s
     }
 
-    .switch-slider::before {
-        position: absolute;
-        content: "";
-        height: 20px;
-        width: 20px;
-        left: 2px;
-        bottom: 2px;
-        background: var(--muted);
-        border-radius: 50%;
-        transition: .2s
-    }
+    .generate-btn:hover { background: var(--surface2) }
+    .generate-btn:disabled { color: var(--muted); cursor: not-allowed }
 
-    .switch input:checked + .switch-slider { background: var(--accent); border-color: var(--accent) }
-    .switch input:checked + .switch-slider::before { background: #fff; transform: translateX(18px) }
+    .msg-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; margin-top: 14px }
+    .msg-label:first-of-type { margin-top: 0 }
 
-    /* ── Review mode row in topbar ── */
-    .review-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 12px;
-        color: var(--muted)
-    }
+    .char-count { font-size: 11px; color: var(--muted); text-align: right; margin-top: 4px }
+    .char-count.over { color: var(--red) }
 
-    /* ── Scrollbar ── */
-    .kanban-board::-webkit-scrollbar { height: 6px }
-    .kanban-board::-webkit-scrollbar-track { background: transparent }
-    .kanban-board::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px }
+    .followup-row { display: flex; align-items: center; gap: 10px; margin-top: 14px }
+    .followup-row input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent) }
+    .followup-row label { font-size: 13px; color: var(--muted); cursor: pointer }
 
-    .col-cards::-webkit-scrollbar { width: 4px }
-    .col-cards::-webkit-scrollbar-track { background: transparent }
-    .col-cards::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px }
+    .send-btn { width: 100%; padding: 13px; background: var(--accent); color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 4px; font-family: inherit; transition: opacity .15s }
+    .send-btn:hover { opacity: .85 }
+    .send-btn:disabled { opacity: .4; cursor: not-allowed }
 
-    /* ── Mobile ── */
+    .status-msg { margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-size: 13px; line-height: 1.7; display: none }
+    .status-msg.success { background: #1a3a28; border: 1px solid #2a5a38; color: #6ee0a4; display: block }
+    .status-msg.error   { background: #3a1a1a; border: 1px solid #7a2a2a; color: #f8a0a0; display: block }
+    .status-msg.loading { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); display: block }
+
+    .edit-note { font-size: 12px; color: var(--muted); margin-top: 6px; font-style: italic }
+
+    /* ── MOBILE: hide detail pane, show as push screen ── */
     @media (max-width: 700px) {
-        .topbar { padding: 0 14px; gap: 10px }
+        .list-pane { width: 100%; border-right: none }
+        .detail-pane {
+            position: fixed;
+            top: 52px; left: 0; right: 0; bottom: 0;
+            background: var(--bg);
+            z-index: 30;
+            transform: translateX(100%);
+            transition: transform .28s cubic-bezier(.4,0,.2,1)
+        }
+        .detail-pane.open { transform: translateX(0) }
+        .detail-back-btn { display: flex }
         .review-row { display: none }
-        .kanban-board { padding: 14px 12px 20px }
-        .kanban-col { width: 230px }
-        #new-lead-view { padding: 14px }
+        #new-lead-shell { padding: 14px }
+        .topbar { padding: 0 14px }
     }
     </style>
 </head>
@@ -747,151 +756,165 @@
 
 <!-- Topbar -->
 <div class="topbar">
-    <div class="topbar-brand">&#10022; Shine <span>/ Pipeline</span></div>
+    <div class="topbar-brand">&#10022; Shine <span>/ Booking</span></div>
     <div class="topbar-tabs">
-        <button class="ttab active" onclick="showView('dashboard')">Pipeline</button>
+        <button class="ttab active" onclick="showView('pipeline')">Leads</button>
         <button class="ttab" onclick="messagingExistingClientId=null;showView('new-lead')">+ New Lead</button>
     </div>
     <div class="topbar-spacer"></div>
     <div class="review-row">
-        <span id="review-toggle-desc">Auto-send on</span>
+        <span id="review-toggle-desc">Auto-send</span>
         <label class="switch">
             <input type="checkbox" id="review-mode-toggle" onchange="onReviewModeToggle()">
             <span class="switch-slider"></span>
         </label>
     </div>
-    <button class="topbar-refresh" onclick="loadPipeline();loadPendingReplies();">&#8635;</button>
+    <button class="topbar-icon-btn" onclick="loadLeads();loadPendingReplies();">&#8635;</button>
 </div>
 
-<!-- Pending replies banner -->
-<div class="pending-banner" id="pending-banner">
-    <div class="pending-banner-title">&#9888; Pending replies</div>
-    <div class="pending-list-row" id="pending-list"></div>
-</div>
+<!-- Shell -->
+<div class="shell">
 
-<!-- Dashboard view: Kanban board -->
-<div id="dashboard-view">
-    <div class="kanban-board" id="kanban-board">
-        <!-- columns injected by JS -->
-    </div>
-</div>
+    <!-- Pipeline shell -->
+    <div id="pipeline-shell">
 
-<!-- New lead view -->
-<div id="new-lead-view">
-<div class="new-lead-inner">
-    <div class="card">
-        <div class="section-label">Quick fill from screenshot</div>
-        <p style="font-size:13px;color:var(--muted);margin:0 0 10px 0">Upload screenshots from Bark, GigSalad, or another platform — the assistant will fill in what it finds.</p>
-        <input type="file" id="lead-screenshot-input" accept="image/*" multiple style="display:none" onchange="handleScreenshotUpload(this.files)">
-        <button class="generate-btn" id="upload-screenshot-btn" onclick="document.getElementById('lead-screenshot-input').click()">Upload screenshot(s)</button>
-        <div id="screenshot-status" style="font-size:13px;color:var(--muted);margin-top:8px;display:none"></div>
-    </div>
-
-    <div class="card">
-        <div class="section-label">Client details</div>
-        <div class="field">
-            <label>Client name</label>
-            <input type="text" id="name" placeholder="e.g. Abigail">
+        <!-- Pending replies banner -->
+        <div id="pending-banner" class="pending-banner" style="position:absolute;top:0;left:0;right:0;z-index:5;display:none">
+            <div class="pending-banner-title">&#9888; Pending replies</div>
+            <div class="pending-cards-row" id="pending-list"></div>
         </div>
-        <div class="two-col">
-            <div class="field">
-                <label>Phone</label>
-                <input type="tel" id="phone" placeholder="(909) 283-2141">
+
+        <!-- List pane -->
+        <div class="list-pane" id="list-pane">
+            <div class="list-pane-header">
+                <div class="list-pane-title">
+                    All leads
+                    <span class="lead-count-badge" id="lead-count">—</span>
+                </div>
+                <div class="filter-row" id="filter-row">
+                    <button class="filter-pill active" data-filter="all" onclick="setFilter('all')">All</button>
+                    <button class="filter-pill" data-filter="new,chatting" onclick="setFilter('new,chatting')">New</button>
+                    <button class="filter-pill" data-filter="pricing_requested,pricing_sent" onclick="setFilter('pricing_requested,pricing_sent')">Pricing</button>
+                    <button class="filter-pill" data-filter="package_selected,booked,intake_sent,intake_completed" onclick="setFilter('package_selected,booked,intake_sent,intake_completed')">Booked</button>
+                    <button class="filter-pill" data-filter="contract_sent,contract_signed" onclick="setFilter('contract_sent,contract_signed')">Contract</button>
+                    <button class="filter-pill" data-filter="lost" onclick="setFilter('lost')">Lost</button>
+                </div>
             </div>
-            <div class="field">
-                <label>Email</label>
-                <input type="email" id="email" placeholder="abigail@gmail.com">
+            <div class="lead-list" id="lead-list">
+                <div class="list-empty">Loading…</div>
             </div>
         </div>
-        <div class="field">
-            <label>Lead source</label>
-            <select id="lead_source" onchange="toggleOtherSource()">
-                <option value="Bark">Bark</option>
-                <option value="GigSalad">GigSalad</option>
-                <option value="TheBash">TheBash</option>
-                <option value="Website">Website</option>
-                <option value="Referral">Referral</option>
-                <option value="Other">Other</option>
-            </select>
+
+        <!-- Detail pane -->
+        <div class="detail-pane" id="detail-pane">
+            <button class="detail-back-btn" onclick="closeDetail()">&#8592; All leads</button>
+            <div id="detail-body">
+                <div class="detail-placeholder">
+                    <div class="detail-placeholder-icon">&#128100;</div>
+                    <div class="detail-placeholder-text">Select a lead to see details</div>
+                </div>
+            </div>
         </div>
-        <div class="field" id="other-source-field" style="display:none">
-            <label>Source name</label>
-            <input type="text" id="other_source_name" placeholder="e.g. Instagram, friend...">
-        </div>
+
     </div>
 
-    <div class="card">
-        <div class="section-label">Event details</div>
-        <div class="field">
-            <label>Event type</label>
-            <select id="event_type">
-                <option value="">Select event type</option>
-                <option value="Birthday party">Birthday party</option>
-                <option value="Bachelorette party">Bachelorette party</option>
-                <option value="Bachelor party">Bachelor party</option>
-                <option value="Corporate event">Corporate event</option>
-                <option value="Graduation">Graduation</option>
-                <option value="Baby Shower">Baby Shower</option>
-                <option value="Private celebration">Private celebration</option>
-                <option value="Anniversary">Anniversary</option>
-                <option value="Other">Other</option>
-            </select>
+    <!-- New lead shell -->
+    <div id="new-lead-shell">
+    <div class="new-lead-inner">
+        <div class="card">
+            <div class="section-label">Quick fill from screenshot</div>
+            <p style="font-size:13px;color:var(--muted);margin:0 0 10px 0">Upload screenshots from Bark, GigSalad, or another platform.</p>
+            <input type="file" id="lead-screenshot-input" accept="image/*" multiple style="display:none" onchange="handleScreenshotUpload(this.files)">
+            <button class="generate-btn" id="upload-screenshot-btn" onclick="document.getElementById('lead-screenshot-input').click()">Upload screenshot(s)</button>
+            <div id="screenshot-status" style="font-size:13px;color:var(--muted);margin-top:8px;display:none"></div>
         </div>
-        <div class="two-col">
-            <div class="field">
-                <label>Event date</label>
-                <input type="date" id="date">
+
+        <div class="card">
+            <div class="section-label">Client details</div>
+            <div class="field"><label>Client name</label><input type="text" id="name" placeholder="e.g. Abigail"></div>
+            <div class="two-col">
+                <div class="field"><label>Phone</label><input type="tel" id="phone" placeholder="(909) 283-2141"></div>
+                <div class="field"><label>Email</label><input type="email" id="email" placeholder="abigail@gmail.com"></div>
             </div>
             <div class="field">
-                <label>Guests</label>
-                <select id="guests">
-                    <option value="">How many?</option>
-                    <option value="Under 10">Under 10</option>
-                    <option value="10-25">10-25</option>
-                    <option value="25-50">25-50</option>
-                    <option value="50-100">50-100</option>
-                    <option value="100+">100+</option>
+                <label>Lead source</label>
+                <select id="lead_source" onchange="toggleOtherSource()">
+                    <option value="Bark">Bark</option>
+                    <option value="GigSalad">GigSalad</option>
+                    <option value="TheBash">TheBash</option>
+                    <option value="Website">Website</option>
+                    <option value="Referral">Referral</option>
+                    <option value="Other">Other</option>
                 </select>
             </div>
-        </div>
-        <div class="field">
-            <label>Venue</label>
-            <input type="text" id="venue" placeholder="e.g. Home, hotel ballroom...">
-        </div>
-        <div class="field">
-            <label>Other entertainment?</label>
-            <input type="text" id="other_entertainment" placeholder="e.g. DJ, photo booth, none...">
-        </div>
-        <div class="field">
-            <label>Notes (optional)</label>
-            <textarea id="notes" placeholder="e.g. Surprise party, evening event..."></textarea>
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="section-label">Preview and edit messages</div>
-        <button class="generate-btn" onclick="generateMessages()" id="gen-btn">Generate AI messages</button>
-        <div id="messages-area" style="display:none">
-            <div class="msg-label">SMS message</div>
-            <div class="field"><textarea id="sms-text" rows="3" oninput="updateCharCount()"></textarea></div>
-            <div class="char-count" id="char-count">0 / 160 characters</div>
-            <div class="msg-label" style="margin-top:16px">Email subject</div>
-            <div class="field"><input type="text" id="email-subject"></div>
-            <div class="msg-label">Email body</div>
-            <div class="field"><textarea id="email-body" rows="8"></textarea></div>
-            <p class="edit-note">Edit any message above before sending.</p>
-            <div class="followup-row">
-                <input type="checkbox" id="followup" checked>
-                <label for="followup">Auto follow-up if no reply in 24 hours</label>
+            <div class="field" id="other-source-field" style="display:none">
+                <label>Source name</label>
+                <input type="text" id="other_source_name" placeholder="e.g. Instagram, friend...">
             </div>
         </div>
+
+        <div class="card">
+            <div class="section-label">Event details</div>
+            <div class="field">
+                <label>Event type</label>
+                <select id="event_type">
+                    <option value="">Select event type</option>
+                    <option value="Birthday party">Birthday party</option>
+                    <option value="Bachelorette party">Bachelorette party</option>
+                    <option value="Bachelor party">Bachelor party</option>
+                    <option value="Corporate event">Corporate event</option>
+                    <option value="Graduation">Graduation</option>
+                    <option value="Baby Shower">Baby Shower</option>
+                    <option value="Private celebration">Private celebration</option>
+                    <option value="Anniversary">Anniversary</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div class="two-col">
+                <div class="field"><label>Event date</label><input type="date" id="date"></div>
+                <div class="field">
+                    <label>Guests</label>
+                    <select id="guests">
+                        <option value="">How many?</option>
+                        <option value="Under 10">Under 10</option>
+                        <option value="10-25">10-25</option>
+                        <option value="25-50">25-50</option>
+                        <option value="50-100">50-100</option>
+                        <option value="100+">100+</option>
+                    </select>
+                </div>
+            </div>
+            <div class="field"><label>Venue</label><input type="text" id="venue" placeholder="e.g. Home, hotel ballroom..."></div>
+            <div class="field"><label>Other entertainment?</label><input type="text" id="other_entertainment" placeholder="e.g. DJ, photo booth, none..."></div>
+            <div class="field"><label>Notes (optional)</label><textarea id="notes" placeholder="e.g. Surprise party, evening event..."></textarea></div>
+        </div>
+
+        <div class="card">
+            <div class="section-label">Preview and edit messages</div>
+            <button class="generate-btn" onclick="generateMessages()" id="gen-btn">Generate AI messages</button>
+            <div id="messages-area" style="display:none">
+                <div class="msg-label">SMS message</div>
+                <div class="field"><textarea id="sms-text" rows="3" oninput="updateCharCount()"></textarea></div>
+                <div class="char-count" id="char-count">0 / 160 characters</div>
+                <div class="msg-label" style="margin-top:16px">Email subject</div>
+                <div class="field"><input type="text" id="email-subject"></div>
+                <div class="msg-label">Email body</div>
+                <div class="field"><textarea id="email-body" rows="8"></textarea></div>
+                <p class="edit-note">Edit any message above before sending.</p>
+                <div class="followup-row">
+                    <input type="checkbox" id="followup" checked>
+                    <label for="followup">Auto follow-up if no reply in 24 hours</label>
+                </div>
+            </div>
+        </div>
+
+        <button class="send-btn" onclick="sendMessages()" id="send-btn" disabled>Send messages</button>
+        <button class="generate-btn" onclick="saveLeadOnly()" id="save-lead-btn" style="margin-top:10px">Save lead (no message yet)</button>
+        <div class="status-msg" id="status"></div>
+    </div>
     </div>
 
-    <button class="send-btn" onclick="sendMessages()" id="send-btn" disabled>Send messages</button>
-    <button class="generate-btn" onclick="saveLeadOnly()" id="save-lead-btn" style="margin-top:10px">Save lead (no message yet)</button>
-    <div class="status-msg" id="status"></div>
-</div>
-</div>
+</div><!-- /.shell -->
 
 <!-- Pricing modal -->
 <div class="modal-overlay" id="pricing-modal">
@@ -905,17 +928,11 @@
         <div class="format-section show" id="format-section-stage">
             <div class="pricing-option" onclick="selectPricingOption('private-standard')" id="opt-private-standard">
                 <div class="pricing-option-icon">&#127874;</div>
-                <div class="pricing-option-text">
-                    <div class="pricing-option-title">Private — Standard</div>
-                    <div class="pricing-option-desc">Deluxe $400 · Signature $500 · Premium $600</div>
-                </div>
+                <div class="pricing-option-text"><div class="pricing-option-title">Private — Standard</div><div class="pricing-option-desc">Deluxe $400 · Signature $500 · Premium $600</div></div>
             </div>
             <div class="pricing-option" onclick="selectPricingOption('private-custom')" id="opt-private-custom">
                 <div class="pricing-option-icon">&#10024;</div>
-                <div class="pricing-option-text">
-                    <div class="pricing-option-title">Private — Custom pricing</div>
-                    <div class="pricing-option-desc">Set your own prices for this client</div>
-                </div>
+                <div class="pricing-option-text"><div class="pricing-option-title">Private — Custom pricing</div><div class="pricing-option-desc">Set your own prices for this client</div></div>
             </div>
             <div class="custom-price-inputs" id="private-custom-inputs">
                 <div class="three-col">
@@ -926,17 +943,11 @@
             </div>
             <div class="pricing-option" onclick="selectPricingOption('corporate-standard')" id="opt-corporate-standard">
                 <div class="pricing-option-icon">&#127970;</div>
-                <div class="pricing-option-text">
-                    <div class="pricing-option-title">Corporate — Standard</div>
-                    <div class="pricing-option-desc">Deluxe $1,000 · Signature $1,200 · Premium $1,500</div>
-                </div>
+                <div class="pricing-option-text"><div class="pricing-option-title">Corporate — Standard</div><div class="pricing-option-desc">Deluxe $1,000 · Signature $1,200 · Premium $1,500</div></div>
             </div>
             <div class="pricing-option" onclick="selectPricingOption('corporate-custom')" id="opt-corporate-custom">
                 <div class="pricing-option-icon">&#128188;</div>
-                <div class="pricing-option-text">
-                    <div class="pricing-option-title">Corporate — Custom pricing</div>
-                    <div class="pricing-option-desc">Set your own prices for this client</div>
-                </div>
+                <div class="pricing-option-text"><div class="pricing-option-title">Corporate — Custom pricing</div><div class="pricing-option-desc">Set your own prices for this client</div></div>
             </div>
             <div class="custom-price-inputs" id="corporate-custom-inputs">
                 <div class="three-col">
@@ -949,17 +960,11 @@
         <div class="format-section" id="format-section-strolling">
             <div class="pricing-option" onclick="selectPricingOption('strolling-private-standard')" id="opt-strolling-private-standard">
                 <div class="pricing-option-icon">&#127874;</div>
-                <div class="pricing-option-text">
-                    <div class="pricing-option-title">Private — Standard</div>
-                    <div class="pricing-option-desc">$400/hr · +$200 Grand Finale</div>
-                </div>
+                <div class="pricing-option-text"><div class="pricing-option-title">Private — Standard</div><div class="pricing-option-desc">$400/hr · +$200 Grand Finale</div></div>
             </div>
             <div class="pricing-option" onclick="selectPricingOption('strolling-private-custom')" id="opt-strolling-private-custom">
                 <div class="pricing-option-icon">&#10024;</div>
-                <div class="pricing-option-text">
-                    <div class="pricing-option-title">Private — Custom</div>
-                    <div class="pricing-option-desc">Set your own strolling rates</div>
-                </div>
+                <div class="pricing-option-text"><div class="pricing-option-title">Private — Custom</div><div class="pricing-option-desc">Set your own strolling rates</div></div>
             </div>
             <div class="custom-price-inputs" id="strolling-private-custom-inputs">
                 <div class="two-col">
@@ -969,17 +974,11 @@
             </div>
             <div class="pricing-option" onclick="selectPricingOption('strolling-corporate-standard')" id="opt-strolling-corporate-standard">
                 <div class="pricing-option-icon">&#127970;</div>
-                <div class="pricing-option-text">
-                    <div class="pricing-option-title">Corporate — Standard</div>
-                    <div class="pricing-option-desc">$1,000/hr · +$300 Grand Finale</div>
-                </div>
+                <div class="pricing-option-text"><div class="pricing-option-title">Corporate — Standard</div><div class="pricing-option-desc">$1,000/hr · +$300 Grand Finale</div></div>
             </div>
             <div class="pricing-option" onclick="selectPricingOption('strolling-corporate-custom')" id="opt-strolling-corporate-custom">
                 <div class="pricing-option-icon">&#128188;</div>
-                <div class="pricing-option-text">
-                    <div class="pricing-option-title">Corporate — Custom</div>
-                    <div class="pricing-option-desc">Set your own strolling rates</div>
-                </div>
+                <div class="pricing-option-text"><div class="pricing-option-title">Corporate — Custom</div><div class="pricing-option-desc">Set your own strolling rates</div></div>
             </div>
             <div class="custom-price-inputs" id="strolling-corporate-custom-inputs">
                 <div class="two-col">
@@ -1014,32 +1013,6 @@
             <button class="modal-cancel" onclick="closeContractModal()">Cancel</button>
             <button class="modal-send" id="contract-send-btn" onclick="sendContract()">Send contract</button>
         </div>
-    </div>
-</div>
-
-<!-- Answers modal -->
-<div class="modal-overlay" id="answers-modal">
-    <div class="modal">
-        <h2>Event questionnaire</h2>
-        <p id="answers-modal-subtitle">Loading...</p>
-        <div id="answers-content"></div>
-        <div class="modal-actions">
-            <button class="modal-cancel" style="flex:1" onclick="closeAnswersModal()">Close</button>
-        </div>
-    </div>
-</div>
-
-<!-- View modal -->
-<div class="modal-overlay" id="view-modal">
-    <div class="modal">
-        <h2 id="view-name">Client details</h2>
-        <p id="view-status-line" style="color:var(--muted);font-size:14px;margin-top:-4px"></p>
-        <div id="view-content" style="margin-top:10px"></div>
-        <div class="modal-actions">
-            <button class="modal-cancel" onclick="deleteClientFromView()">Delete</button>
-            <button class="modal-send" onclick="editFromView()">Edit</button>
-        </div>
-        <button class="generate-btn" id="view-message-btn" style="margin-top:10px;display:none" onclick="messageClientFromView()">Generate &amp; send first message</button>
     </div>
 </div>
 
@@ -1101,47 +1074,57 @@ var currentClientId = null;
 var selectedPricingOption = null;
 var modalClient = {};
 var messagingExistingClientId = null;
-
-/* Pipeline column definitions */
-var PIPELINE = [
-    { cls: 'col-new',    label: 'New',              statuses: ['new', 'chatting'] },
-    { cls: 'col-price',  label: 'Pricing',          statuses: ['pricing_requested', 'pricing_sent'] },
-    { cls: 'col-sel',    label: 'Package Selected', statuses: ['package_selected'] },
-    { cls: 'col-booked', label: 'Booked',           statuses: ['booked', 'intake_sent', 'intake_completed'] },
-    { cls: 'col-cont',   label: 'Contract',         statuses: ['contract_sent', 'contract_signed'] },
-    { cls: 'col-lost',   label: 'Lost',             statuses: ['lost'] }
-];
+var allClients = [];
+var activeFilter = 'all';
+var activeClientId = null;
 
 var STATUS_LABELS = {
-    new: 'New',
-    chatting: 'Chatting',
-    pricing_requested: 'Pricing requested',
-    pricing_sent: 'Pricing sent',
-    package_selected: 'Package selected',
-    booked: 'Booked',
-    intake_sent: 'Intake sent',
-    intake_completed: 'Ready for contract',
-    contract_sent: 'Contract sent',
-    contract_signed: 'Contract signed',
+    new: 'New', chatting: 'Chatting',
+    pricing_requested: 'Pricing requested', pricing_sent: 'Pricing sent',
+    package_selected: 'Package selected', booked: 'Booked',
+    intake_sent: 'Intake sent', intake_completed: 'Ready for contract',
+    contract_sent: 'Contract sent', contract_signed: 'Contract signed',
     lost: 'Lost'
 };
 
+var QUESTION_LABELS = {
+    q_honoree: 'Guest of Honour', q_honoree_dob: 'Date of Birth',
+    q_trivia: 'Trivia / Personal Details', q_vips: 'VIP Guests',
+    q_crowd: 'Crowd Type', q_vibe: 'Show Vibe', q_guests: 'Guest Count',
+    q_address: 'Venue Address', q_indoor_outdoor: 'Indoor / Outdoor',
+    q_power: 'Power Available', q_clear_area: 'Clear Area',
+    q_exclude: 'Exclusions / Sensitivities', q_event_date: 'Event Date',
+    q_start_time: 'Start Time', q_photo_honoree: 'Photo of Honouree'
+};
+
+/* ── View switching ── */
 function showView(view) {
-    document.getElementById('dashboard-view').style.display = view === 'dashboard' ? 'flex' : 'none';
-    document.getElementById('new-lead-view').style.display  = view === 'new-lead'   ? 'block' : 'none';
+    document.getElementById('pipeline-shell').style.display  = view === 'pipeline'  ? 'flex'  : 'none';
+    document.getElementById('new-lead-shell').style.display  = view === 'new-lead'  ? 'block' : 'none';
     document.querySelectorAll('.ttab').forEach(function(t) { t.classList.remove('active'); });
     document.querySelectorAll('.ttab').forEach(function(t) {
-        if ((view === 'dashboard' && t.textContent.trim() === 'Pipeline') ||
-            (view === 'new-lead'  && t.textContent.trim() === '+ New Lead'))
+        if ((view === 'pipeline' && t.textContent.trim() === 'Leads') ||
+            (view === 'new-lead' && t.textContent.trim() === '+ New Lead'))
             t.classList.add('active');
     });
-    if (view === 'dashboard') {
-        loadPipeline();
-        loadReviewModeState();
-        loadPendingReplies();
-    }
+    if (view === 'pipeline') { loadLeads(); loadReviewModeState(); loadPendingReplies(); }
 }
 
+/* ── Filter ── */
+function setFilter(filter) {
+    activeFilter = filter;
+    document.querySelectorAll('.filter-pill').forEach(function(p) {
+        p.classList.toggle('active', p.dataset.filter === filter);
+    });
+    renderList();
+}
+
+function matchesFilter(client) {
+    if (activeFilter === 'all') return true;
+    return activeFilter.split(',').indexOf(client.status) !== -1;
+}
+
+/* ── Time helpers ── */
 function getTimeAgo(ts) {
     if (!ts) return '';
     var diff = Date.now() - new Date(ts).getTime();
@@ -1155,85 +1138,184 @@ function getTimeAgo(ts) {
 
 function fmtDate(d) {
     if (!d) return '';
-    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function cardActions(c) {
-    var btns = '';
-    if (c.status === 'pricing_requested') {
-        btns += '<button class="k-btn primary" onclick="event.stopPropagation();openPricingModal(\'' + c.id + '\',\'' + esc(c.name) + '\',\'' + esc(c.phone||'') + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.last_channel||'email') + '\')">Send pricing</button>';
-    }
-    if (c.status === 'package_selected' || c.status === 'booked' || c.status === 'intake_sent') {
-        var label = c.status === 'package_selected' ? 'Send questionnaire' : 'Resend intake';
-        btns += '<button class="k-btn blue" onclick="event.stopPropagation();sendIntakeForm(\'' + c.id + '\',\'' + esc(c.name) + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.selected_category||'') + '\',' + (c.selected_price||0) + ')">' + label + '</button>';
-    }
-    if (c.status === 'intake_completed') {
-        btns += '<button class="k-btn primary" onclick="event.stopPropagation();openContractModal(\'' + c.id + '\',\'' + esc(c.name) + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.booking_id||'') + '\')">Send contract</button>';
-    }
-    if (c.booking_id && ['intake_completed','contract_sent','contract_signed'].indexOf(c.status) !== -1) {
-        btns += '<button class="k-btn purple" onclick="event.stopPropagation();openAnswersModal(\'' + c.booking_id + '\')">Answers</button>';
-    }
-    btns += '<button class="k-btn ghost" onclick="event.stopPropagation();openEditModal(\'' + c.id + '\')">Edit</button>';
-    return btns;
+function fmtDateLong(d) {
+    if (!d) return '';
+    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-function esc(s) {
-    return String(s||'').replace(/'/g, "\\'");
+function escHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
 }
 
-function buildCard(c) {
-    var meta = [];
-    if (c.event_type) meta.push(c.event_type);
-    if (c.event_date) meta.push(fmtDate(c.event_date));
-    if (c.guests) meta.push(c.guests + ' guests');
-    var statusLabel = STATUS_LABELS[c.status] || c.status;
-    var sourceHtml = c.lead_source ? '<span class="k-badge" style="background:rgba(136,146,176,.12);color:var(--muted)">' + c.lead_source + '</span>' : '';
-    var pkgHtml = c.selected_package ? '<span class="k-badge" style="background:rgba(76,175,135,.12);color:var(--green)">' + c.selected_package + '</span>' : '';
-    return '<div class="k-card" onclick="openViewModal(\'' + c.id + '\')">' +
-        '<div class="k-name">' + escHtml(c.name) + '</div>' +
-        (meta.length ? '<div class="k-meta">' + meta.join(' · ') + '</div>' : '') +
-        '<div class="k-badges">' + sourceHtml + pkgHtml + '</div>' +
-        '<div class="k-actions">' + cardActions(c) + '</div>' +
-        '<div class="k-time">' + getTimeAgo(c.last_activity) + ' · ' + statusLabel + '</div>' +
-        '</div>';
-}
+function esc(s) { return String(s||'').replace(/'/g,"\\'"); }
 
-function loadPipeline() {
-    var board = document.getElementById('kanban-board');
-    board.innerHTML = PIPELINE.map(function(col) {
-        return '<div class="kanban-col ' + col.cls + '" id="col-' + col.cls + '">' +
-            '<div class="col-header">' +
-            '<div class="col-accent-dot"></div>' +
-            '<div class="col-title">' + col.label + '</div>' +
-            '<div class="col-count" id="cnt-' + col.cls + '">—</div>' +
-            '</div>' +
-            '<div class="col-cards" id="cards-' + col.cls + '"><div class="col-empty">Loading…</div></div>' +
-            '</div>';
-    }).join('');
-
+/* ── Load & render list ── */
+function loadLeads() {
+    document.getElementById('lead-list').innerHTML = '<div class="list-empty">Loading…</div>';
     fetch(SUPABASE_URL + '/rest/v1/clients?select=*&order=last_activity.desc', {
         headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
     })
     .then(function(r) { return r.json(); })
     .then(function(clients) {
-        PIPELINE.forEach(function(col) {
-            var colClients = clients.filter(function(c) {
-                return col.statuses.indexOf(c.status) !== -1;
-            });
-            var countEl = document.getElementById('cnt-' + col.cls);
-            var cardsEl = document.getElementById('cards-' + col.cls);
-            countEl.textContent = colClients.length;
-            if (colClients.length > 0) countEl.classList.add('has-cards');
-            cardsEl.innerHTML = colClients.length
-                ? colClients.map(buildCard).join('')
-                : '<div class="col-empty">Empty</div>';
-        });
+        allClients = clients;
+        renderList();
+        if (activeClientId) {
+            var c = clients.find(function(x) { return x.id === activeClientId; });
+            if (c) renderDetail(c);
+        }
     })
     .catch(function(e) {
-        board.innerHTML = '<div style="padding:40px;color:var(--red)">Error: ' + e.message + '</div>';
+        document.getElementById('lead-list').innerHTML = '<div class="list-empty" style="color:var(--red)">Error: ' + e.message + '</div>';
     });
 }
 
+function renderList() {
+    var filtered = allClients.filter(matchesFilter);
+    document.getElementById('lead-count').textContent = filtered.length;
+    if (!filtered.length) {
+        document.getElementById('lead-list').innerHTML = '<div class="list-empty">No leads here</div>';
+        return;
+    }
+    document.getElementById('lead-list').innerHTML = filtered.map(function(c) {
+        var meta = [];
+        if (c.event_type) meta.push(c.event_type);
+        if (c.event_date) meta.push(fmtDate(c.event_date));
+        var statusLabel = STATUS_LABELS[c.status] || c.status;
+        var isSelected = c.id === activeClientId;
+        return '<div class="lead-row' + (isSelected ? ' selected' : '') + '" onclick="selectLead(\'' + c.id + '\')">' +
+            '<div class="lead-row-dot s-' + c.status + '"></div>' +
+            '<div class="lead-row-body">' +
+            '<div class="lead-row-top">' +
+            '<div class="lead-row-name">' + escHtml(c.name) + '</div>' +
+            '<div class="lead-row-time">' + getTimeAgo(c.last_activity) + '</div>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:6px">' +
+            (meta.length ? '<div class="lead-row-meta">' + meta.join(' · ') + '</div>' : '') +
+            '<span class="lead-row-status badge-' + c.status + '">' + statusLabel + '</span>' +
+            '</div>' +
+            '</div></div>';
+    }).join('');
+}
+
+function selectLead(id) {
+    activeClientId = id;
+    var c = allClients.find(function(x) { return x.id === id; });
+    if (!c) return;
+    document.querySelectorAll('.lead-row').forEach(function(r) { r.classList.remove('selected'); });
+    var row = document.querySelector('.lead-row[onclick*="\'' + id + '\'"]');
+    if (row) row.classList.add('selected');
+    renderDetail(c);
+    document.getElementById('detail-pane').classList.add('open');
+}
+
+function closeDetail() {
+    document.getElementById('detail-pane').classList.remove('open');
+    activeClientId = null;
+    document.querySelectorAll('.lead-row').forEach(function(r) { r.classList.remove('selected'); });
+}
+
+function renderDetail(c) {
+    var statusLabel = STATUS_LABELS[c.status] || c.status;
+
+    /* Action buttons */
+    var actions = '';
+    if (c.status === 'pricing_requested') {
+        actions += '<button class="d-btn primary" onclick="openPricingModal(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\',\'' + esc(c.phone||'') + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.last_channel||'email') + '\')">Send pricing</button>';
+    }
+    if (['package_selected','booked','intake_sent'].indexOf(c.status) !== -1) {
+        var intakeLabel = c.status === 'package_selected' ? 'Send questionnaire' : 'Resend intake';
+        actions += '<button class="d-btn blue" onclick="sendIntakeForm(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.selected_category||'') + '\',' + (c.selected_price||0) + ')">' + intakeLabel + '</button>';
+    }
+    if (c.status === 'intake_completed') {
+        actions += '<button class="d-btn primary" onclick="openContractModal(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.booking_id||'') + '\')">Send contract</button>';
+    }
+    if (c.booking_id && ['intake_completed','contract_sent','contract_signed'].indexOf(c.status) !== -1) {
+        actions += '<button class="d-btn purple" onclick="loadAndShowAnswers(\'' + esc(c.booking_id) + '\')">View answers</button>';
+    }
+    actions += '<button class="d-btn ghost" onclick="openEditModal(\'' + esc(c.id) + '\')">Edit</button>';
+    actions += '<button class="d-btn danger" onclick="deleteClient(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\')">Delete</button>';
+
+    /* Package banner */
+    var pkgHtml = '';
+    if (c.selected_package) {
+        pkgHtml = '<div class="pkg-banner"><div class="pkg-banner-icon">&#10003;</div>' +
+            '<div class="pkg-banner-text">' + (c.selected_category === 'corporate' ? 'Corporate' : 'Private') + ' — ' + escHtml(c.selected_package) + ' ($' + c.selected_price + ')</div></div>';
+    }
+
+    /* Fields */
+    var fields = [];
+    if (c.phone)    fields.push({ label: 'Phone', value: c.phone });
+    if (c.email)    fields.push({ label: 'Email', value: c.email });
+    if (c.event_type) fields.push({ label: 'Event type', value: c.event_type });
+    if (c.event_date) fields.push({ label: 'Event date', value: fmtDateLong(c.event_date) });
+    if (c.guests)   fields.push({ label: 'Guests', value: c.guests });
+    if (c.venue)    fields.push({ label: 'Venue', value: c.venue, full: true });
+    if (c.lead_source) fields.push({ label: 'Source', value: c.lead_source });
+    if (c.other_entertainment) fields.push({ label: 'Other entertainment', value: c.other_entertainment });
+    if (c.notes && !c.notes.startsWith('Pricing link sent:') && !c.notes.startsWith('Contract sent:'))
+        fields.push({ label: 'Notes', value: c.notes, full: true });
+
+    var fieldsHtml = fields.map(function(f) {
+        return '<div class="detail-field' + (f.full ? ' full' : '') + '">' +
+            '<div class="label">' + f.label + '</div>' +
+            '<div class="value">' + escHtml(f.value) + '</div></div>';
+    }).join('');
+
+    document.getElementById('detail-body').innerHTML =
+        '<div class="detail-content">' +
+        '<div class="detail-header">' +
+        '<div class="detail-name">' + escHtml(c.name) + '</div>' +
+        '<div class="detail-status-row">' +
+        '<span class="detail-status-badge badge-' + c.status + '">' + statusLabel + '</span>' +
+        '<span class="detail-time">' + getTimeAgo(c.last_activity) + '</span>' +
+        '</div></div>' +
+        pkgHtml +
+        '<div class="detail-actions">' + actions + '</div>' +
+        (fields.length ? '<div class="detail-section-label">Details</div><div class="detail-grid">' + fieldsHtml + '</div>' : '') +
+        '<div id="answers-inline"></div>' +
+        '</div>';
+
+    /* Auto-load answers if available */
+    if (c.booking_id && ['intake_completed','contract_sent','contract_signed'].indexOf(c.status) !== -1) {
+        loadAnswersInline(c.booking_id);
+    }
+}
+
+function loadAnswersInline(bookingId) {
+    var el = document.getElementById('answers-inline');
+    if (!el) return;
+    el.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:10px 0">Loading questionnaire answers…</div>';
+    fetch(SUPABASE_URL + '/rest/v1/bookings?id=eq.' + bookingId + '&select=*', {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(rows) {
+        var b = rows[0] || {};
+        var answers = b.intake_answers || {};
+        var keys = Object.keys(answers).filter(function(k) { return answers[k] && String(answers[k]).trim(); });
+        if (!keys.length) { el.innerHTML = ''; return; }
+        el.innerHTML = '<div class="detail-section-label" style="margin-top:8px">Questionnaire answers</div>' +
+            '<div class="answers-section">' +
+            keys.map(function(k) {
+                var val = answers[k];
+                if (typeof val === 'object') val = JSON.stringify(val);
+                return '<div class="answer-row"><div class="q">' + (QUESTION_LABELS[k]||k) + '</div><div class="a">' + escHtml(String(val)) + '</div></div>';
+            }).join('') + '</div>';
+    })
+    .catch(function() { el.innerHTML = ''; });
+}
+
+function loadAndShowAnswers(bookingId) {
+    var el = document.getElementById('answers-inline');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+}
+
+/* ── Pending replies ── */
 function loadReviewModeState() {
     fetch('/api/pending-replies?action=settings')
     .then(function(r) { return r.json(); })
@@ -1245,29 +1327,25 @@ function loadReviewModeState() {
     .catch(function() {});
 }
 
-function updateReviewToggleDesc(reviewMode) {
-    document.getElementById('review-toggle-desc').textContent = reviewMode ? 'Review on' : 'Auto-send on';
+function updateReviewToggleDesc(on) {
+    document.getElementById('review-toggle-desc').textContent = on ? 'Review on' : 'Auto-send';
 }
 
 function onReviewModeToggle() {
     var toggle = document.getElementById('review-mode-toggle');
-    var newValue = toggle.checked;
+    var val = toggle.checked;
     toggle.disabled = true;
     fetch('/api/pending-replies', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'toggle', reviewMode: newValue })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggle', reviewMode: val })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.error) throw new Error(data.error);
-        updateReviewToggleDesc(newValue);
+        updateReviewToggleDesc(val);
         loadPendingReplies();
     })
-    .catch(function(e) {
-        alert('Error: ' + e.message);
-        toggle.checked = !newValue;
-    })
+    .catch(function(e) { alert('Error: ' + e.message); toggle.checked = !val; })
     .finally(function() { toggle.disabled = false; });
 }
 
@@ -1278,17 +1356,13 @@ function loadPendingReplies() {
         var banner = document.getElementById('pending-banner');
         var list   = document.getElementById('pending-list');
         var pending = data.pending || [];
-        if (!pending.length) {
-            banner.classList.remove('has-items');
-            list.innerHTML = '';
-            return;
-        }
-        banner.classList.add('has-items');
+        if (!pending.length) { banner.style.display = 'none'; list.innerHTML = ''; return; }
+        banner.style.display = 'block';
         list.innerHTML = pending.map(function(p) {
-            var channelLabel = p.channel === 'sms' ? 'SMS' : 'Email';
+            var ch = p.channel === 'sms' ? 'SMS' : 'Email';
             return '<div class="pending-card" id="pending-' + p.id + '">' +
-                '<div class="pending-header"><div class="pending-client">' + p.clientName + '</div>' +
-                '<div class="pending-channel">' + channelLabel + ' · ' + getTimeAgo(p.createdAt) + '</div></div>' +
+                '<div class="pending-header"><div class="pending-client">' + escHtml(p.clientName) + '</div>' +
+                '<div class="pending-channel">' + ch + ' · ' + getTimeAgo(p.createdAt) + '</div></div>' +
                 '<textarea class="pending-draft" id="pending-draft-' + p.id + '">' + escHtml(p.draft) + '</textarea>' +
                 '<div class="pending-actions">' +
                 '<button class="pending-discard" onclick="discardPendingReply(\'' + p.id + '\')">Discard</button>' +
@@ -1299,67 +1373,51 @@ function loadPendingReplies() {
     .catch(function() {});
 }
 
-function escHtml(str) {
-    var d = document.createElement('div');
-    d.textContent = str || '';
-    return d.innerHTML;
-}
-
 function approvePendingReply(id) {
-    var editedText = document.getElementById('pending-draft-' + id).value.trim();
-    if (!editedText) { alert('Reply text cannot be empty.'); return; }
+    var text = document.getElementById('pending-draft-' + id).value.trim();
+    if (!text) { alert('Reply text cannot be empty.'); return; }
     var card = document.getElementById('pending-' + id);
     card.querySelectorAll('button').forEach(function(b) { b.disabled = true; });
     fetch('/api/pending-replies', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approve', messageId: id, editedText: editedText })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve', messageId: id, editedText: text })
     })
     .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.error) throw new Error(data.error);
-        loadPendingReplies();
-    })
-    .catch(function(e) {
-        alert('Error: ' + e.message);
-        card.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
-    });
+    .then(function(d) { if (d.error) throw new Error(d.error); loadPendingReplies(); })
+    .catch(function(e) { alert('Error: ' + e.message); card.querySelectorAll('button').forEach(function(b) { b.disabled = false; }); });
 }
 
 function discardPendingReply(id) {
-    if (!confirm('Discard this draft without sending?')) return;
+    if (!confirm('Discard this draft?')) return;
     var card = document.getElementById('pending-' + id);
     card.querySelectorAll('button').forEach(function(b) { b.disabled = true; });
     fetch('/api/pending-replies', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'discard', messageId: id })
     })
     .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.error) throw new Error(data.error);
-        loadPendingReplies();
-    })
-    .catch(function(e) {
-        alert('Error: ' + e.message);
-        card.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
-    });
+    .then(function(d) { if (d.error) throw new Error(d.error); loadPendingReplies(); })
+    .catch(function(e) { alert('Error: ' + e.message); card.querySelectorAll('button').forEach(function(b) { b.disabled = false; }); });
 }
 
+/* ── Delete ── */
 function deleteClient(id, name) {
     if (!confirm('Delete ' + name + '? This cannot be undone.')) return;
     fetch('/api/delete-client', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId: id })
     })
     .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.error) throw new Error(data.error);
-        loadPipeline();
+    .then(function(d) {
+        if (d.error) throw new Error(d.error);
+        closeDetail();
+        loadLeads();
     })
     .catch(function(e) { alert('Error: ' + e.message); });
 }
+
+/* ── Pricing modal ── */
+var currentFormat = 'stage';
 
 function openPricingModal(id, name, phone, email, lastChannel) {
     currentClientId = id;
@@ -1375,247 +1433,8 @@ function openPricingModal(id, name, phone, email, lastChannel) {
 
 function closeModal() {
     document.getElementById('pricing-modal').classList.remove('show');
-    currentClientId = null;
-    selectedPricingOption = null;
+    currentClientId = null; selectedPricingOption = null;
 }
-
-var contractClient = {};
-
-function sendIntakeForm(id, name, email, eventType, price) {
-    if (!email) { alert('No email on file — intake form needs an email to send.'); return; }
-    if (!confirm('Send intake questionnaire to ' + name + '?')) return;
-    fetch('/api/send-intake', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: id, clientName: name, clientEmail: email, eventType: eventType, fee: price || null })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.error) throw new Error(data.error);
-        alert('Intake form sent to ' + name + '!');
-        loadPipeline();
-    })
-    .catch(function(e) { alert('Error: ' + e.message); });
-}
-
-function openContractModal(id, name, email, bookingId) {
-    contractClient = { id: id, name: name, email: email, bookingId: bookingId };
-    document.getElementById('contract-modal-client-name').textContent = 'Sending to ' + name;
-    if (bookingId) {
-        fetch(SUPABASE_URL + '/rest/v1/bookings?id=eq.' + bookingId + '&select=*', {
-            headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(rows) {
-            var b = rows[0] || {};
-            if (b.event_date)     document.getElementById('ct-date').value = b.event_date;
-            if (b.start_time)     document.getElementById('ct-start').value = b.start_time;
-            if (b.duration)       document.getElementById('ct-duration').value = b.duration;
-            if (b.fee)            document.getElementById('ct-fee').value = b.fee;
-            if (b.venue_address)  document.getElementById('ct-address').value = b.venue_address;
-            if (b.event_title)    document.getElementById('ct-title').value = b.event_title;
-        })
-        .catch(function() {});
-    }
-    document.getElementById('contract-modal').classList.add('show');
-}
-
-function closeContractModal() {
-    document.getElementById('contract-modal').classList.remove('show');
-    contractClient = {};
-}
-
-function sendContract() {
-    var title    = document.getElementById('ct-title').value.trim();
-    var address  = document.getElementById('ct-address').value.trim();
-    var date     = document.getElementById('ct-date').value;
-    var start    = document.getElementById('ct-start').value;
-    var duration = document.getElementById('ct-duration').value.trim();
-    var fee      = document.getElementById('ct-fee').value;
-    if (!title || !address || !date || !start || !duration || !fee) {
-        alert('Please fill in all contract fields.'); return;
-    }
-    var btn = document.getElementById('contract-send-btn');
-    btn.disabled = true; btn.textContent = 'Sending...';
-    fetch('/api/send-contract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            clientId: contractClient.id, clientName: contractClient.name,
-            clientEmail: contractClient.email, bookingId: contractClient.bookingId || null,
-            eventTitle: title, venueAddress: address, eventDate: date,
-            startTime: start, duration: duration, fee: parseFloat(fee)
-        })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.error) throw new Error(data.error);
-        closeContractModal();
-        loadPipeline();
-    })
-    .catch(function(e) { alert('Error: ' + e.message); })
-    .finally(function() { btn.disabled = false; btn.textContent = 'Send contract'; });
-}
-
-var QUESTION_LABELS = {
-    q_honoree: 'Guest of Honour', q_honoree_dob: 'Date of Birth',
-    q_trivia: 'Trivia / Personal Details', q_vips: 'VIP Guests',
-    q_crowd: 'Crowd Type', q_vibe: 'Show Vibe', q_guests: 'Guest Count',
-    q_address: 'Venue Address', q_indoor_outdoor: 'Indoor / Outdoor',
-    q_power: 'Power Available', q_clear_area: 'Clear Area',
-    q_exclude: 'Exclusions / Sensitivities', q_event_date: 'Event Date',
-    q_start_time: 'Start Time', q_photo_honoree: 'Photo of Honouree'
-};
-
-function openAnswersModal(bookingId) {
-    document.getElementById('answers-modal').classList.add('show');
-    document.getElementById('answers-modal-subtitle').textContent = 'Loading...';
-    document.getElementById('answers-content').innerHTML = '<div class="answers-loading">Fetching answers...</div>';
-    fetch(SUPABASE_URL + '/rest/v1/bookings?id=eq.' + bookingId + '&select=*', {
-        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(rows) {
-        var b = rows[0] || {};
-        var answers = b.intake_answers || {};
-        document.getElementById('answers-modal-subtitle').textContent = b.event_title || 'Questionnaire answers';
-        var keys = Object.keys(answers).filter(function(k) { return answers[k] && String(answers[k]).trim(); });
-        if (!keys.length) {
-            document.getElementById('answers-content').innerHTML = '<div class="answers-loading">No answers on file yet.</div>';
-            return;
-        }
-        document.getElementById('answers-content').innerHTML = keys.map(function(k) {
-            var val = answers[k];
-            if (typeof val === 'object') val = JSON.stringify(val);
-            return '<div class="answer-row"><div class="q">' + (QUESTION_LABELS[k] || k) + '</div><div class="a">' + escHtml(String(val)) + '</div></div>';
-        }).join('');
-    })
-    .catch(function(e) {
-        document.getElementById('answers-content').innerHTML = '<div class="answers-loading">Error: ' + e.message + '</div>';
-    });
-}
-
-function closeAnswersModal() { document.getElementById('answers-modal').classList.remove('show'); }
-
-var viewClientId = null;
-
-function openViewModal(id) {
-    viewClientId = id;
-    document.getElementById('view-modal').classList.add('show');
-    document.getElementById('view-name').textContent = 'Loading...';
-    document.getElementById('view-status-line').textContent = '';
-    document.getElementById('view-content').innerHTML = '';
-    document.getElementById('view-message-btn').style.display = 'none';
-    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id + '&select=*', {
-        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(rows) {
-        var c = rows[0];
-        if (!c) { document.getElementById('view-name').textContent = 'Not found'; return; }
-        document.getElementById('view-name').textContent = c.name;
-        document.getElementById('view-status-line').textContent = STATUS_LABELS[c.status] || c.status;
-        var fields = [];
-        if (c.phone)    fields.push(['Phone', c.phone]);
-        if (c.email)    fields.push(['Email', c.email]);
-        if (c.event_type) fields.push(['Event type', c.event_type]);
-        if (c.event_date) fields.push(['Event date', new Date(c.event_date + 'T00:00:00').toLocaleDateString('en-US', {weekday:'long',month:'long',day:'numeric',year:'numeric'})]);
-        if (c.guests)   fields.push(['Guests', c.guests]);
-        if (c.venue)    fields.push(['Venue', c.venue]);
-        if (c.lead_source) fields.push(['Source', c.lead_source]);
-        if (c.other_entertainment) fields.push(['Other entertainment', c.other_entertainment]);
-        if (c.selected_package) fields.push(['Package', (c.selected_category === 'corporate' ? 'Corporate' : 'Private') + ' — ' + c.selected_package + ' ($' + c.selected_price + ')']);
-        if (c.notes && !c.notes.startsWith('Pricing link sent:') && !c.notes.startsWith('Contract sent:')) fields.push(['Notes', c.notes]);
-        document.getElementById('view-content').innerHTML = fields.map(function(f) {
-            return '<div class="answer-row"><div class="q">' + f[0] + '</div><div class="a">' + escHtml(f[1]) + '</div></div>';
-        }).join('');
-    })
-    .catch(function(e) { document.getElementById('view-name').textContent = 'Error: ' + e.message; });
-}
-
-function closeViewModal() { document.getElementById('view-modal').classList.remove('show'); viewClientId = null; }
-
-function deleteClientFromView() {
-    var name = document.getElementById('view-name').textContent;
-    var id = viewClientId;
-    closeViewModal();
-    deleteClient(id, name);
-}
-
-function editFromView() {
-    var id = viewClientId;
-    closeViewModal();
-    openEditModal(id);
-}
-
-function messageClientFromView() {
-    messagingExistingClientId = viewClientId;
-    closeViewModal();
-    showView('new-lead');
-}
-
-function openEditModal(id) {
-    document.getElementById('edit-modal').classList.add('show');
-    document.getElementById('edit-modal-status').textContent = 'Loading...';
-    document.getElementById('edit-modal-form').style.display = 'none';
-    document.getElementById('edit-save-btn').style.display = 'none';
-    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id + '&select=*', {
-        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(rows) {
-        var c = rows[0];
-        if (!c) { document.getElementById('edit-modal-status').textContent = 'Not found.'; return; }
-        document.getElementById('edit-modal-status').textContent = 'Editing ' + c.name;
-        document.getElementById('edit-name').value = c.name || '';
-        document.getElementById('edit-phone').value = c.phone || '';
-        document.getElementById('edit-email').value = c.email || '';
-        document.getElementById('edit-event_type').value = c.event_type || '';
-        document.getElementById('edit-event_date').value = c.event_date || '';
-        document.getElementById('edit-guests').value = c.guests || '';
-        document.getElementById('edit-venue').value = c.venue || '';
-        document.getElementById('edit-lead_source').value = c.lead_source || 'Bark';
-        document.getElementById('edit-notes').value = c.notes || '';
-        document.getElementById('edit-modal-form').style.display = 'block';
-        document.getElementById('edit-save-btn').style.display = 'block';
-        currentClientId = id;
-    })
-    .catch(function(e) { document.getElementById('edit-modal-status').textContent = 'Error: ' + e.message; });
-}
-
-function closeEditModal() { document.getElementById('edit-modal').classList.remove('show'); currentClientId = null; }
-
-function saveEditedClient() {
-    if (!currentClientId) return;
-    var btn = document.getElementById('edit-save-btn');
-    btn.disabled = true; btn.textContent = 'Saving...';
-    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + currentClientId, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=minimal' },
-        body: JSON.stringify({
-            name: document.getElementById('edit-name').value.trim(),
-            phone: document.getElementById('edit-phone').value.trim() || null,
-            email: document.getElementById('edit-email').value.trim() || null,
-            event_type: document.getElementById('edit-event_type').value || null,
-            event_date: document.getElementById('edit-event_date').value || null,
-            guests: document.getElementById('edit-guests').value.trim() || null,
-            venue: document.getElementById('edit-venue').value.trim() || null,
-            lead_source: document.getElementById('edit-lead_source').value || null,
-            notes: document.getElementById('edit-notes').value.trim() || null,
-            last_activity: new Date().toISOString()
-        })
-    })
-    .then(function(r) {
-        if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
-        closeEditModal();
-        loadPipeline();
-    })
-    .catch(function(e) { alert('Error saving: ' + e.message); })
-    .finally(function() { btn.disabled = false; btn.textContent = 'Save'; });
-}
-
-/* ── Pricing modal logic ── */
-var currentFormat = 'stage';
 
 function switchFormat(format) {
     currentFormat = format;
@@ -1634,10 +1453,8 @@ function selectPricingOption(option) {
     document.querySelectorAll('.pricing-option').forEach(function(o) { o.classList.remove('selected'); });
     document.getElementById('opt-' + option).classList.add('selected');
     document.querySelectorAll('.custom-price-inputs').forEach(function(el) { el.classList.remove('show'); });
-    if (option === 'private-custom')              document.getElementById('private-custom-inputs').classList.add('show');
-    if (option === 'corporate-custom')            document.getElementById('corporate-custom-inputs').classList.add('show');
-    if (option === 'strolling-private-custom')    document.getElementById('strolling-private-custom-inputs').classList.add('show');
-    if (option === 'strolling-corporate-custom')  document.getElementById('strolling-corporate-custom-inputs').classList.add('show');
+    var map = { 'private-custom': 'private-custom-inputs', 'corporate-custom': 'corporate-custom-inputs', 'strolling-private-custom': 'strolling-private-custom-inputs', 'strolling-corporate-custom': 'strolling-corporate-custom-inputs' };
+    if (map[option]) document.getElementById(map[option]).classList.add('show');
     document.getElementById('modal-send-btn').disabled = false;
 }
 
@@ -1656,18 +1473,133 @@ function sendPricing() {
     else if (selectedPricingOption === 'strolling-private-custom')     link = base + '?format=strolling&type=private&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-rate').value||400) + '&sf=' + (document.getElementById('ps-finale').value||200);
     else if (selectedPricingOption === 'strolling-corporate-custom')   link = base + '?format=strolling&type=corporate&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-c-rate').value||1000) + '&sf=' + (document.getElementById('ps-c-finale').value||300);
     fetch('/api/chat?mode=pricing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId: currentClientId, clientName: modalClient.name, phone: modalClient.phone, email: modalClient.email, lastChannel: modalClient.lastChannel, pricingLink: link })
     })
     .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.error) throw new Error(data.error);
-        closeModal();
-        loadPipeline();
-    })
+    .then(function(d) { if (d.error) throw new Error(d.error); closeModal(); loadLeads(); })
     .catch(function(e) { alert('Error: ' + e.message); })
     .finally(function() { btn.disabled = false; btn.textContent = 'Send pricing'; });
+}
+
+/* ── Intake ── */
+function sendIntakeForm(id, name, email, eventType, price) {
+    if (!email) { alert('No email on file — intake form needs an email to send.'); return; }
+    if (!confirm('Send intake questionnaire to ' + name + '?')) return;
+    fetch('/api/send-intake', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: id, clientName: name, clientEmail: email, eventType: eventType, fee: price || null })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { if (d.error) throw new Error(d.error); alert('Intake form sent to ' + name + '!'); loadLeads(); })
+    .catch(function(e) { alert('Error: ' + e.message); });
+}
+
+/* ── Contract ── */
+var contractClient = {};
+
+function openContractModal(id, name, email, bookingId) {
+    contractClient = { id: id, name: name, email: email, bookingId: bookingId };
+    document.getElementById('contract-modal-client-name').textContent = 'Sending to ' + name;
+    if (bookingId) {
+        fetch(SUPABASE_URL + '/rest/v1/bookings?id=eq.' + bookingId + '&select=*', {
+            headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(rows) {
+            var b = rows[0] || {};
+            if (b.event_date)    document.getElementById('ct-date').value = b.event_date;
+            if (b.start_time)    document.getElementById('ct-start').value = b.start_time;
+            if (b.duration)      document.getElementById('ct-duration').value = b.duration;
+            if (b.fee)           document.getElementById('ct-fee').value = b.fee;
+            if (b.venue_address) document.getElementById('ct-address').value = b.venue_address;
+            if (b.event_title)   document.getElementById('ct-title').value = b.event_title;
+        })
+        .catch(function() {});
+    }
+    document.getElementById('contract-modal').classList.add('show');
+}
+
+function closeContractModal() { document.getElementById('contract-modal').classList.remove('show'); contractClient = {}; }
+
+function sendContract() {
+    var title    = document.getElementById('ct-title').value.trim();
+    var address  = document.getElementById('ct-address').value.trim();
+    var date     = document.getElementById('ct-date').value;
+    var start    = document.getElementById('ct-start').value;
+    var duration = document.getElementById('ct-duration').value.trim();
+    var fee      = document.getElementById('ct-fee').value;
+    if (!title || !address || !date || !start || !duration || !fee) { alert('Please fill in all contract fields.'); return; }
+    var btn = document.getElementById('contract-send-btn');
+    btn.disabled = true; btn.textContent = 'Sending...';
+    fetch('/api/send-contract', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee) })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { if (d.error) throw new Error(d.error); closeContractModal(); loadLeads(); })
+    .catch(function(e) { alert('Error: ' + e.message); })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Send contract'; });
+}
+
+/* ── Edit modal ── */
+function openEditModal(id) {
+    document.getElementById('edit-modal').classList.add('show');
+    document.getElementById('edit-modal-status').textContent = 'Loading...';
+    document.getElementById('edit-modal-form').style.display = 'none';
+    document.getElementById('edit-save-btn').style.display = 'none';
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id + '&select=*', {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(rows) {
+        var c = rows[0]; if (!c) { document.getElementById('edit-modal-status').textContent = 'Not found.'; return; }
+        document.getElementById('edit-modal-status').textContent = 'Editing ' + c.name;
+        document.getElementById('edit-name').value = c.name||'';
+        document.getElementById('edit-phone').value = c.phone||'';
+        document.getElementById('edit-email').value = c.email||'';
+        document.getElementById('edit-event_type').value = c.event_type||'';
+        document.getElementById('edit-event_date').value = c.event_date||'';
+        document.getElementById('edit-guests').value = c.guests||'';
+        document.getElementById('edit-venue').value = c.venue||'';
+        document.getElementById('edit-lead_source').value = c.lead_source||'Bark';
+        document.getElementById('edit-notes').value = c.notes||'';
+        document.getElementById('edit-modal-form').style.display = 'block';
+        document.getElementById('edit-save-btn').style.display = 'block';
+        currentClientId = id;
+    })
+    .catch(function(e) { document.getElementById('edit-modal-status').textContent = 'Error: ' + e.message; });
+}
+
+function closeEditModal() { document.getElementById('edit-modal').classList.remove('show'); currentClientId = null; }
+
+function saveEditedClient() {
+    if (!currentClientId) return;
+    var btn = document.getElementById('edit-save-btn');
+    btn.disabled = true; btn.textContent = 'Saving...';
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + currentClientId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+            name: document.getElementById('edit-name').value.trim(),
+            phone: document.getElementById('edit-phone').value.trim()||null,
+            email: document.getElementById('edit-email').value.trim()||null,
+            event_type: document.getElementById('edit-event_type').value||null,
+            event_date: document.getElementById('edit-event_date').value||null,
+            guests: document.getElementById('edit-guests').value.trim()||null,
+            venue: document.getElementById('edit-venue').value.trim()||null,
+            lead_source: document.getElementById('edit-lead_source').value||null,
+            notes: document.getElementById('edit-notes').value.trim()||null,
+            last_activity: new Date().toISOString()
+        })
+    })
+    .then(function(r) {
+        if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
+        closeEditModal();
+        loadLeads();
+    })
+    .catch(function(e) { alert('Error: ' + e.message); })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Save'; });
 }
 
 /* ── New lead form ── */
@@ -1675,8 +1607,7 @@ var SYSTEM_PROMPT = 'You are a booking assistant for Shine, The Mentalist — a 
 
 function formatDate(d) {
     if (!d) return 'not specified';
-    var dt = new Date(d + 'T00:00:00');
-    return dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 function toggleOtherSource() {
@@ -1687,10 +1618,7 @@ function toggleOtherSource() {
 function fileToBase64(file) {
     return new Promise(function(resolve, reject) {
         var reader = new FileReader();
-        reader.onload = function() {
-            var result = reader.result;
-            resolve(result.substring(result.indexOf(',') + 1));
-        };
+        reader.onload = function() { resolve(reader.result.substring(reader.result.indexOf(',') + 1)); };
         reader.onerror = reject;
         reader.readAsDataURL(file);
     });
@@ -1701,13 +1629,9 @@ function mapGuestsToOption(v) {
     var s = String(v).toLowerCase();
     if (s.includes('under 10') || s.includes('<10')) return 'Under 10';
     if (s.includes('100+') || s.includes('over 100')) return '100+';
-    var m = s.match(/\d+/);
-    if (!m) return '';
+    var m = s.match(/\d+/); if (!m) return '';
     var n = parseInt(m[0], 10);
-    if (n < 10) return 'Under 10';
-    if (n <= 25) return '10-25';
-    if (n <= 50) return '25-50';
-    if (n <= 100) return '50-100';
+    if (n < 10) return 'Under 10'; if (n <= 25) return '10-25'; if (n <= 50) return '25-50'; if (n <= 100) return '50-100';
     return '100+';
 }
 
@@ -1717,18 +1641,13 @@ function handleScreenshotUpload(fileList) {
     if (files.length > 4) { alert('Please upload at most 4 screenshots at a time.'); return; }
     var statusEl = document.getElementById('screenshot-status');
     var btn = document.getElementById('upload-screenshot-btn');
-    statusEl.style.display = 'block';
-    statusEl.textContent = 'Reading screenshot(s)...';
-    btn.disabled = true;
+    statusEl.style.display = 'block'; statusEl.textContent = 'Reading screenshot(s)...'; btn.disabled = true;
     Promise.all(files.map(function(file) {
-        return fileToBase64(file).then(function(base64) { return { data: base64, mediaType: file.type || 'image/png' }; });
+        return fileToBase64(file).then(function(b64) { return { data: b64, mediaType: file.type||'image/png' }; });
     }))
     .then(function(images) {
         statusEl.textContent = 'Extracting details...';
-        return fetch('/api/extract-lead-screenshot', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ images: images })
-        });
+        return fetch('/api/extract-lead-screenshot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ images: images }) });
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -1737,27 +1656,20 @@ function handleScreenshotUpload(fileList) {
         if (ex.name)  document.getElementById('name').value = ex.name;
         if (ex.phone) document.getElementById('phone').value = ex.phone;
         if (ex.email) document.getElementById('email').value = ex.email;
-        if (ex.event_type) {
-            var sel = document.getElementById('event_type');
-            var m = Array.prototype.find.call(sel.options, function(o) { return o.value.toLowerCase() === String(ex.event_type).toLowerCase(); });
-            if (m) sel.value = m.value;
-        }
+        if (ex.event_type) { var sel = document.getElementById('event_type'); var m = Array.prototype.find.call(sel.options, function(o) { return o.value.toLowerCase() === String(ex.event_type).toLowerCase(); }); if (m) sel.value = m.value; }
         if (ex.event_date) document.getElementById('date').value = ex.event_date;
         if (ex.guests) { var g = mapGuestsToOption(ex.guests); if (g) document.getElementById('guests').value = g; }
         if (ex.venue) document.getElementById('venue').value = ex.venue;
         if (ex.notes) document.getElementById('notes').value = ex.notes;
-        statusEl.textContent = '✓ Filled in what we could find — please review before creating the lead.';
+        statusEl.textContent = '✓ Filled in — please review before creating the lead.';
     })
-    .catch(function(err) { statusEl.textContent = 'Could not extract: ' + err.message; })
+    .catch(function(e) { statusEl.textContent = 'Could not extract: ' + e.message; })
     .finally(function() { btn.disabled = false; document.getElementById('lead-screenshot-input').value = ''; });
 }
 
 function getFormData() {
     var src = document.getElementById('lead_source').value;
-    if (src === 'Other') {
-        var other = document.getElementById('other_source_name').value.trim();
-        if (other) src = other;
-    }
+    if (src === 'Other') { var o = document.getElementById('other_source_name').value.trim(); if (o) src = o; }
     return {
         name: document.getElementById('name').value.trim(),
         phone: document.getElementById('phone').value.trim(),
@@ -1782,11 +1694,8 @@ function saveLeadOnly() {
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
         body: JSON.stringify({ name: d.name, phone: d.phone||null, email: d.email||null, event_type: d.eventType||null, event_date: d.date||null, guests: d.guests||null, venue: d.venue||null, other_entertainment: d.otherEntertainment||null, lead_source: d.leadSource||null, notes: d.notes||null, status: 'new', last_activity: new Date().toISOString() })
     })
-    .then(function(r) {
-        if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
-        return r.json();
-    })
-    .then(function() { showView('dashboard'); })
+    .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
+    .then(function() { showView('pipeline'); })
     .catch(function(e) { alert('Could not save: ' + e.message); })
     .finally(function() { btn.disabled = false; btn.textContent = 'Save lead (no message yet)'; });
 }
@@ -1815,8 +1724,7 @@ function generateMessages() {
     btn.disabled = true; btn.textContent = 'Writing messages...';
     showStatus('Claude is writing personalized SMS and email...', 'loading');
     fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 200, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: buildPrompt(d) }], clientName: d.name, eventType: d.eventType })
     })
     .then(function(r) { return r.json(); })
@@ -1836,18 +1744,17 @@ function generateMessages() {
 
 function sendMessages() {
     var d = getFormData();
-    if (!d.name || !d.phone || !d.eventType) { showStatus('Please fill in client name, phone, and event type.', 'error'); return; }
-    var smsText      = document.getElementById('sms-text').value.trim();
+    if (!d.name || !d.phone || !d.eventType) { showStatus('Please fill in name, phone, and event type.', 'error'); return; }
+    var smsText = document.getElementById('sms-text').value.trim();
     var emailSubject = document.getElementById('email-subject').value.trim();
-    var emailBody    = document.getElementById('email-body').value.trim();
+    var emailBody = document.getElementById('email-body').value.trim();
     if (!smsText) { showStatus('Please generate messages first.', 'error'); return; }
     var btn = document.getElementById('send-btn');
     btn.disabled = true; btn.textContent = 'Sending...';
     showStatus('Sending messages...', 'loading');
     fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 200, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: buildPrompt(d) }], toPhone: d.phone||null, toEmail: d.email||null, clientName: d.name, eventType: d.eventType, venue: d.venue, otherEntertainment: d.otherEntertainment, leadSource: d.leadSource, eventDate: d.date, guests: d.guests, smsOverride: smsText, emailOverride: 'Subject: ' + emailSubject + '\n\n' + emailBody, existingClientId: messagingExistingClientId || undefined })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 200, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: buildPrompt(d) }], toPhone: d.phone||null, toEmail: d.email||null, clientName: d.name, eventType: d.eventType, venue: d.venue, otherEntertainment: d.otherEntertainment, leadSource: d.leadSource, eventDate: d.date, guests: d.guests, smsOverride: smsText, emailOverride: 'Subject: ' + emailSubject + '\n\n' + emailBody, existingClientId: messagingExistingClientId||undefined })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -1855,26 +1762,18 @@ function sendMessages() {
         var followup = document.getElementById('followup').checked;
         showStatus((data.smsSent ? 'SMS sent to ' + d.phone : 'SMS pending A2P approval') + '<br>' + (data.emailSent ? 'Email sent to ' + d.email : (d.email ? 'Email not sent' : '')) + '<br>' + (followup ? 'Follow-up scheduled in 24 hours if no reply.' : ''), 'success');
         messagingExistingClientId = null;
-        if (data.smsSent || data.emailSent) setTimeout(function() { showView('dashboard'); }, 2000);
+        if (data.smsSent || data.emailSent) setTimeout(function() { showView('pipeline'); }, 2000);
     })
     .catch(function(e) { showStatus('Error: ' + e.message, 'error'); })
     .finally(function() { btn.disabled = false; btn.textContent = 'Send messages'; });
 }
 
 /* ── Modal backdrop clicks ── */
-['pricing-modal','contract-modal','answers-modal','edit-modal','view-modal'].forEach(function(id) {
-    document.getElementById(id).addEventListener('click', function(e) {
-        if (e.target === this) {
-            if (id === 'pricing-modal') closeModal();
-            else if (id === 'contract-modal') closeContractModal();
-            else if (id === 'answers-modal') closeAnswersModal();
-            else if (id === 'edit-modal') closeEditModal();
-            else if (id === 'view-modal') closeViewModal();
-        }
-    });
+[['pricing-modal', closeModal], ['contract-modal', closeContractModal], ['edit-modal', closeEditModal]].forEach(function(pair) {
+    document.getElementById(pair[0]).addEventListener('click', function(e) { if (e.target === this) pair[1](); });
 });
 
-showView('dashboard');
+showView('pipeline');
 </script>
 </body>
 </html>
