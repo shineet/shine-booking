@@ -46,6 +46,16 @@ body {
 .topbar h1 { font-size: 17px; font-weight: 600; }
 .topbar .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.topbar-link {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+.topbar-link:hover { color: var(--accent2); }
 
 .sync-status { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
 .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
@@ -395,6 +405,7 @@ td { padding: 9px 14px; vertical-align: middle; }
       <div class="sync-dot syncing" id="sync-dot"></div>
       <span id="sync-label">Connecting...</span>
     </div>
+    <a class="topbar-link" href="https://shine-booking.vercel.app/index.html" target="_blank" rel="noopener">Booking App &#8599;</a>
     <button class="secondary" id="refresh-btn" onclick="loadAll()">Refresh</button>
     <button class="secondary" onclick="exportCSV()">Export CSV</button>
     <button onclick="openAdd()">+ Add Gig</button>
