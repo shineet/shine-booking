@@ -1113,6 +1113,22 @@
     </div>
 </div>
 
+<div class="modal-overlay" id="copy-link-modal">
+    <div class="modal">
+        <h2>Pricing link ready</h2>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px" id="copy-link-desc"></p>
+        <div class="field">
+            <label>Link</label>
+            <input type="text" id="copy-link-input" readonly onclick="this.select()">
+        </div>
+        <div id="copy-link-status" style="font-size:13px;color:var(--green);min-height:18px;margin-bottom:4px"></div>
+        <div class="modal-actions">
+            <button class="modal-cancel" onclick="closeCopyLinkModal()">Done</button>
+            <button class="modal-send" onclick="copyPricingLinkToClipboard()">Copy to clipboard</button>
+        </div>
+    </div>
+</div>
+
 <script>
 var SUPABASE_URL = 'https://nkhwttlmtidtippylbzs.supabase.co';
 var SUPABASE_KEY = 'sb_publishable_jvudqPYcwnnqjO8w7DQd2g_SSyb-HJl';
@@ -1603,6 +1619,7 @@ function getPricingLinkManually() {
     if (!selectedPricingOption || !currentClientId) return;
     var link = buildPricingLink();
     var clientIdForUpdate = currentClientId;
+    var clientNameForDisplay = modalClient.name;
     var btn = document.getElementById('modal-manual-btn');
     btn.disabled = true; btn.textContent = 'Saving...';
 
@@ -1615,10 +1632,52 @@ function getPricingLinkManually() {
     .then(function() {
         closeModal();
         loadLeads();
-        prompt('Copy this link and send it to ' + modalClient.name + ' manually:', link);
+        openCopyLinkModal(link, clientNameForDisplay);
     })
     .catch(function(e) { alert('Could not save: ' + e.message); })
     .finally(function() { btn.disabled = false; btn.textContent = 'Get link (send manually)'; });
+}
+
+function openCopyLinkModal(link, clientName) {
+    document.getElementById('copy-link-desc').textContent = 'Copy this and send it to ' + (clientName || 'the client') + ' manually.';
+    document.getElementById('copy-link-input').value = link;
+    document.getElementById('copy-link-status').textContent = '';
+    document.getElementById('copy-link-modal').classList.add('show');
+}
+
+function closeCopyLinkModal() {
+    document.getElementById('copy-link-modal').classList.remove('show');
+}
+
+function copyPricingLinkToClipboard() {
+    var input = document.getElementById('copy-link-input');
+    var statusEl = document.getElementById('copy-link-status');
+    var link = input.value;
+
+    function showCopied() {
+        statusEl.textContent = '✓ Copied to clipboard';
+        setTimeout(function() { statusEl.textContent = ''; }, 3000);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(showCopied).catch(function() {
+            // Fall back to the select+execCommand approach below if the async API is blocked
+            fallbackCopy();
+        });
+    } else {
+        fallbackCopy();
+    }
+
+    function fallbackCopy() {
+        input.select();
+        input.setSelectionRange(0, link.length);
+        try {
+            var ok = document.execCommand('copy');
+            if (ok) { showCopied(); return; }
+        } catch (e) {}
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = 'Could not auto-copy — tap the link above to select it manually.';
+    }
 }
 
 /* ── Intake ── */
@@ -1928,7 +1987,7 @@ function sendMessages() {
 }
 
 /* ── Modal backdrop clicks ── */
-[['pricing-modal', closeModal], ['contract-modal', closeContractModal], ['edit-modal', closeEditModal]].forEach(function(pair) {
+[['pricing-modal', closeModal], ['contract-modal', closeContractModal], ['edit-modal', closeEditModal], ['copy-link-modal', closeCopyLinkModal]].forEach(function(pair) {
     document.getElementById(pair[0]).addEventListener('click', function(e) { if (e.target === this) pair[1](); });
 });
 
