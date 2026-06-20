@@ -990,6 +990,7 @@
         </div>
         <div class="modal-actions">
             <button class="modal-cancel" onclick="closeModal()">Cancel</button>
+            <button class="modal-cancel" id="modal-manual-btn" onclick="getPricingLinkManually()" disabled>Get link (send manually)</button>
             <button class="modal-send" id="modal-send-btn" onclick="sendPricing()" disabled>Send pricing</button>
         </div>
     </div>
@@ -1491,6 +1492,7 @@ function openPricingModal(id, name, phone, email, lastChannel) {
     document.querySelectorAll('.pricing-option').forEach(function(o) { o.classList.remove('selected'); });
     document.querySelectorAll('.custom-price-inputs').forEach(function(el) { el.classList.remove('show'); });
     document.getElementById('modal-send-btn').disabled = true;
+    document.getElementById('modal-manual-btn').disabled = true;
     switchFormat('stage');
     document.getElementById('pricing-modal').classList.add('show');
 }
@@ -1510,6 +1512,7 @@ function switchFormat(format) {
     document.querySelectorAll('.pricing-option').forEach(function(o) { o.classList.remove('selected'); });
     document.querySelectorAll('.custom-price-inputs').forEach(function(el) { el.classList.remove('show'); });
     document.getElementById('modal-send-btn').disabled = true;
+    document.getElementById('modal-manual-btn').disabled = true;
 }
 
 function selectPricingOption(option) {
@@ -1520,22 +1523,27 @@ function selectPricingOption(option) {
     var map = { 'private-custom': 'private-custom-inputs', 'corporate-custom': 'corporate-custom-inputs', 'strolling-private-custom': 'strolling-private-custom-inputs', 'strolling-corporate-custom': 'strolling-corporate-custom-inputs' };
     if (map[option]) document.getElementById(map[option]).classList.add('show');
     document.getElementById('modal-send-btn').disabled = false;
+    document.getElementById('modal-manual-btn').disabled = false;
+}
+
+function buildPricingLink() {
+    var base = 'https://shine-booking.vercel.app/pricing.html';
+    if (selectedPricingOption === 'private-standard')           return base + '?type=private&cid=' + currentClientId;
+    if (selectedPricingOption === 'corporate-standard')         return base + '?type=corporate&cid=' + currentClientId;
+    if (selectedPricingOption === 'private-custom')             return base + '?type=private&cid=' + currentClientId + '&d1=' + (document.getElementById('pc-d1').value||400) + '&d2=' + (document.getElementById('pc-d2').value||500) + '&d3=' + (document.getElementById('pc-d3').value||600);
+    if (selectedPricingOption === 'corporate-custom')           return base + '?type=corporate&cid=' + currentClientId + '&d1=' + (document.getElementById('pc-c1').value||1000) + '&d2=' + (document.getElementById('pc-c2').value||1200) + '&d3=' + (document.getElementById('pc-c3').value||1500);
+    if (selectedPricingOption === 'strolling-private-standard') return base + '?format=strolling&type=private&cid=' + currentClientId;
+    if (selectedPricingOption === 'strolling-corporate-standard') return base + '?format=strolling&type=corporate&cid=' + currentClientId;
+    if (selectedPricingOption === 'strolling-private-custom')   return base + '?format=strolling&type=private&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-rate').value||400) + '&sf=' + (document.getElementById('ps-finale').value||200);
+    if (selectedPricingOption === 'strolling-corporate-custom') return base + '?format=strolling&type=corporate&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-c-rate').value||1000) + '&sf=' + (document.getElementById('ps-c-finale').value||300);
+    return '';
 }
 
 function sendPricing() {
     if (!selectedPricingOption || !currentClientId) return;
     var btn = document.getElementById('modal-send-btn');
     btn.disabled = true; btn.textContent = 'Sending...';
-    var base = 'https://shine-booking.vercel.app/pricing.html';
-    var link = '';
-    if (selectedPricingOption === 'private-standard')           link = base + '?type=private&cid=' + currentClientId;
-    else if (selectedPricingOption === 'corporate-standard')    link = base + '?type=corporate&cid=' + currentClientId;
-    else if (selectedPricingOption === 'private-custom')        link = base + '?type=private&cid=' + currentClientId + '&d1=' + (document.getElementById('pc-d1').value||400) + '&d2=' + (document.getElementById('pc-d2').value||500) + '&d3=' + (document.getElementById('pc-d3').value||600);
-    else if (selectedPricingOption === 'corporate-custom')      link = base + '?type=corporate&cid=' + currentClientId + '&d1=' + (document.getElementById('pc-c1').value||1000) + '&d2=' + (document.getElementById('pc-c2').value||1200) + '&d3=' + (document.getElementById('pc-c3').value||1500);
-    else if (selectedPricingOption === 'strolling-private-standard')   link = base + '?format=strolling&type=private&cid=' + currentClientId;
-    else if (selectedPricingOption === 'strolling-corporate-standard') link = base + '?format=strolling&type=corporate&cid=' + currentClientId;
-    else if (selectedPricingOption === 'strolling-private-custom')     link = base + '?format=strolling&type=private&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-rate').value||400) + '&sf=' + (document.getElementById('ps-finale').value||200);
-    else if (selectedPricingOption === 'strolling-corporate-custom')   link = base + '?format=strolling&type=corporate&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-c-rate').value||1000) + '&sf=' + (document.getElementById('ps-c-finale').value||300);
+    var link = buildPricingLink();
     fetch('/api/chat?mode=pricing', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId: currentClientId, clientName: modalClient.name, phone: modalClient.phone, email: modalClient.email, lastChannel: modalClient.lastChannel, pricingLink: link })
@@ -1544,6 +1552,28 @@ function sendPricing() {
     .then(function(d) { if (d.error) throw new Error(d.error); closeModal(); loadLeads(); })
     .catch(function(e) { alert('Error: ' + e.message); })
     .finally(function() { btn.disabled = false; btn.textContent = 'Send pricing'; });
+}
+
+function getPricingLinkManually() {
+    if (!selectedPricingOption || !currentClientId) return;
+    var link = buildPricingLink();
+    var clientIdForUpdate = currentClientId;
+    var btn = document.getElementById('modal-manual-btn');
+    btn.disabled = true; btn.textContent = 'Saving...';
+
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + clientIdForUpdate, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
+        body: JSON.stringify({ status: 'pricing_requested', notes: 'Pricing link generated for manual send: ' + link, last_activity: new Date().toISOString() })
+    })
+    .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
+    .then(function() {
+        closeModal();
+        loadLeads();
+        prompt('Copy this link and send it to ' + modalClient.name + ' manually:', link);
+    })
+    .catch(function(e) { alert('Could not save: ' + e.message); })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Get link (send manually)'; });
 }
 
 /* ── Intake ── */
