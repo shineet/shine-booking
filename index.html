@@ -1060,6 +1060,22 @@
                     <option value="Other">Other</option>
                 </select>
             </div>
+            <div class="field">
+                <label>Status</label>
+                <select id="edit-status">
+                    <option value="new">New</option>
+                    <option value="chatting">Chatting</option>
+                    <option value="pricing_requested">Pricing requested</option>
+                    <option value="pricing_sent">Pricing sent</option>
+                    <option value="package_selected">Package selected</option>
+                    <option value="booked">Booked</option>
+                    <option value="intake_sent">Intake sent</option>
+                    <option value="intake_completed">Ready for contract</option>
+                    <option value="contract_sent">Contract sent</option>
+                    <option value="contract_signed">Contract signed</option>
+                    <option value="lost">Lost</option>
+                </select>
+            </div>
             <div class="field"><label>Notes</label><textarea id="edit-notes" rows="3"></textarea></div>
         </div>
         <div class="modal-actions">
@@ -1657,6 +1673,7 @@ function openEditModal(id) {
         document.getElementById('edit-guests').value = c.guests||'';
         document.getElementById('edit-venue').value = c.venue||'';
         document.getElementById('edit-lead_source').value = c.lead_source||'Bark';
+        document.getElementById('edit-status').value = c.status||'new';
         document.getElementById('edit-notes').value = c.notes||'';
         document.getElementById('edit-modal-form').style.display = 'block';
         document.getElementById('edit-save-btn').style.display = 'block';
@@ -1683,6 +1700,7 @@ function saveEditedClient() {
             guests: document.getElementById('edit-guests').value.trim()||null,
             venue: document.getElementById('edit-venue').value.trim()||null,
             lead_source: document.getElementById('edit-lead_source').value||null,
+            status: document.getElementById('edit-status').value||'new',
             notes: document.getElementById('edit-notes').value.trim()||null,
             last_activity: new Date().toISOString()
         })
