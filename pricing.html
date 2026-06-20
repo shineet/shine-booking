@@ -668,8 +668,23 @@
             d2: parseInt(p.get('d2')) || null,
             d3: parseInt(p.get('d3')) || null,
             strollRate: parseInt(p.get('sr')) || null,
-            strollFinale: parseInt(p.get('sf')) || null
+            strollFinale: parseInt(p.get('sf')) || null,
+            clientName: p.get('cname') || '',
+            eventType: p.get('etype') || ''
         };
+    }
+
+    function titleCase(str) {
+        return str.replace(/\w\S*/g, function(t) { return t.charAt(0).toUpperCase() + t.substring(1).toLowerCase(); });
+    }
+
+    function buildSubtitle(p, fallback) {
+        const name = (p.clientName || '').trim();
+        const etype = titleCase((p.eventType || '').trim());
+        if (name && etype) return `${name}'s ${etype}`;
+        if (etype) return `${etype} · Texas`;
+        if (name) return `For ${name} · Texas`;
+        return fallback;
     }
 
     function makeCard(category, tier, label, price, tagline, features, featured) {
@@ -736,9 +751,9 @@
         }
 
         if (isPrivate)
-            document.getElementById('subtitle').textContent = 'Birthdays, bachelorettes & celebrations · Texas';
+            document.getElementById('subtitle').textContent = buildSubtitle(p, 'Birthdays, bachelorettes & celebrations · Texas');
         if (isCorporate)
-            document.getElementById('subtitle').textContent = 'Corporate events & conferences · Texas';
+            document.getElementById('subtitle').textContent = buildSubtitle(p, 'Corporate events & conferences · Texas');
     }
 
     let strollingParams = null;
@@ -749,9 +764,9 @@
 
         const isCorporate = p.type === 'corporate';
         document.getElementById('strolling-section-title').textContent = isCorporate ? 'Strolling magic · Corporate' : 'Strolling magic';
-        document.getElementById('subtitle').textContent = isCorporate
-        ? 'Up-close magic that moves through your event · Texas'
-        : 'Up-close magic that mingles with your guests · Texas';
+        document.getElementById('subtitle').textContent = buildSubtitle(p, isCorporate
+            ? 'Up-close magic that moves through your event · Texas'
+            : 'Up-close magic that mingles with your guests · Texas');
 
         updateDurationDisplay();
         renderStrollingCards();
