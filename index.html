@@ -1288,7 +1288,7 @@ function renderDetail(c) {
         actions += '<button class="d-btn primary" onclick="messageClientFromDetail(\'' + esc(c.id) + '\')">Generate & send first message</button>';
     }
     if (c.status === 'pricing_requested') {
-        actions += '<button class="d-btn primary" onclick="openPricingModal(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\',\'' + esc(c.phone||'') + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.last_channel||'email') + '\')">Send pricing</button>';
+        actions += '<button class="d-btn primary" onclick="openPricingModal(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\',\'' + esc(c.phone||'') + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.last_channel||'email') + '\',\'' + esc(c.event_type||'') + '\')">Send pricing</button>';
     }
     if (['package_selected','booked','intake_sent'].indexOf(c.status) !== -1) {
         var intakeLabel = c.status === 'package_selected' ? 'Send questionnaire' : 'Resend intake';
@@ -1528,9 +1528,9 @@ function toggleContactType(id, newType) {
 /* ── Pricing modal ── */
 var currentFormat = 'stage';
 
-function openPricingModal(id, name, phone, email, lastChannel) {
+function openPricingModal(id, name, phone, email, lastChannel, eventType) {
     currentClientId = id;
-    modalClient = { id: id, name: name, phone: phone, email: email, lastChannel: lastChannel };
+    modalClient = { id: id, name: name, phone: phone, email: email, lastChannel: lastChannel, eventType: eventType };
     selectedPricingOption = null;
     document.getElementById('modal-client-name').textContent = 'Sending to ' + name;
     document.querySelectorAll('.pricing-option').forEach(function(o) { o.classList.remove('selected'); });
@@ -1572,14 +1572,15 @@ function selectPricingOption(option) {
 
 function buildPricingLink() {
     var base = 'https://shine-booking.vercel.app/pricing.html';
-    if (selectedPricingOption === 'private-standard')           return base + '?type=private&cid=' + currentClientId;
-    if (selectedPricingOption === 'corporate-standard')         return base + '?type=corporate&cid=' + currentClientId;
-    if (selectedPricingOption === 'private-custom')             return base + '?type=private&cid=' + currentClientId + '&d1=' + (document.getElementById('pc-d1').value||400) + '&d2=' + (document.getElementById('pc-d2').value||500) + '&d3=' + (document.getElementById('pc-d3').value||600);
-    if (selectedPricingOption === 'corporate-custom')           return base + '?type=corporate&cid=' + currentClientId + '&d1=' + (document.getElementById('pc-c1').value||1000) + '&d2=' + (document.getElementById('pc-c2').value||1200) + '&d3=' + (document.getElementById('pc-c3').value||1500);
-    if (selectedPricingOption === 'strolling-private-standard') return base + '?format=strolling&type=private&cid=' + currentClientId;
-    if (selectedPricingOption === 'strolling-corporate-standard') return base + '?format=strolling&type=corporate&cid=' + currentClientId;
-    if (selectedPricingOption === 'strolling-private-custom')   return base + '?format=strolling&type=private&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-rate').value||400) + '&sf=' + (document.getElementById('ps-finale').value||200);
-    if (selectedPricingOption === 'strolling-corporate-custom') return base + '?format=strolling&type=corporate&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-c-rate').value||1000) + '&sf=' + (document.getElementById('ps-c-finale').value||300);
+    var extra = '&cname=' + encodeURIComponent(modalClient.name||'') + '&etype=' + encodeURIComponent(modalClient.eventType||'');
+    if (selectedPricingOption === 'private-standard')           return base + '?type=private&cid=' + currentClientId + extra;
+    if (selectedPricingOption === 'corporate-standard')         return base + '?type=corporate&cid=' + currentClientId + extra;
+    if (selectedPricingOption === 'private-custom')             return base + '?type=private&cid=' + currentClientId + '&d1=' + (document.getElementById('pc-d1').value||400) + '&d2=' + (document.getElementById('pc-d2').value||500) + '&d3=' + (document.getElementById('pc-d3').value||600) + extra;
+    if (selectedPricingOption === 'corporate-custom')           return base + '?type=corporate&cid=' + currentClientId + '&d1=' + (document.getElementById('pc-c1').value||1000) + '&d2=' + (document.getElementById('pc-c2').value||1200) + '&d3=' + (document.getElementById('pc-c3').value||1500) + extra;
+    if (selectedPricingOption === 'strolling-private-standard') return base + '?format=strolling&type=private&cid=' + currentClientId + extra;
+    if (selectedPricingOption === 'strolling-corporate-standard') return base + '?format=strolling&type=corporate&cid=' + currentClientId + extra;
+    if (selectedPricingOption === 'strolling-private-custom')   return base + '?format=strolling&type=private&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-rate').value||400) + '&sf=' + (document.getElementById('ps-finale').value||200) + extra;
+    if (selectedPricingOption === 'strolling-corporate-custom') return base + '?format=strolling&type=corporate&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-c-rate').value||1000) + '&sf=' + (document.getElementById('ps-c-finale').value||300) + extra;
     return '';
 }
 
