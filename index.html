@@ -57,6 +57,27 @@
     .topbar-brand span { color: var(--muted); font-weight: 400 }
     .topbar-spacer { flex: 1 }
 
+    /* ── Footer ── */
+    .app-footer {
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        padding: 0 20px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        height: 38px;
+        flex-shrink: 0;
+        font-size: 13px
+    }
+    .app-footer a {
+        color: var(--muted);
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 6px
+    }
+    .app-footer a:hover { color: var(--accent2) }
+
     .topbar-tabs {
         display: flex;
         gap: 2px;
@@ -916,6 +937,13 @@
     </div>
 
 </div><!-- /.shell -->
+
+<!-- Footer -->
+<div class="app-footer">
+    <a href="https://shine-booking.vercel.app/gig-dashboard.html" target="_blank" rel="noopener">
+        Gig Dashboard &#8599;
+    </a>
+</div>
 
 <!-- Pricing modal -->
 <div class="modal-overlay" id="pricing-modal">
