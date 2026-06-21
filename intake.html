@@ -220,6 +220,31 @@
         cursor: not-allowed
     }
 
+    .save-draft-btn {
+        width: 100%;
+        padding: 14px;
+        background: transparent;
+        color: #0071e3;
+        border: 1.5px solid #d1d9f0;
+        border-radius: 14px;
+        font-size: 14.5px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        margin-top: 10px;
+        transition: background 0.15s
+    }
+
+    .save-draft-btn:active {
+        background: #f0f7ff
+    }
+
+    .save-draft-btn:disabled {
+        color: #aeaeb2;
+        border-color: #e5e5ea;
+        cursor: not-allowed
+    }
+
     .loading {
         text-align: center;
         padding: 60px 20px;
@@ -380,6 +405,8 @@
             html += `
       <div class="field"><label>Bride's full name</label><input type="text" id="q_honoree"></div>
       <div class="field"><label>Bride's date of birth</label><input type="date" id="q_honoree_dob"></div>
+      <div class="field"><label>Groom's date of birth</label><input type="date" id="q_groom_dob"></div>
+      <div class="field"><label>Wedding day</label><input type="date" id="q_wedding_date"></div>
       <div class="field"><label>Any VIPs or special people attending?</label><input type="text" id="q_vips"></div>
       <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
       <div class="field"><label>What kind of vibe are you looking for?</label>
@@ -392,7 +419,8 @@
       </div>
       <div class="field"><label>Any other entertainment before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
       <div class="field"><label>Tell me about the bride <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know — I'll use this to personalize the show and a few custom touches)</span></label><textarea id="q_trivia_bride"></textarea></div>
-      <div class="field"><label>Link to a photo of the bride <span class="hint">(Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)</span></label><input type="text" id="q_photo_bride" placeholder="https://..."></div>
+      <div class="field"><label>Tell me about the groom <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know — I'll use this to personalize the show and a few custom touches)</span></label><textarea id="q_trivia_groom"></textarea></div>
+      <div class="field"><label>Please share a photo of the bride, with or without the groom <span class="hint">You can give the link here for the photo or share with me via text. (Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)</span></label><input type="text" id="q_photo_bride" placeholder="https://..."></div>
       <div class="field"><label>Anything else I should know? <span class="hint">(how they met, the proposal story, etc.)</span></label><textarea id="q_anything_else"></textarea></div>
     `
 
@@ -624,15 +652,38 @@
         ;
         html += '</div>';
 
-        html += '<button class="submit-btn" id="submit-btn" onclick="submitIntake()">Submit questionnaire</button>';
+        html += '<button class="submit-btn" id="submit-btn" onclick="submitIntake(false)">Submit questionnaire</button>';
+        html += '<button class="save-draft-btn" id="save-draft-btn" onclick="submitIntake(true)">Save and finish later</button>';
 
         document.getElementById('form-content').innerHTML = html;
+        prefillSavedAnswers(d.savedAnswers || {});
     }
 
-    function submitIntake() {
-        const btn = document.getElementById('submit-btn');
-        btn.disabled = true;
-        btn.textContent = 'Submitting...';
+    function prefillSavedAnswers(saved) {
+        Object.keys(saved).forEach(function(key) {
+            const value = saved[key];
+            if (value === null || value === undefined || value === '') return;
+
+            // Radio groups are saved under their group name (e.g. q_vibe), not an element id
+            const radioInGroup = document.querySelector('input[name="' + key + '"][value="' + String(value).replace(/"/g, '\\"') + '"]');
+            if (radioInGroup) {
+                radioInGroup.checked = true;
+                onRadioChange(radioInGroup);
+                return;
+            }
+
+            const field = document.getElementById(key);
+            if (field) field.value = value;
+        });
+    }
+
+    function submitIntake(isDraft) {
+        const submitBtn = document.getElementById('submit-btn');
+        const draftBtn = document.getElementById('save-draft-btn');
+        const activeBtn = isDraft ? draftBtn : submitBtn;
+        submitBtn.disabled = true;
+        draftBtn.disabled = true;
+        activeBtn.textContent = isDraft ? 'Saving...' : 'Submitting...';
 
         const answers = {};
         document.querySelectorAll('#form-content input, #form-content textarea, #form-content select').forEach(el => {
@@ -651,20 +702,32 @@
             },
             body: JSON.stringify({
                 bookingId: getBookingId(),
-                answers: answers
+                answers: answers,
+                draft: isDraft
             })
         })
         .then(r => r.json())
         .then(data => {
             if (data.error)
                 throw new Error(data.error);
-            document.getElementById('main-page').style.display = 'none';
-            document.getElementById('success-page').style.display = 'block';
+            if (isDraft) {
+                draftBtn.textContent = '✓ Saved — come back anytime to finish';
+                setTimeout(() => {
+                    submitBtn.disabled = false;
+                    draftBtn.disabled = false;
+                    draftBtn.textContent = 'Save and finish later';
+                }, 3000);
+            } else {
+                document.getElementById('main-page').style.display = 'none';
+                document.getElementById('success-page').style.display = 'block';
+            }
         })
         .catch(e => {
             alert('Something went wrong — please try again.');
-            btn.disabled = false;
-            btn.textContent = 'Submit questionnaire';
+            submitBtn.disabled = false;
+            draftBtn.disabled = false;
+            submitBtn.textContent = 'Submit questionnaire';
+            draftBtn.textContent = 'Save and finish later';
         });
     }
 
