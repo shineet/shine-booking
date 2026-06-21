@@ -659,7 +659,8 @@
     .format-section { display: none }
     .format-section.show { display: block }
 
-    .modal-actions { display: flex; gap: 10px; margin-top: 16px }
+    .modal-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap }
+    .modal-actions button { flex: 1; min-width: 130px }
 
     .modal-cancel {
         flex: 1;
@@ -931,6 +932,7 @@
         </div>
 
         <button class="send-btn" onclick="sendMessages()" id="send-btn" disabled>Send messages</button>
+        <button class="modal-cancel" onclick="openSmsInMessages()" id="sms-imessage-btn" style="margin-top:10px;width:100%" disabled>Open SMS in Messages (my phone)</button>
         <button class="generate-btn" onclick="saveLeadOnly()" id="save-lead-btn" style="margin-top:10px">Save lead (no message yet)</button>
         <div class="status-msg" id="status"></div>
     </div>
@@ -1018,6 +1020,7 @@
         </div>
         <div class="modal-actions">
             <button class="modal-cancel" onclick="closeModal()">Cancel</button>
+            <button class="modal-cancel" id="modal-imessage-btn" onclick="openPricingInMessages()" disabled>Open in Messages (my phone)</button>
             <button class="modal-cancel" id="modal-manual-btn" onclick="getPricingLinkManually()" disabled>Get link (send manually)</button>
             <button class="modal-send" id="modal-send-btn" onclick="sendPricing()" disabled>Send pricing</button>
         </div>
@@ -1553,6 +1556,7 @@ function openPricingModal(id, name, phone, email, lastChannel, eventType) {
     document.querySelectorAll('.custom-price-inputs').forEach(function(el) { el.classList.remove('show'); });
     document.getElementById('modal-send-btn').disabled = true;
     document.getElementById('modal-manual-btn').disabled = true;
+    document.getElementById('modal-imessage-btn').disabled = true;
     switchFormat('stage');
     document.getElementById('pricing-modal').classList.add('show');
 }
@@ -1573,6 +1577,7 @@ function switchFormat(format) {
     document.querySelectorAll('.custom-price-inputs').forEach(function(el) { el.classList.remove('show'); });
     document.getElementById('modal-send-btn').disabled = true;
     document.getElementById('modal-manual-btn').disabled = true;
+    document.getElementById('modal-imessage-btn').disabled = true;
 }
 
 function selectPricingOption(option) {
@@ -1584,6 +1589,7 @@ function selectPricingOption(option) {
     if (map[option]) document.getElementById(map[option]).classList.add('show');
     document.getElementById('modal-send-btn').disabled = false;
     document.getElementById('modal-manual-btn').disabled = false;
+    document.getElementById('modal-imessage-btn').disabled = false;
 }
 
 function buildPricingLink() {
@@ -1613,6 +1619,34 @@ function sendPricing() {
     .then(function(d) { if (d.error) throw new Error(d.error); closeModal(); loadLeads(); })
     .catch(function(e) { alert('Error: ' + e.message); })
     .finally(function() { btn.disabled = false; btn.textContent = 'Send pricing'; });
+}
+
+function openPricingInMessages() {
+    if (!selectedPricingOption || !currentClientId) return;
+    if (!modalClient.phone) { alert('This client has no phone number on file.'); return; }
+
+    var link = buildPricingLink();
+    var message = 'Hi! Here are my show packages and pricing: ' + link + ' — Shine, The Mentalist';
+    var clientIdForUpdate = currentClientId;
+    var phoneDigits = modalClient.phone.replace(/[^\d+]/g, '');
+
+    var btn = document.getElementById('modal-imessage-btn');
+    btn.disabled = true; btn.textContent = 'Opening...';
+
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + clientIdForUpdate, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
+        body: JSON.stringify({ status: 'pricing_requested', notes: 'Pricing sent via personal Messages app (not Twilio) — replies will not appear in this dashboard. Link sent: ' + link, last_activity: new Date().toISOString() })
+    })
+    .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
+    .then(function() {
+        closeModal();
+        loadLeads();
+        // iOS uses &body= (not ?body=) for the sms: URI scheme
+        window.location.href = 'sms:' + phoneDigits + '&body=' + encodeURIComponent(message);
+    })
+    .catch(function(e) { alert('Could not save: ' + e.message); })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Open in Messages (my phone)'; });
 }
 
 function getPricingLinkManually() {
@@ -1953,11 +1987,23 @@ function generateMessages() {
         document.getElementById('email-body').value = data.emailBody;
         document.getElementById('messages-area').style.display = 'block';
         document.getElementById('send-btn').disabled = false;
+        document.getElementById('sms-imessage-btn').disabled = false;
         updateCharCount();
         showStatus('Messages ready — review and edit, then hit Send.', 'success');
     })
     .catch(function(e) { showStatus('Error: ' + e.message, 'error'); })
     .finally(function() { btn.disabled = false; btn.textContent = 'Regenerate messages'; });
+}
+
+function openSmsInMessages() {
+    var d = getFormData();
+    if (!d.phone) { showStatus('No phone number entered.', 'error'); return; }
+    var smsText = document.getElementById('sms-text').value.trim();
+    if (!smsText) { showStatus('Please generate messages first.', 'error'); return; }
+
+    var phoneDigits = d.phone.replace(/[^\d+]/g, '');
+    showStatus('Opening Messages — remember to also click "Send messages" for email delivery if you haven\'t.', 'success');
+    window.location.href = 'sms:' + phoneDigits + '&body=' + encodeURIComponent(smsText);
 }
 
 function sendMessages() {
