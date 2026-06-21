@@ -1,5 +1,126 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
+// Parses free-text start times like "7 PM", "7:30pm", "7-8 PM", "19:00".
+// Returns { startDate, confident } — confident is false if the format couldn't be understood.
+function parseStartTime(timeStr, eventDateStr) {
+  if (!timeStr || !eventDateStr) return { confident: false };
+
+  const cleaned = String(timeStr).trim().toLowerCase();
+  const firstPart = cleaned.split('-')[0].trim();
+  const match = firstPart.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+  if (!match) return { confident: false };
+
+  let hour = parseInt(match[1], 10);
+  const minute = match[2] ? parseInt(match[2], 10) : 0;
+  let meridiem = match[3];
+
+  if (isNaN(hour) || hour > 23 || minute > 59) return { confident: false };
+
+  // Ranges like "7-8 PM" only carry am/pm on the second half — check the whole string if needed
+  if (!meridiem) {
+    const fullMatch = cleaned.match(/(am|pm)/);
+    if (fullMatch) meridiem = fullMatch[1];
+  }
+
+  if (meridiem === 'pm' && hour < 12) hour += 12;
+  if (meridiem === 'am' && hour === 12) hour = 0;
+
+  const startDate = new Date(eventDateStr + 'T00:00:00');
+  startDate.setHours(hour, minute, 0, 0);
+  return { startDate, confident: true };
+}
+
+// Parses free-text durations like "60 minutes", "1 hour", "1.5 hours", "up to 60 minutes".
+function parseDurationMinutes(durationStr) {
+  if (!durationStr) return null;
+  const match = String(durationStr).match(/(\d+(?:\.\d+)?)\s*(hour|hr|minute|min)/i);
+  if (!match) return null;
+  const num = parseFloat(match[1]);
+  const unit = match[2].toLowerCase();
+  if (unit.startsWith('hour') || unit.startsWith('hr')) return Math.round(num * 60);
+  return Math.round(num);
+}
+
+// Formats a Date as a floating (no timezone) ICS local datetime: YYYYMMDDTHHMMSS
+function formatIcsDateTime(date) {
+  const pad = n => String(n).padStart(2, '0');
+  return date.getFullYear() + pad(date.getMonth() + 1) + pad(date.getDate()) + 'T' +
+    pad(date.getHours()) + pad(date.getMinutes()) + pad(date.getSeconds());
+}
+
+function escapeIcsText(str) {
+  return String(str || '').replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
+}
+
+// Builds a standalone .ics calendar file as a string. Falls back to a placeholder
+// noon-start, 1-hour event (clearly flagged in the description) if the time can't be parsed,
+// rather than risk creating an event at a silently wrong time.
+function buildIcsFile(booking) {
+  const timeResult = parseStartTime(booking.start_time, booking.event_date);
+  const durationMinutes = parseDurationMinutes(booking.duration) || 60;
+
+  let startDate, needsTimeConfirmation;
+  if (timeResult.confident) {
+    startDate = timeResult.startDate;
+    needsTimeConfirmation = false;
+  } else {
+    startDate = new Date(booking.event_date + 'T00:00:00');
+    startDate.setHours(12, 0, 0, 0); // noon placeholder
+    needsTimeConfirmation = true;
+  }
+
+  const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+
+  let description = `Performance for ${booking.client_name}.`;
+  if (booking.fee) description += ` Fee: $${booking.fee}.`;
+  if (needsTimeConfirmation) {
+    description += ` ⚠️ Start time could not be read from the booking record (original value: "${booking.start_time || 'none given'}") — this was set to a placeholder noon start. Please confirm the real time with the client and update this event manually.`;
+  }
+
+  const title = needsTimeConfirmation
+    ? `[CONFIRM TIME] ${booking.event_title || 'Performance'} — ${booking.client_name}`
+    : `${booking.event_title || 'Performance'} — ${booking.client_name}`;
+
+  const uid = 'shine-booking-' + (booking.id || Date.now()) + '@texasmentalist.com';
+  const now = formatIcsDateTime(new Date());
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Shine The Mentalist//Booking App//EN',
+    'BEGIN:VEVENT',
+    'UID:' + uid,
+    'DTSTAMP:' + now,
+    'DTSTART:' + formatIcsDateTime(startDate),
+    'DTEND:' + formatIcsDateTime(endDate),
+    'SUMMARY:' + escapeIcsText(title),
+    'DESCRIPTION:' + escapeIcsText(description),
+    'LOCATION:' + escapeIcsText(booking.venue_address || ''),
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+}
+
+function escapeVcfText(str) {
+  return String(str || '').replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
+}
+
+// Builds a standalone .vcf contact card. First name = full client name, last name = a fixed
+// tag so all clients from this app group together and are instantly recognizable in Contacts.
+function buildVcfFile(clientName, email, phone, venueAddress) {
+  const lines = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `N:Magic Show Client;${escapeVcfText(clientName)};;;`,
+    `FN:${escapeVcfText(clientName)} Magic Show Client`
+  ];
+  if (phone) lines.push(`TEL;TYPE=CELL:${escapeVcfText(phone)}`);
+  if (email) lines.push(`EMAIL:${escapeVcfText(email)}`);
+  if (venueAddress) lines.push(`ADR;TYPE=WORK:;;${escapeVcfText(venueAddress)};;;;`);
+  lines.push('END:VCARD');
+  return lines.join('\r\n');
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -157,6 +278,32 @@ export default async function handler(req, res) {
       });
     }
 
+    // Build calendar event for this booking
+    const icsContent = buildIcsFile(booking);
+    const icsBase64 = Buffer.from(icsContent, 'utf-8').toString('base64');
+
+    // Look up phone number — it lives on the clients table, not bookings
+    let clientPhone = null;
+    if (booking.client_id) {
+      try {
+        const clientLookupRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${booking.client_id}&select=phone&limit=1`, {
+          headers: {
+            'apikey': process.env.SUPABASE_SECRET_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+          }
+        });
+        const clientLookupRows = await clientLookupRes.json();
+        if (Array.isArray(clientLookupRows) && clientLookupRows[0]) {
+          clientPhone = clientLookupRows[0].phone || null;
+        }
+      } catch (lookupErr) {
+        console.error('Could not look up client phone for vCard:', lookupErr.message);
+      }
+    }
+
+    const vcfContent = buildVcfFile(booking.client_name, booking.client_email, clientPhone, booking.venue_address);
+    const vcfBase64 = Buffer.from(vcfContent, 'utf-8').toString('base64');
+
     // Email signed PDF to Shine
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -165,8 +312,12 @@ export default async function handler(req, res) {
         from: 'Shine Booking Assistant <shine@texasmentalist.com>',
         to: 'shinethementalist@gmail.com',
         subject: `Signed: ${booking.client_name}'s performance agreement`,
-        text: `${booking.client_name} just signed the performance agreement for ${booking.event_title} on ${eventDateFormatted}.\n\nSigned PDF attached.`,
-        attachments: [{ filename: 'Performance_Agreement_Signed.pdf', content: pdfBase64 }]
+        text: `${booking.client_name} just signed the performance agreement for ${booking.event_title} on ${eventDateFormatted}.\n\nSigned PDF attached. A calendar file and contact card are also attached — tap either to add them to your phone.`,
+        attachments: [
+          { filename: 'Performance_Agreement_Signed.pdf', content: pdfBase64 },
+          { filename: 'event.ics', content: icsBase64 },
+          { filename: 'contact.vcf', content: vcfBase64 }
+        ]
       })
     });
 
