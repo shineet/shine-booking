@@ -245,6 +245,27 @@
         cursor: not-allowed
     }
 
+    .text-photo-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        margin-top: 10px;
+        padding: 12px;
+        background: #f0f7ff;
+        color: #0071e3;
+        border: 1.5px solid #cde0fc;
+        border-radius: 11px;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        transition: background 0.15s
+    }
+
+    .text-photo-btn:active {
+        background: #e0effe
+    }
+
     .loading {
         text-align: center;
         padding: 60px 20px;
@@ -341,6 +362,22 @@
         input.closest('.radio-option').classList.add('selected');
     }
 
+    // Generates a consistent photo-link field across every event type: a label, a hint with
+    // the inline text-link as a fallback, the URL input itself, and a prominent standalone
+    // button to open Messages directly — since most people send photos by text, not a link.
+    function photoField(fieldId, personLabel, opts) {
+        opts = opts || {};
+        const labelText = opts.labelText || ('Link to a photo of ' + personLabel);
+        const hintText = opts.hintText || '(Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)';
+        return `
+      <div class="field">
+        <label>${labelText} <span class="hint">${hintText}</span></label>
+        <input type="text" id="${fieldId}" placeholder="https://...">
+        <a href="sms:+16128657681" class="text-photo-btn">📱 Text me the photo instead</a>
+      </div>
+    `;
+    }
+
     function renderForm(d) {
         const firstName = (d.clientName || '').split(' ')[0];
         document.getElementById('greeting-title').textContent = 'Hi ' + firstName + ',';
@@ -420,7 +457,7 @@
       <div class="field"><label>Any other entertainment before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
       <div class="field"><label>Tell me about the bride <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know — I'll use this to personalize the show and a few custom touches)</span></label><textarea id="q_trivia_bride"></textarea></div>
       <div class="field"><label>Tell me about the groom <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know — I'll use this to personalize the show and a few custom touches)</span></label><textarea id="q_trivia_groom"></textarea></div>
-      <div class="field"><label>Please share a photo of the bride, with or without the groom <span class="hint">You can give the link here for the photo or share with me via text. (Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)</span></label><input type="text" id="q_photo_bride" placeholder="https://..."></div>
+      ${photoField('q_photo_bride', 'the bride', { labelText: 'Please share a photo of the bride, with or without the groom', hintText: 'You can give the link here for the photo or share with me via text. (Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)' })}
       <div class="field"><label>Anything else I should know? <span class="hint">(how they met, the proposal story, etc.)</span></label><textarea id="q_anything_else"></textarea></div>
     `
 
@@ -445,7 +482,7 @@
       </div>
       <div class="field"><label>Any other entertainment before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
       <div class="field"><label>Tell me about the groom <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know — I'll use this to personalize the show and a few custom touches)</span></label><textarea id="q_trivia_groom"></textarea></div>
-      <div class="field"><label>Link to a photo of the groom <span class="hint">(Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)</span></label><input type="text" id="q_photo_groom" placeholder="https://..."></div>
+      ${photoField('q_photo_groom', 'the groom')}
       <div class="field"><label>Anything else I should know? <span class="hint">(how they met, the proposal story, etc.)</span></label><textarea id="q_anything_else"></textarea></div>
     `
 
@@ -474,7 +511,7 @@
             radioGroup('q_vibe', ['Clean elegant & classy', 'Family friendly', 'Light adult humor', 'Slightly edgy / flirty', 'Bold & edgy'])}</div>
       </div>
       <div class="field"><label>Tell me about the birthday person <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know — I'll use this to personalize the show and a few custom touches)</span></label><textarea id="q_trivia"></textarea></div>
-      <div class="field"><label>Link to a photo of the birthday person <span class="hint">(Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)</span></label><input type="text" id="q_photo_honoree" placeholder="https://..."></div>
+      ${photoField('q_photo_honoree', 'the birthday person')}
     `
 
 
@@ -501,9 +538,9 @@
             radioGroup('q_vibe', ['Clean elegant & classy', 'Family friendly', 'Light adult humor', 'Slightly edgy / flirty', 'Bold & edgy'])}</div>
       </div>
       <div class="field"><label>Tell me about spouse 1 <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know)</span></label><textarea id="q_trivia_spouse1"></textarea></div>
-      <div class="field"><label>Link to a photo of spouse 1 <span class="hint">(or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)</span></label><input type="text" id="q_photo_spouse1" placeholder="https://..."></div>
+      ${photoField('q_photo_spouse1', 'spouse 1', { hintText: '(or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)' })}
       <div class="field"><label>Tell me about spouse 2 <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know)</span></label><textarea id="q_trivia_spouse2"></textarea></div>
-      <div class="field"><label>Link to a photo of spouse 2 <span class="hint">(or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)</span></label><input type="text" id="q_photo_spouse2" placeholder="https://..."></div>
+      ${photoField('q_photo_spouse2', 'spouse 2', { hintText: '(or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)' })}
       <div class="field"><label>Anything else I should know? <span class="hint">(how they met, favorite memories, etc.)</span></label><textarea id="q_anything_else"></textarea></div>
     `
 
@@ -556,7 +593,7 @@
       </div>
       <div class="field"><label>Any other entertainment before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
       <div class="field"><label>Tell me about the graduate <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know — I'll use this to personalize the show and a few custom touches)</span></label><textarea id="q_trivia"></textarea></div>
-      <div class="field"><label>Link to a photo of the graduate <span class="hint">(Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)</span></label><input type="text" id="q_photo_honoree" placeholder="https://..."></div>
+      ${photoField('q_photo_honoree', 'the graduate')}
     `
 
 
@@ -590,7 +627,7 @@
             radioGroup('q_vibe', ['Clean elegant & classy', 'Family friendly', 'Light adult humor'])}</div>
       </div>
       <div class="field"><label>Tell me about the parent(s)-to-be <span class="hint">(personality, hobbies, a funny story, anything most people don't know)</span></label><textarea id="q_trivia"></textarea></div>
-      <div class="field"><label>Link to a photo of the parent(s)-to-be <span class="hint">(Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)</span></label><input type="text" id="q_photo_honoree" placeholder="https://..."></div>
+      ${photoField('q_photo_honoree', 'the parent(s)-to-be')}
     `
 
 
@@ -621,7 +658,7 @@
       </div>
       <div class="field"><label>Any other entertainment before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
       <div class="field"><label>If there's a guest of honor, tell me about them <span class="hint">(personality, hobbies, a funny story, anything most people don't know — optional)</span></label><textarea id="q_trivia"></textarea></div>
-      <div class="field"><label>Link to a photo of the guest of honor <span class="hint">(optional — Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)</span></label><input type="text" id="q_photo_honoree" placeholder="https://..."></div>
+      ${photoField('q_photo_honoree', 'the guest of honor', { hintText: '(optional — Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)' })}
     `
 
 
