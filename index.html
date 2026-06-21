@@ -1326,6 +1326,9 @@ function renderDetail(c) {
         var intakeLabel = c.status === 'package_selected' ? 'Send questionnaire' : 'Resend intake';
         actions += '<button class="d-btn blue" onclick="sendIntakeForm(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.selected_category||'') + '\',' + (c.selected_price||0) + ')">' + intakeLabel + '</button>';
     }
+    if (c.status === 'package_selected') {
+        actions += '<button class="d-btn green" onclick="markAsBooked(\'' + esc(c.id) + '\')">Mark as booked (show on Gig Dashboard)</button>';
+    }
     if (c.status === 'intake_completed') {
         actions += '<button class="d-btn primary" onclick="openContractModal(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.booking_id||'') + '\')">Send contract</button>';
     }
@@ -1555,6 +1558,21 @@ function toggleContactType(id, newType) {
         loadLeads();
     })
     .catch(function(e) { alert('Could not reclassify: ' + e.message); });
+}
+
+function markAsBooked(id) {
+    if (!confirm('Mark this client as booked? This will show them in the Gig Dashboard\'s Upcoming Gigs, even before the contract is signed.')) return;
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
+        body: JSON.stringify({ status: 'booked', last_activity: new Date().toISOString() })
+    })
+    .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
+    .then(function() {
+        closeDetail();
+        loadLeads();
+    })
+    .catch(function(e) { alert('Could not update status: ' + e.message); });
 }
 
 /* ── Pricing modal ── */
