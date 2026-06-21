@@ -37,12 +37,13 @@ export default async function handler(req, res) {
 
     const answers = booking.intake_answers || {};
 
-    // mode=full -> for intake.html (just need name + event type + event date)
+    // mode=full -> for intake.html (name + event type + event date + any previously saved answers)
     if (mode === 'full') {
       res.status(200).json({
         clientName: booking.client_name,
         eventType: booking.event_type,
-        eventDate: booking.event_date || ''
+        eventDate: booking.event_date || '',
+        savedAnswers: answers
       });
       return;
     }
