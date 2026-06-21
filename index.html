@@ -1326,7 +1326,7 @@ function renderDetail(c) {
         var intakeLabel = c.status === 'package_selected' ? 'Send questionnaire' : 'Resend intake';
         actions += '<button class="d-btn blue" onclick="sendIntakeForm(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.selected_category||'') + '\',' + (c.selected_price||0) + ')">' + intakeLabel + '</button>';
     }
-    if (c.status === 'package_selected') {
+    if (['package_selected','booked','intake_sent','intake_completed','contract_sent'].indexOf(c.status) !== -1) {
         actions += '<button class="d-btn green" onclick="markAsBooked(\'' + esc(c.id) + '\')">Mark as booked (show on Gig Dashboard)</button>';
     }
     if (c.status === 'intake_completed') {
@@ -1561,6 +1561,20 @@ function toggleContactType(id, newType) {
 }
 
 function markAsBooked(id) {
+    var c = allClients.find(function(x) { return x.id === id; });
+    if (!c) return;
+
+    // Anything past 'booked' in the pipeline already has its own status doing real work
+    // (e.g. unlocking "Send contract" at intake_completed) — don't regress it. The Gig
+    // Dashboard already picks these up separately once a real booking record exists.
+    var pipelineOrder = ['package_selected', 'booked', 'intake_sent', 'intake_completed', 'contract_sent', 'contract_signed'];
+    var alreadyPastBooked = pipelineOrder.indexOf(c.status) > pipelineOrder.indexOf('booked');
+
+    if (alreadyPastBooked) {
+        alert('This client is already further along (' + (STATUS_LABELS[c.status] || c.status) + ') — they\'ll continue showing on the Gig Dashboard automatically, so no change is needed here.');
+        return;
+    }
+
     if (!confirm('Mark this client as booked? This will show them in the Gig Dashboard\'s Upcoming Gigs, even before the contract is signed.')) return;
     fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id, {
         method: 'PATCH',
