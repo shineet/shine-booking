@@ -148,6 +148,17 @@ button.success { background: #1a3a28; color: #6ee0a4; border: 1px solid #2a5a38;
 .card-footer { display: flex; justify-content: space-between; align-items: center; }
 .card-fee { font-size: 18px; font-weight: 700; color: var(--green); }
 .card-source { font-size: 11px; color: var(--muted); }
+.intake-pending-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--amber);
+  background: rgba(240,165,0,.12);
+  border: 1px solid rgba(240,165,0,.25);
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin-bottom: 10px;
+}
 
 /* ── KPI row ── */
 .kpi-row {
@@ -708,11 +719,15 @@ function renderUpcoming() {
     const label = days === 0 ? 'TODAY' : days === 1 ? 'TOMORROW' : `IN ${days} DAYS`;
     const fee   = c.selected_price ? `$${Number(c.selected_price).toLocaleString()}` : 'Fee TBD';
     const meta  = [fmtDate(c.event_date), c.event_type, c.venue].filter(Boolean).join(' · ');
+    const booking = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings;
+    const intakeDone = booking && booking.intake_status === 'completed';
+    const intakeBadge = !intakeDone ? '<div class="intake-pending-badge">⏳ Awaiting questionnaire</div>' : '';
     return `
       <div class="upcoming-card ${cls}" onclick="openDetail('${c.id}')">
         <div class="card-days">${label}</div>
         <div class="card-client">${esc(c.name)}</div>
         <div class="card-meta">${esc(meta)}</div>
+        ${intakeBadge}
         <div class="card-footer">
           <div class="card-fee">${fee}</div>
           <div class="card-source">${esc(c.lead_source || '')}</div>
