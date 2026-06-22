@@ -4,9 +4,11 @@
 // POST with { action: 'send', invoiceData, toEmail, toName, customMessage? } → returns { success }
 
 import { Resend } from 'resend';
-import PDFDocument from 'pdfkit';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const PDFDocument = require('pdfkit');
 
 export const config = { runtime: 'nodejs' };
 
