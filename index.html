@@ -2164,7 +2164,9 @@ function toggleContractInvoice(checked) {
         var today = new Date();
         document.getElementById('ci-number').value  = 'STM-' + today.getFullYear() + '-' + String(Math.floor(Math.random()*900)+100);
         document.getElementById('ci-company').value = contractClient.name || '';
-        document.getElementById('ci-contact').value = '';   // not stored on client — leave blank for manual entry
+        // If client name looks like a person (First Last), pre-fill contact with their name
+        var isPersonName = contractClient.name && /^[A-Z][a-z]+ [A-Z]/.test(contractClient.name);
+        document.getElementById('ci-contact').value = isPersonName ? contractClient.name : '';
         document.getElementById('ci-due').value     = dueDate;
 
         ciLineItems = [{ description: 'Performance Fee', details: title || '', amount: fee }];
