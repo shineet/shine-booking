@@ -4,7 +4,9 @@
 // an invoice PDF — all in one call.
 
 import { Resend } from 'resend';
-import PDFDocument from 'pdfkit';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const PDFDocument = require('pdfkit');
 
 export const config = { runtime: 'nodejs' };
 
