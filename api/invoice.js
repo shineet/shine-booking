@@ -97,7 +97,7 @@ function buildInvoicePDF(data) {
     // Logo — loaded from /public/icons/logo.png if present on Vercel
     try {
       const fs = require('fs'), path = require('path');
-      const logoPath = path.join(process.cwd(), 'public', 'icons', 'logo.png');
+      const logoPath = path.join(process.cwd(), 'icons', 'logo.png');
       if (fs.existsSync(logoPath)) {
         doc.image(logoPath, 50, 36, { width: 62, height: 62 });
       }
