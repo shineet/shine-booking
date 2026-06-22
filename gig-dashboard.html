@@ -1418,7 +1418,7 @@ function openRepertoire(clientId, eventType, eventDate, clientName) {
     event: eventType,
     name:  clientName,
   });
-  window.open(REPERTOIRE_BASE + '?' + params.toString(), '_blank');
+  window.location.href = REPERTOIRE_BASE + '?' + params.toString();
 }
 
 // ── Invoice button on upcoming cards ─────────────────────────────────────────
