@@ -559,7 +559,8 @@ td { padding: 9px 14px; vertical-align: middle; }
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
       <div class="form-group"><label>Event Name</label><input type="text" id="inv-event-name" placeholder="Executive Dinner"></div>
       <div class="form-group"><label>Event Date</label><input type="text" id="inv-event-date" placeholder="July 1, 2026"></div>
-      <div class="form-group"><label>Time</label><input type="text" id="inv-event-time" placeholder="5:30 PM - 8:30 PM"></div>
+      <div class="form-group"><label>Start Time</label><input type="text" id="inv-event-time" placeholder="5:30 PM"></div>
+      <div class="form-group"><label>Duration</label><input type="text" id="inv-duration" placeholder="3 hours"></div>
       <div class="form-group"><label>Venue</label><input type="text" id="inv-venue" placeholder="Juniper Lakehouse, Austin, TX"></div>
       <div class="form-group"><label>Guests</label><input type="text" id="inv-guests" placeholder="Approximately 45"></div>
       <div class="form-group"><label>Deposit %</label><input type="number" id="inv-deposit" value="50" min="0" max="100"></div>
@@ -1438,6 +1439,7 @@ function openInvoiceFromCard(btn) {
     eventName: booking ? (booking.event_title || c.event_type || '') : (c.event_type || ''),
     eventDate: fmtDate(c.event_date),
     eventTime: booking ? (booking.start_time || '') : '',
+    duration:  booking ? (booking.duration || '') : '',
     venue:     booking ? (booking.venue_address || c.venue || '') : (c.venue || ''),
     guests:    guests,
     dueDate:   dueDate,
@@ -1460,6 +1462,7 @@ function openInvoiceModal(prefill) {
   document.getElementById('inv-event-name').value = prefill.eventName || '';
   document.getElementById('inv-event-date').value = prefill.eventDate || '';
   document.getElementById('inv-event-time').value = prefill.eventTime || '';
+  var durEl = document.getElementById('inv-duration'); if(durEl) durEl.value = prefill.duration || '';
   document.getElementById('inv-venue').value   = prefill.venue   || '';
   document.getElementById('inv-guests').value  = prefill.guests  || '';
   document.getElementById('inv-to-email').value = prefill.email  || '';
@@ -1532,6 +1535,7 @@ function buildInvoicePayload() {
     eventName:      document.getElementById('inv-event-name').value,
     eventDate:      document.getElementById('inv-event-date').value,
     eventTime:      document.getElementById('inv-event-time').value,
+    duration:       document.getElementById('inv-duration').value,
     venue:          document.getElementById('inv-venue').value,
     guests:         document.getElementById('inv-guests').value,
     depositPercent: parseInt(document.getElementById('inv-deposit').value) || 50,
