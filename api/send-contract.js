@@ -31,13 +31,17 @@ export default async function handler(req, res) {
     invoiceData,     // optional — attach invoice PDF if present
   } = req.body;
 
+  // Coerce empty strings to null so Supabase UUID columns don't reject them
+  const safeClientId  = clientId  && String(clientId).trim()  ? clientId  : null;
+  const safeBookingId = bookingId && String(bookingId).trim() ? bookingId : null;
+
   if (!clientEmail || !clientName) {
     return res.status(400).json({ error: 'Missing clientEmail or clientName' });
   }
 
   try {
     // ── 1. Upsert booking record ─────────────────────────────────────────────
-    let resolvedBookingId = bookingId || null;
+    let resolvedBookingId = safeBookingId;
 
     if (resolvedBookingId) {
       // Update existing booking with latest event details
@@ -54,13 +58,21 @@ export default async function handler(req, res) {
           contract_status: 'sent',
         }),
       });
+      // Also update selected_price on client so dashboard card shows fee
+      if (safeClientId && fee) {
+        await fetch(`${SB_URL}/rest/v1/clients?id=eq.${safeClientId}`, {
+          method: 'PATCH',
+          headers: SB_HDR,
+          body: JSON.stringify({ selected_price: fee, last_activity: new Date().toISOString() }),
+        });
+      }
     } else {
       // Create new booking record for planners / direct clients
       const bRes = await fetch(`${SB_URL}/rest/v1/bookings`, {
         method: 'POST',
         headers: SB_HDR,
         body: JSON.stringify({
-          client_id:     clientId     || null,
+          client_id:     safeClientId,
           client_name:   clientName,
           client_email:  clientEmail,
           event_title:   eventTitle   || null,
@@ -79,11 +91,11 @@ export default async function handler(req, res) {
       resolvedBookingId = booking.id;
 
       // Link booking back to client record
-      if (clientId) {
-        await fetch(`${SB_URL}/rest/v1/clients?id=eq.${clientId}`, {
+      if (safeClientId) {
+        await fetch(`${SB_URL}/rest/v1/clients?id=eq.${safeClientId}`, {
           method: 'PATCH',
           headers: SB_HDR,
-          body: JSON.stringify({ booking_id: resolvedBookingId, status: 'intake_completed', last_activity: new Date().toISOString() }),
+          body: JSON.stringify({ booking_id: resolvedBookingId, status: 'intake_completed', last_activity: new Date().toISOString(), selected_price: fee || null }),
         });
       }
     }
