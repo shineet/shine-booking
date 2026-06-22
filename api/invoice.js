@@ -69,6 +69,40 @@ function safeFilename(data) {
     (data.clientCompany || data.clientName || 'Client').replace(/\s+/g, '_') + '.pdf';
 }
 
+function formatGuests(g) {
+  if (!g) return '';
+  var s = String(g).trim();
+  // If it's a plain number or starts with a digit, prefix "Approximately"
+  if (/^[0-9]/.test(s) && !/approx/i.test(s)) return 'Approximately ' + s + ' people';
+  // If it already says "approximately" just ensure "people" at end
+  if (/approx/i.test(s) && !/people/i.test(s)) return s + ' people';
+  return s;
+}
+
+function formatTimeRange(startTime, duration) {
+  if (!startTime) return '';
+  var start12 = fmt12h(startTime);
+  if (!duration) return start12;
+  // Parse start time to minutes
+  var m = String(startTime).match(/([0-9]{1,2}):([0-9]{2})/);
+  if (!m) return start12;
+  var startMins = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  // Parse duration — supports "3 hours", "2.5 hours", "90 minutes", "1 hour 30 minutes"
+  var durationMins = 0;
+  var dStr = String(duration).toLowerCase();
+  var hoursMatch = dStr.match(/([0-9.]+)\s*h/);
+  var minsMatch  = dStr.match(/([0-9.]+)\s*m/);
+  if (hoursMatch) durationMins += Math.round(parseFloat(hoursMatch[1]) * 60);
+  if (minsMatch)  durationMins += parseInt(minsMatch[1], 10);
+  if (durationMins === 0) return start12;
+  var endMins = startMins + durationMins;
+  var endH = Math.floor(endMins / 60) % 24;
+  var endM = String(endMins % 60).padStart(2, '0');
+  var endAmpm = endH >= 12 ? 'PM' : 'AM';
+  endH = endH % 12 || 12;
+  return start12 + ' – ' + endH + ':' + endM + ' ' + endAmpm;
+}
+
 function fmt12h(t) {
   if (!t) return '';
   const m = String(t).match(/([0-9]{1,2}):([0-9]{2})/);
@@ -132,9 +166,9 @@ function buildInvoicePDF(data) {
     var eventRows = [
       ['Event',  data.eventName],
       ['Date',   data.eventDate],
-      ['Time',   fmt12h(data.eventTime)],
+      ['Time',   formatTimeRange(data.eventTime, data.duration)],
       ['Venue',  data.venue],
-      ['Guests', data.guests],
+      ['Guests', formatGuests(data.guests)],
     ].filter(function(r) { return r[1]; });
 
     eventRows.forEach(function(row, i) {
@@ -185,7 +219,7 @@ function buildInvoicePDF(data) {
 
     // ── PAGE 2: 3-COLUMN PAYMENT INFO ────────────────────────────────────────
     doc.addPage();
-    var col1=50, col2=220, col3=390, colW=155;
+    var col1=50, col2=230, col3=400, colW=160;
 
     doc.font('Helvetica-Bold').fontSize(11).fillColor(DARK)
        .text('Payment Methods',col1,60)
