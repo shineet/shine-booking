@@ -791,7 +791,19 @@ function renderUpcoming() {
           <div class="card-fee">${fee}</div>
           <div style="display:flex;align-items:center;gap:8px">
             <div class="card-source">${esc(c.lead_source || '')}</div>
-            <button onclick="event.stopPropagation();openInvoiceModal({company:esc(c.name),email:c.email||'',eventName:c.event_type||'',eventDate:fmtDate(c.event_date),venue:c.venue||''})" style="background:#B8960C;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">Invoice</button>
+            <button onclick="event.stopPropagation();(function(c){
+              var feeAmt = Number(c.selected_price)||0;
+              openInvoiceModal({
+                company: c.name,
+                email: c.email||'',
+                eventName: c.event_type||'',
+                eventDate: fmtDate(c.event_date),
+                eventTime: (Array.isArray(c.bookings)?c.bookings[0]:c.bookings)&&(Array.isArray(c.bookings)?c.bookings[0]:c.bookings).start_time||\'\',
+                venue: c.venue||\'\',
+                lineItems: feeAmt ? [{description:\'Performance Fee\',details:c.event_type||\'\',amount:feeAmt}] : [{description:\'\',details:\'\',amount:\'\'}],
+                total: feeAmt
+              });
+            })(c)" style="background:#B8960C;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">Invoice</button>
           </div>
         </div>
       </div>`;
