@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   try {
     const {
       bookingId, clientId, clientName, clientEmail, eventType,
-      eventTitle, venueAddress, eventDate, startTime, duration, fee
+      eventTitle, venueAddress, clientAddress, eventDate, startTime, duration, fee
     } = req.body;
 
     if (!clientName || !clientEmail || !venueAddress || !eventDate || !fee) {
@@ -83,7 +83,7 @@ export default async function handler(req, res) {
       }
     }
 
-    const contractLink = `https://shine-booking.vercel.app/contract.html?bid=${resolvedBookingId}`;
+    const contractLink = `https://shine-booking.vercel.app/contract.html?bid=${resolvedBookingId}${clientAddress ? '&caddr=' + encodeURIComponent(clientAddress) : ''}`;
 
     // Email contract link to client
     await fetch('https://api.resend.com/emails', {
