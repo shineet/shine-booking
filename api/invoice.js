@@ -5,8 +5,17 @@
 
 import { Resend } from 'resend';
 import PDFDocument from 'pdfkit';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 
 export const config = { runtime: 'nodejs' };
+
+// Pre-load logo once at module level
+let _logoBuffer = null;
+try {
+  const logoPath = join(process.cwd(), 'icons', 'logo.png');
+  if (existsSync(logoPath)) _logoBuffer = readFileSync(logoPath);
+} catch(_) {}
 
 const resend = new Resend(process.env.RESEND_KEY);
 
@@ -94,12 +103,10 @@ function buildInvoicePDF(data) {
     const WHITE = '#ffffff';
 
     // ── HEADER ───────────────────────────────────────────────────────────────
-    // Logo — loaded from /public/icons/logo.png if present on Vercel
+    // Logo — loaded from icons/logo.png
     try {
-      const fs = require('fs'), path = require('path');
-      const logoPath = path.join(process.cwd(), 'icons', 'logo.png');
-      if (fs.existsSync(logoPath)) {
-        doc.image(logoPath, 50, 36, { width: 62, height: 62 });
+      if (_logoBuffer) {
+        doc.image(_logoBuffer, 50, 36, { width: 62, height: 62 });
       }
     } catch(_) {}
 
