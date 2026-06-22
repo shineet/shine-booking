@@ -10,31 +10,80 @@ export default async function handler(req, res) {
       eventTitle, venueAddress, eventDate, startTime, duration, fee
     } = req.body;
 
-    if (!bookingId || !clientName || !clientEmail || !venueAddress || !eventDate || !fee) {
+    if (!clientName || !clientEmail || !venueAddress || !eventDate || !fee) {
       res.status(400).json({ error: 'Missing required contract fields' });
       return;
     }
 
-    // Update the existing booking record (created at intake step) with final contract details
-    await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${bookingId}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': process.env.SUPABASE_SECRET_KEY,
-        'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
-      },
-      body: JSON.stringify({
-        event_title: eventTitle,
-        venue_address: venueAddress,
-        event_date: eventDate,
-        start_time: startTime,
-        duration: duration,
-        fee: fee,
-        contract_status: 'sent'
-      })
-    });
+    let resolvedBookingId = bookingId;
 
-    const contractLink = `https://shine-booking.vercel.app/contract.html?bid=${bookingId}`;
+    if (resolvedBookingId) {
+      // Update the existing booking record (created at intake step)
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${resolvedBookingId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+        },
+        body: JSON.stringify({
+          event_title: eventTitle,
+          venue_address: venueAddress,
+          event_date: eventDate,
+          start_time: startTime,
+          duration: duration,
+          fee: fee,
+          contract_status: 'sent'
+        })
+      });
+    } else {
+      // No intake form was submitted — create a fresh bookings row now
+      const createRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({
+          client_id: clientId,
+          client_name: clientName,
+          client_email: clientEmail,
+          event_type: eventType || '',
+          event_title: eventTitle,
+          venue_address: venueAddress,
+          event_date: eventDate,
+          start_time: startTime,
+          duration: duration,
+          fee: fee,
+          contract_status: 'sent',
+          intake_status: 'completed'  // skipped intake — mark as complete so it doesn't show as pending
+        })
+      });
+      if (!createRes.ok) {
+        const errText = await createRes.text();
+        throw new Error('Could not create booking record: ' + errText);
+      }
+      const newBooking = await createRes.json();
+      resolvedBookingId = newBooking[0]?.id;
+      if (!resolvedBookingId) throw new Error('Booking created but no ID returned');
+
+      // Link the new booking back to the client record
+      if (clientId) {
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.SUPABASE_SECRET_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+          },
+          body: JSON.stringify({ booking_id: resolvedBookingId })
+        });
+      }
+    }
+
+    const contractLink = `https://shine-booking.vercel.app/contract.html?bid=${resolvedBookingId}`;
 
     // Email contract link to client
     await fetch('https://api.resend.com/emails', {
@@ -65,7 +114,7 @@ export default async function handler(req, res) {
       });
     }
 
-    res.status(200).json({ success: true, bookingId, contractLink });
+    res.status(200).json({ success: true, bookingId: resolvedBookingId, contractLink });
 
   } catch(e) {
     console.error('send-contract error:', e);
