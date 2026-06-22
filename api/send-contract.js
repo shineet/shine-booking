@@ -3,19 +3,19 @@
 // contract signing URL, emails it to the client, and optionally attaches
 // an invoice PDF — all in one call.
 
-import { Resend } from 'resend';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
+const { Resend } = require('resend');
 const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
 
-export const config = { runtime: 'nodejs' };
+
 
 const resend   = new Resend(process.env.RESEND_KEY);
 const SB_URL   = process.env.SUPABASE_URL;
 const SB_KEY   = process.env.SUPABASE_SECRET_KEY;
 const SB_HDR   = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const {
