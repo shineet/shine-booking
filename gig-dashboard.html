@@ -794,6 +794,7 @@ function renderUpcoming() {
           <div style="display:flex;align-items:center;gap:8px">
             <div class="card-source">${esc(c.lead_source || '')}</div>
             <button data-invoice-idx="${_cardIdx}" onclick="event.stopPropagation();openInvoiceFromCard(this)" style="background:#B8960C;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">Invoice</button>
+            <button onclick="event.stopPropagation();openRepertoire('${c.id}','${esc(c.event_type||'')}','${c.event_date||''}','${esc(c.name||'')}')" style="background:#4f46e5;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">🎩 Routine</button>
           </div>
         </div>
       </div>`;
@@ -1405,6 +1406,20 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 document.getElementById('th-date').classList.add('sorted');
 loadAll();
 
+
+// ── Repertoire button on upcoming cards ───────────────────────────────────────
+const REPERTOIRE_BASE = 'https://my-repertoire-lovat.vercel.app';
+
+function openRepertoire(clientId, eventType, eventDate, clientName) {
+  // Build URL with gig params — Repertoire app uses these to find or create the gig
+  var params = new URLSearchParams({
+    gig:   clientId,
+    date:  eventDate,
+    event: eventType,
+    name:  clientName,
+  });
+  window.open(REPERTOIRE_BASE + '?' + params.toString(), '_blank');
+}
 
 // ── Invoice button on upcoming cards ─────────────────────────────────────────
 function openInvoiceFromCard(btn) {
