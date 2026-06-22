@@ -1044,6 +1044,7 @@
         </div>
         <div class="modal-actions">
             <button class="modal-cancel" onclick="closeContractModal()">Cancel</button>
+            <button class="modal-cancel" id="contract-link-btn" onclick="getContractLinkManually()">Get link (send manually)</button>
             <button class="modal-send" id="contract-send-btn" onclick="sendContract()">Send contract</button>
         </div>
     </div>
@@ -1329,7 +1330,7 @@ function renderDetail(c) {
     if (['package_selected','booked','intake_sent','intake_completed','contract_sent'].indexOf(c.status) !== -1) {
         actions += '<button class="d-btn green" onclick="markAsBooked(\'' + esc(c.id) + '\')">Mark as booked (show on Gig Dashboard)</button>';
     }
-    if (c.status === 'intake_completed') {
+    if (['intake_completed', 'booked', 'contract_sent'].indexOf(c.status) !== -1) {
         actions += '<button class="d-btn primary" onclick="openContractModal(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.booking_id||'') + '\')">Send contract</button>';
     }
     if (c.booking_id && ['intake_completed','contract_sent','contract_signed'].indexOf(c.status) !== -1) {
@@ -1798,6 +1799,31 @@ function openContractModal(id, name, email, bookingId) {
 }
 
 function closeContractModal() { document.getElementById('contract-modal').classList.remove('show'); contractClient = {}; }
+
+function getContractLinkManually() {
+    var title    = document.getElementById('ct-title').value.trim();
+    var address  = document.getElementById('ct-address').value.trim();
+    var date     = document.getElementById('ct-date').value;
+    var start    = document.getElementById('ct-start').value;
+    var duration = document.getElementById('ct-duration').value.trim();
+    var fee      = document.getElementById('ct-fee').value;
+    if (!title || !address || !date || !duration || !fee) { alert('Please fill in all contract fields.'); return; }
+    var btn = document.getElementById('contract-link-btn');
+    btn.disabled = true; btn.textContent = 'Generating...';
+    fetch('/api/send-contract', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee) })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.error) throw new Error(d.error);
+        closeContractModal();
+        loadLeads();
+        openCopyLinkModal(d.contractLink, contractClient.name);
+    })
+    .catch(function(e) { alert('Error: ' + e.message); })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Get link (send manually)'; });
+}
 
 function sendContract() {
     var title    = document.getElementById('ct-title').value.trim();
