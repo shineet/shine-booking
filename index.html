@@ -1034,6 +1034,7 @@
         <p id="contract-modal-client-name">Fill in the event details</p>
         <div class="field"><label>Event title</label><input type="text" id="ct-title" placeholder="e.g. Sarah's 30th Birthday"></div>
         <div class="field"><label>Venue address</label><input type="text" id="ct-address" placeholder="Full address"></div>
+        <div class="field"><label>Client / Company address <span style="font-weight:400;color:var(--muted)">(optional — for planners &amp; DMCs; leave blank for direct clients)</span></label><input type="text" id="ct-client-address" placeholder="e.g. 123 Business St, Austin TX"></div>
         <div class="two-col">
             <div class="price-field"><label>Event date</label><input type="date" id="ct-date"></div>
             <div class="price-field"><label>Start time</label><input type="time" id="ct-start"></div>
@@ -1801,18 +1802,19 @@ function openContractModal(id, name, email, bookingId) {
 function closeContractModal() { document.getElementById('contract-modal').classList.remove('show'); contractClient = {}; }
 
 function getContractLinkManually() {
-    var title    = document.getElementById('ct-title').value.trim();
-    var address  = document.getElementById('ct-address').value.trim();
-    var date     = document.getElementById('ct-date').value;
-    var start    = document.getElementById('ct-start').value;
-    var duration = document.getElementById('ct-duration').value.trim();
-    var fee      = document.getElementById('ct-fee').value;
+    var title         = document.getElementById('ct-title').value.trim();
+    var address       = document.getElementById('ct-address').value.trim();
+    var clientAddress = document.getElementById('ct-client-address').value.trim();
+    var date          = document.getElementById('ct-date').value;
+    var start         = document.getElementById('ct-start').value;
+    var duration      = document.getElementById('ct-duration').value.trim();
+    var fee           = document.getElementById('ct-fee').value;
     if (!title || !address || !date || !duration || !fee) { alert('Please fill in all contract fields.'); return; }
     var btn = document.getElementById('contract-link-btn');
     btn.disabled = true; btn.textContent = 'Generating...';
     fetch('/api/send-contract', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee) })
+        body: JSON.stringify({ clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee) })
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
@@ -1826,18 +1828,19 @@ function getContractLinkManually() {
 }
 
 function sendContract() {
-    var title    = document.getElementById('ct-title').value.trim();
-    var address  = document.getElementById('ct-address').value.trim();
-    var date     = document.getElementById('ct-date').value;
-    var start    = document.getElementById('ct-start').value;
-    var duration = document.getElementById('ct-duration').value.trim();
-    var fee      = document.getElementById('ct-fee').value;
+    var title         = document.getElementById('ct-title').value.trim();
+    var address       = document.getElementById('ct-address').value.trim();
+    var clientAddress = document.getElementById('ct-client-address').value.trim();
+    var date          = document.getElementById('ct-date').value;
+    var start         = document.getElementById('ct-start').value;
+    var duration      = document.getElementById('ct-duration').value.trim();
+    var fee           = document.getElementById('ct-fee').value;
     if (!title || !address || !date || !start || !duration || !fee) { alert('Please fill in all contract fields.'); return; }
     var btn = document.getElementById('contract-send-btn');
     btn.disabled = true; btn.textContent = 'Sending...';
     fetch('/api/send-contract', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee) })
+        body: JSON.stringify({ clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee) })
     })
     .then(function(r) { return r.json(); })
     .then(function(d) { if (d.error) throw new Error(d.error); closeContractModal(); loadLeads(); })
