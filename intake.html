@@ -733,12 +733,13 @@
             }
         });
 
-        fetch('/api/submit-intake', {
+        fetch('/api/intake', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
+                action: 'submit',
                 bookingId: getBookingId(),
                 answers: answers,
                 draft: isDraft
