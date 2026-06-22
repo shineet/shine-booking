@@ -2204,10 +2204,13 @@ function buildCIInvoiceData() {
         clientPhone:    contractClient.phone || '',
         clientCity:     (function() {
             // Extract city from venue address e.g. "1234 Main St, Austin, TX 78701"
-            var addr = document.getElementById('ct-address').value;
+            var addr = document.getElementById('ct-address').value.replace(/\s*\(.*?\)/g, '').trim();
             var parts = addr.split(',');
-            if (parts.length >= 3) return parts[parts.length-2].trim() + ', ' + parts[parts.length-1].trim();
-            if (parts.length === 2) return parts[1].trim();
+            if (parts.length >= 3) {
+                var st = parts[parts.length-1].trim().replace(/\s*[0-9]{5}.*$/, '').trim();
+                return parts[parts.length-2].trim() + ', ' + st;
+            }
+            if (parts.length === 2) return parts[1].trim().replace(/\s*[0-9]{5}.*$/, '').trim();
             return '';
         })(),
         invoiceNumber:  document.getElementById('ci-number').value,
