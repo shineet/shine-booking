@@ -1765,9 +1765,9 @@ function copyPricingLinkToClipboard() {
 function sendIntakeForm(id, name, email, eventType, price) {
     if (!email) { alert('No email on file — intake form needs an email to send.'); return; }
     if (!confirm('Send intake questionnaire to ' + name + '?')) return;
-    fetch('/api/send-intake', {
+    fetch('/api/intake', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: id, clientName: name, clientEmail: email, eventType: eventType, fee: price || null })
+        body: JSON.stringify({ action: 'send', clientId: id, clientName: name, clientEmail: email, eventType: eventType, fee: price || null })
     })
     .then(function(r) { return r.json(); })
     .then(function(d) { if (d.error) throw new Error(d.error); alert('Intake form sent to ' + name + '!'); loadLeads(); })
