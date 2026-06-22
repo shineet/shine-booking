@@ -1410,17 +1410,39 @@ function openInvoiceFromCard(btn) {
   var idx = parseInt(btn.getAttribute('data-invoice-idx'), 10);
   var c   = upcomingClients[idx];
   if (!c) return;
-  var feeAmt = Number(c.selected_price) || 0;
+  var feeAmt  = Number(c.selected_price) || 0;
   var booking = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings;
+
+  // Format event date for due date (default: 6 days before event)
+  var dueDate = '';
+  if (c.event_date) {
+    var d = new Date(c.event_date + 'T12:00:00');
+    d.setDate(d.getDate() - 6);
+    dueDate = d.toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+  }
+
+  // Format guests from booking intake answers if available
+  var guests = '';
+  if (booking && booking.intake_answers) {
+    guests = booking.intake_answers.q_guests || booking.intake_answers.q_attendees || '';
+  }
+  if (!guests && c.guests) guests = c.guests;
+  if (!guests && c.event_guests) guests = String(c.event_guests);
+
   openInvoiceModal({
-    company:   c.name        || '',
-    email:     c.email       || '',
-    eventName: c.event_type  || '',
+    company:   c.name          || '',
+    contact:   '',
+    city:      '',
+    phone:     c.phone         || '',
+    email:     c.email         || '',
+    eventName: booking ? (booking.event_title || c.event_type || '') : (c.event_type || ''),
     eventDate: fmtDate(c.event_date),
     eventTime: booking ? (booking.start_time || '') : '',
-    venue:     c.venue       || '',
+    venue:     booking ? (booking.venue_address || c.venue || '') : (c.venue || ''),
+    guests:    guests,
+    dueDate:   dueDate,
     lineItems: feeAmt
-      ? [{ description: 'Performance Fee', details: c.event_type || '', amount: feeAmt }]
+      ? [{ description: 'Performance Fee', details: booking ? (booking.event_title || c.event_type || '') : (c.event_type || ''), amount: feeAmt }]
       : [{ description: '', details: '', amount: '' }],
     total: feeAmt,
   });
