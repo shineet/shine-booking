@@ -271,6 +271,9 @@
     function getBookingId() {
         return new URLSearchParams(window.location.search).get('bid') || '';
     }
+    function getClientAddress() {
+        return new URLSearchParams(window.location.search).get('caddr') || '';
+    }
 
     let canvas,
         ctx,
@@ -363,6 +366,8 @@
     }
 
     function renderContract(d) {
+        const clientAddr = getClientAddress();
+        const locationText = clientAddr || d.venueAddress;
         const html = `
     <div class="contract-card">
       <h2>PERFORMANCE AGREEMENT</h2>
@@ -370,7 +375,7 @@
       <p>This Performance Agreement ("Agreement") is entered into on ${
 
 
-        d.todayDate} by and between MindGames, represented by Shine, The Mentalist ("Performer"), and ${d.clientName} ("Client"), located at ${d.venueAddress}.</p>
+        d.todayDate} by and between MindGames, represented by Shine, The Mentalist ("Performer"), and ${d.clientName} ("Client"), located at ${locationText}.</p>
 
       <h3>1. Performance Details</h3>
       <p>Performer shall present a professional Magic &amp; Mentalism performance for the event titled "${
