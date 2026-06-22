@@ -1497,9 +1497,9 @@ function buildInvoicePayload() {
 
 async function downloadInvoice() {
   try {
-    const res  = await fetch('/api/generate-invoice', {
+    const res  = await fetch('/api/invoice', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(buildInvoicePayload()),
+      body: JSON.stringify({ action: 'generate', ...buildInvoicePayload() }),
     });
     const data = await res.json();
     if (!data.pdf) throw new Error(data.error || 'No PDF');
@@ -1518,9 +1518,10 @@ async function sendInvoiceEmail() {
   const orig = btn.textContent;
   btn.textContent = 'Sending...'; btn.disabled = true;
   try {
-    const res  = await fetch('/api/send-invoice', {
+    const res  = await fetch('/api/invoice', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
+        action:        'send',
         invoiceData:   buildInvoicePayload(),
         toEmail,
         toName:        document.getElementById('inv-contact').value || document.getElementById('inv-company').value,
