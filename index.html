@@ -2208,6 +2208,7 @@ function buildCIInvoiceData() {
         eventName:      document.getElementById('ct-title').value,
         eventDate:      document.getElementById('ct-date').value,
         eventTime:      document.getElementById('ct-start').value,
+        duration:       document.getElementById('ct-duration').value,
         venue:          document.getElementById('ct-address').value,
         depositPercent: 50,
         lineItems:      ciLineItems.filter(function(i){ return i.description || i.amount; }),
