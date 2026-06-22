@@ -1051,10 +1051,10 @@
           </label>
           <div id="ct-invoice-fields" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid rgba(184,150,12,0.2)">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-              <div class="field" style="margin:0"><label>Company / Bill To</label><input type="text" id="ci-company" placeholder="Fifth Street DMC"></div>
-              <div class="field" style="margin:0"><label>Contact & Title</label><input type="text" id="ci-contact" placeholder="Paget Goldthwait, Event Producer"></div>
-              <div class="field" style="margin:0"><label>Invoice #</label><input type="text" id="ci-number" placeholder="STM-2026-002"></div>
-              <div class="field" style="margin:0"><label>Due Date</label><input type="text" id="ci-due" placeholder="June 28, 2026"></div>
+              <div class="field" style="margin:0"><label>Company / Bill To</label><input type="text" id="ci-company" placeholder="e.g. Fifth Street DMC"></div>
+              <div class="field" style="margin:0"><label>Contact & Title</label><input type="text" id="ci-contact" placeholder="e.g. Jane Smith, Event Planner"></div>
+              <div class="field" style="margin:0"><label>Invoice #</label><input type="text" id="ci-number" placeholder="Auto-generated"></div>
+              <div class="field" style="margin:0"><label>Due Date</label><input type="text" id="ci-due" placeholder="e.g. June 28, 2026"></div>
             </div>
             <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">
               Line Items
@@ -2202,6 +2202,14 @@ function buildCIInvoiceData() {
         contactName:    document.getElementById('ci-contact').value,
         clientName:     contractClient.name,
         clientPhone:    contractClient.phone || '',
+        clientCity:     (function() {
+            // Extract city from venue address e.g. "1234 Main St, Austin, TX 78701"
+            var addr = document.getElementById('ct-address').value;
+            var parts = addr.split(',');
+            if (parts.length >= 3) return parts[parts.length-2].trim() + ', ' + parts[parts.length-1].trim();
+            if (parts.length === 2) return parts[1].trim();
+            return '';
+        })(),
         invoiceNumber:  document.getElementById('ci-number').value,
         invoiceDate:    today.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}),
         dueDate:        document.getElementById('ci-due').value,
