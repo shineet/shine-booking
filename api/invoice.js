@@ -70,6 +70,15 @@ function safeFilename(data) {
 }
 
 // ── PDF builder ────────────────────────────────────────────────────────────────
+function fmt12h(t) {
+  if (!t) return '';
+  const m = String(t).match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return t;
+  let h = parseInt(m[1]), min = m[2], ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${min} ${ampm}`;
+}
+
 function buildInvoicePDF(data) {
   return new Promise((resolve, reject) => {
     const doc    = new PDFDocument({ margin: 50, size: 'LETTER' });
@@ -84,96 +93,143 @@ function buildInvoicePDF(data) {
     const LG    = '#f3f4f6';
     const WHITE = '#ffffff';
 
-    // Header
-    doc.font('Helvetica-Bold').fontSize(22).fillColor(DARK).text('Shine, The Mentalist', 150, 50);
-    doc.font('Helvetica').fontSize(10).fillColor(GOLD).text('texasmentalist.com', 150, 76);
-    doc.font('Helvetica-Bold').fontSize(28).fillColor(GOLD).text('INVOICE', 400, 50, { align:'right', width:145 });
-    doc.moveTo(50,105).lineTo(562,105).lineWidth(2).strokeColor(GOLD).stroke();
-    doc.moveTo(50,108).lineTo(562,108).lineWidth(0.5).strokeColor(DARK).stroke();
+    // ── HEADER ───────────────────────────────────────────────────────────────
+    // Logo — loaded from /public/icons/logo.png if present on Vercel
+    try {
+      const fs = require('fs'), path = require('path');
+      const logoPath = path.join(process.cwd(), 'public', 'icons', 'logo.png');
+      if (fs.existsSync(logoPath)) {
+        doc.image(logoPath, 50, 36, { width: 62, height: 62 });
+      }
+    } catch(_) {}
 
-    // Bill To / Invoice Meta
-    let y = 128;
+    doc.font('Helvetica-Bold').fontSize(22).fillColor(DARK).text('Shine, The Mentalist', 122, 44);
+    doc.font('Helvetica').fontSize(10).fillColor(GOLD).text('texasmentalist.com', 122, 71);
+    doc.font('Helvetica-Bold').fontSize(28).fillColor(GOLD).text('INVOICE', 380, 44, { align:'right', width:182 });
+
+    doc.moveTo(50,100).lineTo(562,100).lineWidth(2).strokeColor(GOLD).stroke();
+    doc.moveTo(50,103).lineTo(562,103).lineWidth(0.5).strokeColor(DARK).stroke();
+
+    // ── BILL TO / INVOICE META ────────────────────────────────────────────────
+    let y = 122;
     doc.font('Helvetica').fontSize(8).fillColor(GRAY).text('BILL TO', 50, y);
     doc.font('Helvetica').fontSize(8).fillColor(GRAY).text('INVOICE DETAILS', 350, y, { align:'right', width:212 });
-    y += 14;
+
+    y += 13;
     doc.font('Helvetica-Bold').fontSize(11).fillColor(DARK).text(data.clientCompany || data.clientName || '', 50, y);
-    doc.font('Helvetica-Bold').fontSize(10).fillColor(DARK).text(`Invoice #: ${data.invoiceNumber || ''}`, 350, y, { align:'right', width:212 });
-    y += 16;
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(DARK).text(\`Invoice #: \${data.invoiceNumber || ''}\`, 350, y, { align:'right', width:212 });
+
+    y += 15;
     if (data.contactName) doc.font('Helvetica').fontSize(10).fillColor(DARK).text(data.contactName, 50, y);
-    doc.font('Helvetica').fontSize(10).fillColor(DARK).text(`Invoice Date: ${data.invoiceDate || ''}`, 350, y, { align:'right', width:212 });
+    doc.font('Helvetica').fontSize(10).fillColor(DARK)
+       .text(\`Invoice Date: \${data.invoiceDate || ''}\`, 350, y, { align:'right', width:212 });
+
     y += 14;
     if (data.clientCity) doc.font('Helvetica').fontSize(10).fillColor(DARK).text(data.clientCity, 50, y);
-    doc.font('Helvetica').fontSize(10).fillColor(DARK).text(`Due Date: ${data.dueDate || ''}`, 350, y, { align:'right', width:212 });
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(DARK)
+       .text(\`Due Date: \${data.dueDate || ''}\`, 350, y, { align:'right', width:212 });
+
     y += 14;
     if (data.clientPhone) doc.font('Helvetica').fontSize(10).fillColor(DARK).text(data.clientPhone, 50, y);
 
-    // Event Details table
-    y += 32;
+    // ── EVENT DETAILS ─────────────────────────────────────────────────────────
+    y += 28;
     doc.font('Helvetica').fontSize(8).fillColor(GRAY).text('EVENT DETAILS', 50, y);
     y += 10;
-    const eventRows = [['Event',data.eventName],['Date',data.eventDate],['Time',data.eventTime],['Venue',data.venue],['Guests',data.guests]].filter(r=>r[1]);
+
+    const eventRows = [
+      ['Event',  data.eventName],
+      ['Date',   data.eventDate],
+      ['Time',   fmt12h(data.eventTime)],
+      ['Venue',  data.venue],
+      ['Guests', data.guests],
+    ].filter(r => r[1]);
+
     eventRows.forEach((row, i) => {
       const ry = y + i * 22;
-      doc.rect(50,ry,512,22).fillColor(i%2===0?LG:WHITE).fill();
-      doc.rect(50,ry,512,22).strokeColor('#e5e7eb').lineWidth(0.5).stroke();
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(DARK).text(row[0],58,ry+6);
-      doc.font('Helvetica').fontSize(10).fillColor(DARK).text(row[1],200,ry+6);
+      doc.rect(50, ry, 512, 22).fillColor(i % 2 === 0 ? LG : WHITE).fill();
+      doc.rect(50, ry, 512, 22).strokeColor('#e5e7eb').lineWidth(0.5).stroke();
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(DARK).text(row[0], 58, ry + 6);
+      doc.font('Helvetica').fontSize(10).fillColor(DARK).text(row[1], 200, ry + 6);
     });
 
-    // Services table
+    // ── SERVICES TABLE ────────────────────────────────────────────────────────
     y += eventRows.length * 22 + 20;
     doc.font('Helvetica').fontSize(8).fillColor(GRAY).text('SERVICES', 50, y);
     y += 10;
-    doc.rect(50,y,512,22).fillColor(DARK).fill();
+
+    doc.rect(50, y, 512, 22).fillColor(DARK).fill();
     doc.font('Helvetica-Bold').fontSize(10).fillColor(WHITE)
-       .text('Description',58,y+6).text('Details',210,y+6).text('Amount',468,y+6,{align:'right',width:86});
+       .text('Description', 58, y + 6)
+       .text('Details', 210, y + 6)
+       .text('Amount', 468, y + 6, { align:'right', width:86 });
     y += 22;
+
     (data.lineItems || []).forEach(item => {
-      const dh = doc.heightOfString(item.description||'',{width:140,fontSize:10});
-      const th = doc.heightOfString(item.details||'',{width:240,fontSize:10});
-      const rh = Math.max(dh,th) + 16;
-      doc.rect(50,y,512,rh).fillColor(WHITE).fill();
-      doc.rect(50,y,512,rh).strokeColor('#e5e7eb').lineWidth(0.5).stroke();
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(DARK).text(item.description||'',58,y+8,{width:140});
-      doc.font('Helvetica').fontSize(10).fillColor(DARK).text(item.details||'',210,y+8,{width:240});
-      doc.font('Helvetica').fontSize(10).fillColor(DARK).text('$'+Number(item.amount||0).toLocaleString(),468,y+8,{align:'right',width:86});
+      const dh = doc.heightOfString(item.description || '', { width:140, fontSize:10 });
+      const th = doc.heightOfString(item.details || '', { width:240, fontSize:10 });
+      const rh = Math.max(dh, th) + 16;
+      doc.rect(50, y, 512, rh).fillColor(WHITE).fill();
+      doc.rect(50, y, 512, rh).strokeColor('#e5e7eb').lineWidth(0.5).stroke();
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(DARK).text(item.description || '', 58, y + 8, { width:140 });
+      doc.font('Helvetica').fontSize(10).fillColor(DARK).text(item.details || '', 210, y + 8, { width:240 });
+      doc.font('Helvetica').fontSize(10).fillColor(DARK)
+         .text('$' + Number(item.amount || 0).toLocaleString(), 468, y + 8, { align:'right', width:86 });
       y += rh;
     });
 
-    // Total
-    doc.rect(50,y,512,28).strokeColor(GOLD).lineWidth(1.5).stroke();
-    doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('TOTAL',350,y+8);
-    doc.font('Helvetica-Bold').fontSize(13).fillColor(GOLD).text('$'+Number(data.total||0).toLocaleString(),468,y+8,{align:'right',width:86});
+    // Total row
+    doc.rect(50, y, 512, 28).strokeColor(GOLD).lineWidth(1.5).stroke();
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('TOTAL', 350, y + 8);
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(GOLD)
+       .text('$' + Number(data.total || 0).toLocaleString(), 468, y + 8, { align:'right', width:86 });
     y += 28;
 
     const dep    = data.depositPercent || 50;
-    const depAmt = Math.round((data.total||0)*dep/100).toLocaleString();
+    const depAmt = Math.round((data.total || 0) * dep / 100).toLocaleString();
     doc.font('Helvetica').fontSize(8.5).fillColor(GRAY)
-       .text(`* A ${dep}% deposit ($${depAmt}) is required to secure the date. Remaining balance due on or before ${data.eventDate||''}.`,50,y+8,{width:512});
-    y += 30;
-    doc.moveTo(50,y+10).lineTo(562,y+10).lineWidth(1).strokeColor(GOLD).stroke();
-    doc.moveTo(50,y+13).lineTo(562,y+13).lineWidth(0.3).strokeColor(DARK).stroke();
+       .text(\`* A \${dep}% deposit ($\${depAmt}) is required to secure the date. Remaining balance due on or before \${data.eventDate || ''}.\`, 50, y + 8, { width:512 });
+    y += 28;
+    doc.moveTo(50, y + 8).lineTo(562, y + 8).lineWidth(1).strokeColor(GOLD).stroke();
+    doc.moveTo(50, y + 11).lineTo(562, y + 11).lineWidth(0.3).strokeColor(DARK).stroke();
 
-    // Page 2 — payment info
+    // ── PAGE 2: 3-COLUMN PAYMENT INFO ────────────────────────────────────────
     doc.addPage();
-    doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Payment Methods',50,60);
-    doc.font('Helvetica').fontSize(11).fillColor(DARK)
-       .text('Zelle: 2020shine@gmail.com',50,85)
-       .text('Venmo: @Shine-Thankappan',50,102)
-       .text('PayPal: shine_e_thankappan@yahoo.com',50,119)
-       .text('Check payable to: Shine Thankappan',50,136)
-       .text('Cash also accepted',50,153);
-    doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Payment Terms',50,185);
-    doc.font('Helvetica').fontSize(11).fillColor(DARK)
-       .text(`${dep}% deposit due upon booking.`,50,205)
-       .text('Balance due on day of performance.',50,222)
-       .text('Cancellation policy per agreement.',50,239);
-    doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Questions?',50,270);
-    doc.font('Helvetica').fontSize(11).fillColor(DARK)
-       .text('texasmentalist.com',50,290).text('2020shine@gmail.com',50,307);
+
+    const col1 = 50, col2 = 220, col3 = 390, colW = 155;
+
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(DARK)
+       .text('Payment Methods', col1, 60)
+       .text('Payment Terms',   col2, 60)
+       .text('Questions?',      col3, 60);
+
+    [col1, col2, col3].forEach(x => {
+      doc.moveTo(x, 76).lineTo(x + colW, 76).lineWidth(1).strokeColor(GOLD).stroke();
+    });
+
+    doc.font('Helvetica').fontSize(10).fillColor(DARK)
+       .text('Zelle: 2020shine@gmail.com',        col1, 88)
+       .text('Venmo: @Shine-Thankappan',           col1, 104)
+       .text('PayPal: shine_e_thankappan@yahoo.com', col1, 120)
+       .text('Check payable to: Shine Thankappan', col1, 136)
+       .text('Cash also accepted',                 col1, 152);
+
+    doc.font('Helvetica').fontSize(10).fillColor(DARK)
+       .text(\`\${dep}% deposit due upon booking.\`,  col2, 88)
+       .text('Balance due on day of performance.', col2, 104)
+       .text('Cancellation policy per agreement.', col2, 120);
+
+    doc.font('Helvetica').fontSize(10).fillColor(DARK)
+       .text('texasmentalist.com',   col3, 88)
+       .text('2020shine@gmail.com',  col3, 104)
+       .text('+1 (612) 865-7681',    col3, 120);
+
     doc.font('Helvetica').fontSize(10).fillColor(GRAY)
-       .text('Thank you for choosing Shine, The Mentalist — looking forward to an unforgettable evening!',50,340,{align:'center',width:512});
-    doc.moveTo(50,360).lineTo(562,360).lineWidth(1).strokeColor(GOLD).stroke();
+       .text('Thank you for choosing Shine, The Mentalist — looking forward to an unforgettable evening!',
+             50, 200, { align:'center', width:512 });
+
+    doc.moveTo(50, 224).lineTo(562, 224).lineWidth(1).strokeColor(GOLD).stroke();
+
     doc.end();
   });
 }
