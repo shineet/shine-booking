@@ -1357,7 +1357,7 @@ function renderDetail(c) {
         actions += '<button class="d-btn green" onclick="markAsBooked(\'' + esc(c.id) + '\')">Mark as booked (show on Gig Dashboard)</button>';
     }
     if (['intake_completed', 'booked', 'contract_sent'].indexOf(c.status) !== -1) {
-        actions += '<button class="d-btn primary" onclick="openContractModal(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.booking_id||'') + '\')">Send contract</button>';
+        actions += '<button class="d-btn primary" onclick="openContractModal(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.booking_id||'') + '\',\'' + esc(c.phone||'') + '\')">Send contract</button>';
     }
     if (c.booking_id && ['intake_completed','contract_sent','contract_signed'].indexOf(c.status) !== -1) {
         actions += '<button class="d-btn purple" onclick="loadAndShowAnswers(\'' + esc(c.booking_id) + '\')">View answers</button>';
@@ -1802,8 +1802,8 @@ function sendIntakeForm(id, name, email, eventType, price) {
 /* ── Contract ── */
 var contractClient = {};
 
-function openContractModal(id, name, email, bookingId) {
-    contractClient = { id: id, name: name, email: email, bookingId: bookingId };
+function openContractModal(id, name, email, bookingId, phone) {
+    contractClient = { id: id, name: name, email: email, bookingId: bookingId, phone: phone || '' };
     document.getElementById('contract-modal-client-name').textContent = 'Sending to ' + name;
     if (bookingId) {
         fetch(SUPABASE_URL + '/rest/v1/bookings?id=eq.' + bookingId + '&select=*', {
@@ -2148,16 +2148,27 @@ function toggleContractInvoice(checked) {
     document.getElementById('ct-invoice-fields').style.display = checked ? 'block' : 'none';
     document.getElementById('contract-dl-invoice-btn').style.display = checked ? 'inline-block' : 'none';
     if (checked && ciLineItems.length === 0) {
-        // Pre-fill from fee field
-        var fee = parseFloat(document.getElementById('ct-fee').value) || 0;
-        var title = document.getElementById('ct-title').value.trim();
+        var fee    = parseFloat(document.getElementById('ct-fee').value) || 0;
+        var title  = document.getElementById('ct-title').value.trim();
+        var date   = document.getElementById('ct-date').value;
+
+        // Auto-calculate due date: 6 days before event
+        var dueDate = '';
+        if (date) {
+            var d = new Date(date + 'T12:00:00');
+            d.setDate(d.getDate() - 6);
+            dueDate = d.toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+        }
+
+        // Pre-fill all invoice fields from contract form + contractClient
+        var today = new Date();
+        document.getElementById('ci-number').value  = 'STM-' + today.getFullYear() + '-' + String(Math.floor(Math.random()*900)+100);
+        document.getElementById('ci-company').value = contractClient.name || '';
+        document.getElementById('ci-contact').value = '';   // not stored on client — leave blank for manual entry
+        document.getElementById('ci-due').value     = dueDate;
+
         ciLineItems = [{ description: 'Performance Fee', details: title || '', amount: fee }];
         renderCILineItems();
-        // Auto-fill invoice number and date
-        var today = new Date();
-        document.getElementById('ci-number').value = 'STM-' + today.getFullYear() + '-' + String(Math.floor(Math.random()*900)+100);
-        // Pre-fill company from client name
-        document.getElementById('ci-company').value = contractClient.name || '';
     }
 }
 
@@ -2190,6 +2201,7 @@ function buildCIInvoiceData() {
         clientCompany:  document.getElementById('ci-company').value || contractClient.name,
         contactName:    document.getElementById('ci-contact').value,
         clientName:     contractClient.name,
+        clientPhone:    contractClient.phone || '',
         invoiceNumber:  document.getElementById('ci-number').value,
         invoiceDate:    today.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}),
         dueDate:        document.getElementById('ci-due').value,
