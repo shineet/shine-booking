@@ -1043,8 +1043,33 @@
             <div class="price-field"><label>Duration</label><input type="text" id="ct-duration" placeholder="e.g. 45 minutes"></div>
             <div class="price-field"><label>Fee ($)</label><input type="number" id="ct-fee"></div>
         </div>
+        <!-- Invoice option -->
+        <div style="background:rgba(184,150,12,0.08);border:1px solid rgba(184,150,12,0.3);border-radius:8px;padding:12px;margin-bottom:14px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:0">
+            <input type="checkbox" id="ct-attach-invoice" onchange="toggleContractInvoice(this.checked)" style="width:15px;height:15px;accent-color:#B8960C">
+            <span style="font-size:13px;font-weight:600;color:#B8960C">📎 Also attach Invoice to this email</span>
+          </label>
+          <div id="ct-invoice-fields" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid rgba(184,150,12,0.2)">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+              <div class="field" style="margin:0"><label>Company / Bill To</label><input type="text" id="ci-company" placeholder="Fifth Street DMC"></div>
+              <div class="field" style="margin:0"><label>Contact & Title</label><input type="text" id="ci-contact" placeholder="Paget Goldthwait, Event Producer"></div>
+              <div class="field" style="margin:0"><label>Invoice #</label><input type="text" id="ci-number" placeholder="STM-2026-002"></div>
+              <div class="field" style="margin:0"><label>Due Date</label><input type="text" id="ci-due" placeholder="June 28, 2026"></div>
+            </div>
+            <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">
+              Line Items
+              <button onclick="addCILineItem()" style="margin-left:8px;padding:2px 8px;font-size:11px;border-radius:4px">+ Add</button>
+            </div>
+            <div id="ci-line-items"></div>
+            <div style="text-align:right;margin-top:8px;font-size:13px;font-weight:700;color:#B8960C">
+              Total: <span id="ci-total-display">$0</span>
+            </div>
+          </div>
+        </div>
+
         <div class="modal-actions">
             <button class="modal-cancel" onclick="closeContractModal()">Cancel</button>
+            <button class="modal-cancel" id="contract-dl-invoice-btn" style="display:none" onclick="downloadContractInvoice()">⬇️ Invoice PDF</button>
             <button class="modal-cancel" id="contract-link-btn" onclick="getContractLinkManually()">Get link (send manually)</button>
             <button class="modal-send" id="contract-send-btn" onclick="sendContract()">Send contract</button>
         </div>
@@ -1838,9 +1863,12 @@ function sendContract() {
     if (!title || !address || !date || !start || !duration || !fee) { alert('Please fill in all contract fields.'); return; }
     var btn = document.getElementById('contract-send-btn');
     btn.disabled = true; btn.textContent = 'Sending...';
+    var attachInvoice = document.getElementById('ct-attach-invoice') && document.getElementById('ct-attach-invoice').checked;
+    var payload = { clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee) };
+    if (attachInvoice) { payload.invoiceData = buildCIInvoiceData(); }
     fetch('/api/send-contract', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee) })
+        body: JSON.stringify(payload)
     })
     .then(function(r) { return r.json(); })
     .then(function(d) { if (d.error) throw new Error(d.error); closeContractModal(); loadLeads(); })
@@ -2112,6 +2140,94 @@ function sendMessages() {
 });
 
 showView('pipeline');
+
+// ── Contract modal invoice attachment ─────────────────────────────────────────
+var ciLineItems = [];
+
+function toggleContractInvoice(checked) {
+    document.getElementById('ct-invoice-fields').style.display = checked ? 'block' : 'none';
+    document.getElementById('contract-dl-invoice-btn').style.display = checked ? 'inline-block' : 'none';
+    if (checked && ciLineItems.length === 0) {
+        // Pre-fill from fee field
+        var fee = parseFloat(document.getElementById('ct-fee').value) || 0;
+        var title = document.getElementById('ct-title').value.trim();
+        ciLineItems = [{ description: 'Performance Fee', details: title || '', amount: fee }];
+        renderCILineItems();
+        // Auto-fill invoice number and date
+        var today = new Date();
+        document.getElementById('ci-number').value = 'STM-' + today.getFullYear() + '-' + String(Math.floor(Math.random()*900)+100);
+        // Pre-fill company from client name
+        document.getElementById('ci-company').value = contractClient.name || '';
+    }
+}
+
+function renderCILineItems() {
+    var c = document.getElementById('ci-line-items');
+    c.innerHTML = ciLineItems.map(function(item, i) {
+        return '<div style="display:grid;grid-template-columns:1fr 1.5fr 80px 28px;gap:6px;align-items:center;margin-bottom:6px">' +
+            '<input type="text" value="' + (item.description||'') + '" placeholder="Description" oninput="ciLineItems[' + i + '].description=this.value" style="padding:6px;background:var(--input-bg,#1e2235);border:1px solid var(--border,#2a2f45);border-radius:4px;color:var(--text);font-size:12px;box-sizing:border-box">' +
+            '<input type="text" value="' + (item.details||'') + '" placeholder="Details" oninput="ciLineItems[' + i + '].details=this.value" style="padding:6px;background:var(--input-bg,#1e2235);border:1px solid var(--border,#2a2f45);border-radius:4px;color:var(--text);font-size:12px;box-sizing:border-box">' +
+            '<input type="number" value="' + (item.amount||'') + '" placeholder="$" oninput="ciLineItems[' + i + '].amount=this.value;updateCITotal()" style="padding:6px;background:var(--input-bg,#1e2235);border:1px solid var(--border,#2a2f45);border-radius:4px;color:var(--text);font-size:12px;box-sizing:border-box">' +
+            '<button onclick="ciLineItems.splice(' + i + ',1);renderCILineItems()" style="background:#5c2020;color:#f8a0a0;border:1px solid #7a2a2a;border-radius:3px;padding:3px 6px;cursor:pointer;font-size:12px">x</button>' +
+            '</div>';
+    }).join('');
+    updateCITotal();
+}
+
+function addCILineItem() {
+    ciLineItems.push({ description: '', details: '', amount: '' });
+    renderCILineItems();
+}
+
+function updateCITotal() {
+    var total = ciLineItems.reduce(function(s,i) { return s + (parseFloat(i.amount)||0); }, 0);
+    document.getElementById('ci-total-display').textContent = '$' + total.toLocaleString();
+}
+
+function buildCIInvoiceData() {
+    var today = new Date();
+    return {
+        clientCompany:  document.getElementById('ci-company').value || contractClient.name,
+        contactName:    document.getElementById('ci-contact').value,
+        clientName:     contractClient.name,
+        invoiceNumber:  document.getElementById('ci-number').value,
+        invoiceDate:    today.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'}),
+        dueDate:        document.getElementById('ci-due').value,
+        eventName:      document.getElementById('ct-title').value,
+        eventDate:      document.getElementById('ct-date').value,
+        eventTime:      document.getElementById('ct-start').value,
+        venue:          document.getElementById('ct-address').value,
+        depositPercent: 50,
+        lineItems:      ciLineItems.filter(function(i){ return i.description || i.amount; }),
+        total:          ciLineItems.reduce(function(s,i){ return s+(parseFloat(i.amount)||0); }, 0),
+    };
+}
+
+function downloadContractInvoice() {
+    fetch('/api/invoice', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ action: 'generate' }, buildCIInvoiceData()))
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (!data.pdf) throw new Error(data.error || 'No PDF');
+        var bytes = Uint8Array.from(atob(data.pdf), function(c) { return c.charCodeAt(0); });
+        var url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        var a = document.createElement('a'); a.href = url; a.download = data.filename; a.click();
+        URL.revokeObjectURL(url);
+    })
+    .catch(function(e) { alert('Failed to generate invoice: ' + e.message); });
+}
+
+// Reset invoice fields when contract modal closes
+var _origCloseContractModal = closeContractModal;
+closeContractModal = function() {
+    _origCloseContractModal();
+    document.getElementById('ct-attach-invoice').checked = false;
+    document.getElementById('ct-invoice-fields').style.display = 'none';
+    document.getElementById('contract-dl-invoice-btn').style.display = 'none';
+    ciLineItems = [];
+};
 </script>
 </body>
 </html>
