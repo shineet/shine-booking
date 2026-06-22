@@ -230,19 +230,23 @@ function buildInvoicePDF(data) {
       doc.moveTo(x,76).lineTo(x+colW,76).lineWidth(1).strokeColor(GOLD).stroke();
     });
 
-    doc.font('Helvetica').fontSize(10).fillColor(DARK)
+    // Col 1 — Payment Methods (smaller font so long emails don't overflow)
+    doc.font('Helvetica').fontSize(9).fillColor(DARK)
        .text('Zelle: 2020shine@gmail.com',          col1,88)
        .text('Venmo: @Shine-Thankappan',             col1,104)
-       .text('PayPal: shine_e_thankappan@yahoo.com', col1,120)
-       .text('Check payable to: Shine Thankappan',   col1,136)
-       .text('Cash also accepted',                   col1,152);
+       .text('PayPal: shine_e_thankappan',           col1,120)
+       .text('  @yahoo.com',                         col1,131)
+       .text('Check: payable to Shine Thankappan',   col1,146)
+       .text('Cash also accepted',                   col1,161);
 
-    doc.font('Helvetica').fontSize(10).fillColor(DARK)
+    // Col 2 — Payment Terms
+    doc.font('Helvetica').fontSize(9).fillColor(DARK)
        .text(dep+'% deposit due upon booking.',      col2,88)
        .text('Balance due on day of performance.',   col2,104)
        .text('Cancellation policy per agreement.',   col2,120);
 
-    doc.font('Helvetica').fontSize(10).fillColor(DARK)
+    // Col 3 — Questions
+    doc.font('Helvetica').fontSize(9).fillColor(DARK)
        .text('texasmentalist.com',  col3,88)
        .text('2020shine@gmail.com', col3,104)
        .text('+1 (612) 865-7681',   col3,120);
