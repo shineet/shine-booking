@@ -534,6 +534,65 @@ td { padding: 9px 14px; vertical-align: middle; }
   </div>
 </div>
 
+
+<!-- Invoice Modal -->
+<div class="modal-overlay" id="invoice-modal">
+  <div class="modal wide" style="max-width:700px;width:100%">
+    <h2>Create Invoice</h2>
+
+    <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:0 0 10px">Bill To</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div class="form-group"><label>Company / Organization *</label><input type="text" id="inv-company" placeholder="Fifth Street DMC"></div>
+      <div class="form-group"><label>Contact Name &amp; Title</label><input type="text" id="inv-contact" placeholder="Paget Goldthwait, Event Producer"></div>
+      <div class="form-group"><label>City / State</label><input type="text" id="inv-city" placeholder="Austin, TX"></div>
+      <div class="form-group"><label>Phone(s)</label><input type="text" id="inv-phone" placeholder="C: 617.797.3074"></div>
+    </div>
+
+    <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:0 0 10px">Invoice Details</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+      <div class="form-group"><label>Invoice # *</label><input type="text" id="inv-number" placeholder="STM-2026-002"></div>
+      <div class="form-group"><label>Invoice Date *</label><input type="text" id="inv-date" placeholder="June 22, 2026"></div>
+      <div class="form-group"><label>Due Date *</label><input type="text" id="inv-due" placeholder="June 28, 2026"></div>
+    </div>
+
+    <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:0 0 10px">Event Details</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div class="form-group"><label>Event Name</label><input type="text" id="inv-event-name" placeholder="Executive Dinner"></div>
+      <div class="form-group"><label>Event Date</label><input type="text" id="inv-event-date" placeholder="July 1, 2026"></div>
+      <div class="form-group"><label>Time</label><input type="text" id="inv-event-time" placeholder="5:30 PM - 8:30 PM"></div>
+      <div class="form-group"><label>Venue</label><input type="text" id="inv-venue" placeholder="Juniper Lakehouse, Austin, TX"></div>
+      <div class="form-group"><label>Guests</label><input type="text" id="inv-guests" placeholder="Approximately 45"></div>
+      <div class="form-group"><label>Deposit %</label><input type="number" id="inv-deposit" value="50" min="0" max="100"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:0">Services</h3>
+      <button onclick="addLineItem()" style="padding:3px 10px;font-size:11px;background:var(--accent)">+ Add Line</button>
+    </div>
+    <div id="lineItemsContainer" style="margin-bottom:14px"></div>
+
+    <div style="text-align:right;margin-bottom:16px">
+      <span style="font-size:13px;font-weight:700;color:var(--text)">TOTAL: </span>
+      <span id="inv-total-display" style="font-size:18px;font-weight:700;color:#B8960C">$0</span>
+    </div>
+
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px">
+      <p style="margin:0 0 10px;font-size:12px;font-weight:600;color:var(--muted)">Send to Client (optional)</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label>Client Email</label><input type="email" id="inv-to-email" placeholder="client@company.com"></div>
+        <div class="form-group"><label>Custom Message (optional)</label><textarea id="inv-custom-msg" rows="2" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:13px;font-family:inherit;width:100%;box-sizing:border-box" placeholder="Leave blank for default message..."></textarea></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('invoice-modal')">Cancel</button>
+      <button class="secondary" onclick="downloadInvoice()">Download PDF</button>
+      <button onclick="sendInvoiceEmail()">Send by Email</button>
+    </div>
+    <p id="invoiceStatusMsg" style="margin-top:10px;font-size:13px;color:var(--green);display:none;text-align:right"></p>
+  </div>
+</div>
+
 <!-- ── Add / Edit Modal ── -->
 <div class="modal-overlay" id="add-modal">
   <div class="modal">
@@ -730,7 +789,10 @@ function renderUpcoming() {
         ${intakeBadge}
         <div class="card-footer">
           <div class="card-fee">${fee}</div>
-          <div class="card-source">${esc(c.lead_source || '')}</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="card-source">${esc(c.lead_source || '')}</div>
+            <button onclick="event.stopPropagation();openInvoiceModal({company:esc(c.name),email:c.email||'',eventName:c.event_type||'',eventDate:fmtDate(c.event_date),venue:c.venue||''})" style="background:#B8960C;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">Invoice</button>
+          </div>
         </div>
       </div>`;
   }).join('');
@@ -1340,6 +1402,139 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.getElementById('th-date').classList.add('sorted');
 loadAll();
+
+// ── Invoice Modal JS ──────────────────────────────────────────────────────────
+let invoiceLineItems = [];
+
+function openInvoiceModal(prefill) {
+  prefill = prefill || {};
+  document.getElementById('inv-company').value = prefill.company || '';
+  document.getElementById('inv-contact').value = prefill.contact || '';
+  document.getElementById('inv-city').value    = prefill.city    || '';
+  document.getElementById('inv-phone').value   = prefill.phone   || '';
+  document.getElementById('inv-event-name').value = prefill.eventName || '';
+  document.getElementById('inv-event-date').value = prefill.eventDate || '';
+  document.getElementById('inv-event-time').value = prefill.eventTime || '';
+  document.getElementById('inv-venue').value   = prefill.venue   || '';
+  document.getElementById('inv-guests').value  = prefill.guests  || '';
+  document.getElementById('inv-to-email').value = prefill.email  || '';
+  document.getElementById('inv-custom-msg').value = '';
+  document.getElementById('invoiceStatusMsg').style.display = 'none';
+
+  const today = new Date();
+  const yyyy  = today.getFullYear();
+  document.getElementById('inv-number').value =
+    prefill.invoiceNumber || ('STM-' + yyyy + '-' + String(Math.floor(Math.random()*900)+100));
+  document.getElementById('inv-date').value =
+    prefill.invoiceDate || today.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
+  document.getElementById('inv-due').value = prefill.dueDate || '';
+
+  invoiceLineItems = prefill.lineItems || [{ description:'', details:'', amount:'' }];
+  renderLineItems();
+  openModal('invoice-modal');
+}
+
+function renderLineItems() {
+  const c = document.getElementById('lineItemsContainer');
+  c.innerHTML = invoiceLineItems.map((item, i) => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px">
+      <div style="display:grid;grid-template-columns:1.2fr 2fr 90px 30px;gap:8px;align-items:start">
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px;text-transform:uppercase">Description</div>
+          <textarea rows="2" oninput="invoiceLineItems[${i}].description=this.value"
+            style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px;color:var(--text);font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box"
+            placeholder="Performance Fee...">${item.description}</textarea>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px;text-transform:uppercase">Details</div>
+          <textarea rows="2" oninput="invoiceLineItems[${i}].details=this.value"
+            style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px;color:var(--text);font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box"
+            placeholder="Close-up mentalism during cocktail hour...">${item.details}</textarea>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:3px;text-transform:uppercase">Amount ($)</div>
+          <input type="number" value="${item.amount}" oninput="invoiceLineItems[${i}].amount=this.value;updateInvTotal()"
+            style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px;color:var(--text);font-size:12px;box-sizing:border-box"
+            placeholder="2500">
+        </div>
+        <button onclick="invoiceLineItems.splice(${i},1);renderLineItems()"
+          style="margin-top:18px;background:#5c2020;color:#f8a0a0;border:1px solid #7a2a2a;border-radius:4px;padding:4px 7px;cursor:pointer;font-size:13px">x</button>
+      </div>
+    </div>`).join('');
+  updateInvTotal();
+}
+
+function addLineItem() {
+  invoiceLineItems.push({ description:'', details:'', amount:'' });
+  renderLineItems();
+}
+
+function updateInvTotal() {
+  const total = invoiceLineItems.reduce((s, i) => s + (parseFloat(i.amount)||0), 0);
+  document.getElementById('inv-total-display').textContent = '$' + total.toLocaleString();
+}
+
+function buildInvoicePayload() {
+  return {
+    clientCompany:  document.getElementById('inv-company').value,
+    contactName:    document.getElementById('inv-contact').value,
+    clientCity:     document.getElementById('inv-city').value,
+    clientPhone:    document.getElementById('inv-phone').value,
+    clientName:     document.getElementById('inv-company').value,
+    invoiceNumber:  document.getElementById('inv-number').value,
+    invoiceDate:    document.getElementById('inv-date').value,
+    dueDate:        document.getElementById('inv-due').value,
+    eventName:      document.getElementById('inv-event-name').value,
+    eventDate:      document.getElementById('inv-event-date').value,
+    eventTime:      document.getElementById('inv-event-time').value,
+    venue:          document.getElementById('inv-venue').value,
+    guests:         document.getElementById('inv-guests').value,
+    depositPercent: parseInt(document.getElementById('inv-deposit').value) || 50,
+    lineItems:      invoiceLineItems.filter(i => i.description || i.amount),
+    total:          invoiceLineItems.reduce((s,i) => s+(parseFloat(i.amount)||0), 0),
+  };
+}
+
+async function downloadInvoice() {
+  try {
+    const res  = await fetch('/api/generate-invoice', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(buildInvoicePayload()),
+    });
+    const data = await res.json();
+    if (!data.pdf) throw new Error(data.error || 'No PDF');
+    const bytes = Uint8Array.from(atob(data.pdf), c => c.charCodeAt(0));
+    const url   = URL.createObjectURL(new Blob([bytes], {type:'application/pdf'}));
+    const a     = document.createElement('a');
+    a.href = url; a.download = data.filename; a.click();
+    URL.revokeObjectURL(url);
+  } catch(err) { alert('Failed to generate invoice: ' + err.message); }
+}
+
+async function sendInvoiceEmail() {
+  const toEmail = document.getElementById('inv-to-email').value.trim();
+  if (!toEmail) { alert('Please enter a client email address.'); return; }
+  const btn = event.currentTarget || event.target;
+  const orig = btn.textContent;
+  btn.textContent = 'Sending...'; btn.disabled = true;
+  try {
+    const res  = await fetch('/api/send-invoice', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        invoiceData:   buildInvoicePayload(),
+        toEmail,
+        toName:        document.getElementById('inv-contact').value || document.getElementById('inv-company').value,
+        customMessage: document.getElementById('inv-custom-msg').value.trim() || undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Send failed');
+    const msg = document.getElementById('invoiceStatusMsg');
+    msg.textContent = 'Invoice sent to ' + toEmail;
+    msg.style.display = 'block';
+  } catch(err) { alert('Failed to send invoice: ' + err.message); }
+  finally { btn.textContent = orig; btn.disabled = false; }
+}
 </script>
 </body>
 </html>
