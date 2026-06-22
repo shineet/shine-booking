@@ -1430,17 +1430,27 @@ function openInvoiceFromCard(btn) {
   if (!guests && c.guests) guests = c.guests;
   if (!guests && c.event_guests) guests = String(c.event_guests);
 
-  // Try to extract city from venue address (last part after comma)
+  // Try to extract city from venue address
   var cityGuess = '';
   if (booking && booking.venue_address) {
-    var parts = booking.venue_address.split(',');
-    if (parts.length >= 3) cityGuess = parts[parts.length-2].trim() + ', ' + parts[parts.length-1].trim();
-    else if (parts.length === 2) cityGuess = parts[1].trim();
+    var addr = booking.venue_address.replace(/\s*\(.*?\)/g, '').trim(); // strip (TBC) etc
+    var parts = addr.split(',');
+    // Look for "City, ST" or "City, ST ZIP" pattern — usually last two parts
+    if (parts.length >= 3) {
+      var st = parts[parts.length-1].trim().replace(/\s*[0-9]{5}.*$/, '').trim();
+      cityGuess = parts[parts.length-2].trim() + ', ' + st;
+    } else if (parts.length === 2) {
+      cityGuess = parts[1].trim().replace(/\s*[0-9]{5}.*$/, '').trim();
+    }
   }
 
+  // For corporate/planner clients, the client name IS the contact name
+  // and company comes from notes or event_type context
+  // Use name as contact, leave company blank for manual entry if it's a person's name
+  var isPersonName = c.name && /^[A-Z][a-z]+ [A-Z]/.test(c.name); // "First Last" pattern
   openInvoiceModal({
     company:   c.name          || '',
-    contact:   '',
+    contact:   isPersonName ? c.name : '',
     city:      cityGuess,
     phone:     c.phone         || '',
     email:     c.email         || '',
