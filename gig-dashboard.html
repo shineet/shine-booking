@@ -786,7 +786,7 @@ function renderUpcoming() {
     return `
       <div class="upcoming-card ${cls}" onclick="openDetail('${c.id}')">
         <div class="card-days">${label}</div>
-        <div class="card-client">${esc(c.name)}</div>
+        <div class="card-client">${esc(booking?.event_title || c.name)}</div>
         <div class="card-meta">${esc(meta)}</div>
         ${intakeBadge}
         <div class="card-footer">
