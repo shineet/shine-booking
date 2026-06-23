@@ -16,21 +16,14 @@ const SB_HDR = {
 
 function extractTextFromRawEmail(raw) {
   if (!raw) return '';
-  // Try to find plain text part
-  // Look for Content-Type: text/plain section
-  const plainMatch = raw.match(/Content-Type: text\/plain[^\n]*\n(?:.*\n)*?\n([\s\S]*?)(?:\n--|\n\n--|\z)/i);
-  if (plainMatch && plainMatch[1].trim()) {
-    return decodeEmailBody(plainMatch[1].trim());
-  }
-  // Fallback: strip all headers and MIME boundaries, return remaining text
+  const plainMatch = raw.match(/Content-Type: text\/plain[^\n]*\n(?:.*\n)*?\n([\s\S]*?)(?:\n--|\n\n--)/i);
+  if (plainMatch && plainMatch[1].trim()) return decodeEmailBody(plainMatch[1].trim());
   const lines = raw.split('\n');
-  let inBody = false;
-  let bodyLines = [];
-  let headersDone = false;
+  let inBody = false, bodyLines = [], headersDone = false;
   for (const line of lines) {
     if (!headersDone && line.trim() === '') { headersDone = true; inBody = true; continue; }
     if (!inBody) continue;
-    if (line.startsWith('--')) continue; // MIME boundary
+    if (line.startsWith('--')) continue;
     if (line.match(/^Content-Type:|^Content-Transfer-Encoding:|^Content-Disposition:/i)) continue;
     bodyLines.push(line);
   }
@@ -38,19 +31,16 @@ function extractTextFromRawEmail(raw) {
 }
 
 function decodeEmailBody(text) {
-  // Decode quoted-printable encoding
   return text
-    .replace(/=\r?\n/g, '')           // soft line breaks
+    .replace(/=\r?\n/g, '')
     .replace(/=([0-9A-F]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-    .replace(/<[^>]*>/g, '')          // strip any HTML tags
+    .replace(/<[^>]*>/g, '')
     .trim();
 }
 
 function extractSenderName(fromHeader) {
-  // "Francisco Lopez <francisco@gmail.com>" -> "Francisco Lopez"
   const match = fromHeader.match(/^([^<]+)</);
   if (match) return match[1].trim();
-  // Fallback: derive from email address
   const email = fromHeader.replace(/[<>]/g, '').trim();
   const namePart = email.split('@')[0].replace(/[._-]/g, ' ');
   return namePart.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -67,27 +57,24 @@ module.exports = async function handler(req, res) {
     const subject   = payload.subject || '';
     const rawEmail  = payload.rawEmail || '';
 
-    // Parse body from rawEmail, fallback to direct fields
     let body = payload.text || payload.body || '';
-    if (!body && rawEmail) {
-      body = extractTextFromRawEmail(rawEmail);
-    }
+    if (!body && rawEmail) body = extractTextFromRawEmail(rawEmail);
 
     if (!fromEmail) return res.status(200).json({ received: true, reason: 'no from' });
 
-    // Don't reply to our own emails or system emails
     const skip = ['texasmentalist.com','2020shine@gmail.com','resend.com',
-                  'shinethementalist@gmail.com','noreply','no-reply','mailer-daemon',
-                  'postmaster','bounce'];
+                  'shinethementalist@gmail.com','noreply','no-reply','mailer-daemon','postmaster','bounce'];
     if (skip.some(s => fromEmail.toLowerCase().includes(s))) {
       return res.status(200).json({ received: true, skipped: true });
     }
 
-    // Use body or subject as context (body might be empty if encoding fails)
     const context = body || subject || '(no message body)';
 
-    // ── 1. Generate AI reply ────────────────────────────────────────────────
+    // ── 1. Claude: extract name + status + generate reply ───────────────────
     let replyText = '';
+    let extractedName = '';
+    let extractedStatus = 'new';
+
     try {
       const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -98,26 +85,50 @@ module.exports = async function handler(req, res) {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 1024,
-          system: `You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic performer in Texas. Write warm, concise email replies to potential clients. Always sign off as "Shine, The Mentalist" with phone +1 (612) 865-7681 and website www.texasmentalist.com. Never confirm bookings or quote prices without saying "I'll check my availability and send you details." Keep replies under 150 words.`,
+          max_tokens: 1500,
+          system: `You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic performer in Texas.
+
+Respond in this EXACT format:
+NAME: [sender's real name from the email, or UNKNOWN]
+STATUS: [new, contacted, price_requested, or negotiating]
+REPLY:
+[warm reply under 150 words signed as Shine, The Mentalist with +1 (612) 865-7681 and www.texasmentalist.com]
+
+STATUS rules:
+- price_requested: they ask about cost, pricing, rates, how much, fees
+- negotiating: going back and forth on details after receiving pricing
+- contacted: general follow-up, no pricing question
+- new: first inquiry
+
+Never quote specific prices. If asked, say you will send pricing details shortly.`,
           messages: [{
             role: 'user',
-            content: `Reply to this email inquiry:\nFrom: ${fromFull}\nSubject: ${subject}\n\n${context.slice(0, 2000)}`
+            content: `Process this email:\nFrom: ${fromFull}\nSubject: ${subject}\n\n${context.slice(0, 2000)}`
           }],
         }),
       });
       const claudeData = await claudeRes.json();
+      let raw = '';
       if (claudeData.content && Array.isArray(claudeData.content)) {
         for (const block of claudeData.content) {
-          if (block.type === 'text' && block.text) replyText += block.text;
+          if (block.type === 'text' && block.text) raw += block.text;
         }
       }
-    } catch(e) {
-      console.error('Claude error:', e);
-    }
+      if (raw) {
+        const nameMatch = raw.match(/^NAME:\s*(.+)$/m);
+        if (nameMatch && nameMatch[1].trim() !== 'UNKNOWN') extractedName = nameMatch[1].trim();
+        const statusMatch = raw.match(/^STATUS:\s*(.+)$/m);
+        if (statusMatch) {
+          const s = statusMatch[1].trim().toLowerCase();
+          if (['new','contacted','price_requested','negotiating'].includes(s)) extractedStatus = s;
+        }
+        const replyMatch = raw.match(/^REPLY:\s*\n([\s\S]+)$/m);
+        if (replyMatch) replyText = replyMatch[1].trim();
+      }
+    } catch(e) { console.error('Claude error:', e); }
 
     if (!replyText) {
-      replyText = `Hi,\n\nThank you for reaching out about booking Shine, The Mentalist! I received your message and will get back to you shortly with more details.\n\n– Shine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`;
+      replyText = `Hi,\n\nThank you for reaching out about booking Shine, The Mentalist! I received your message and will get back to you shortly.\n\n– Shine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`;
     }
 
     // ── 2. Create or update lead in Supabase ────────────────────────────────
@@ -129,12 +140,12 @@ module.exports = async function handler(req, res) {
       const existing = await existingRes.json();
 
       if (!existing || existing.length === 0) {
-        const clientName = extractSenderName(fromFull);
+        const clientName = extractedName || extractSenderName(fromFull);
         const text = (subject + ' ' + context).toLowerCase();
         let eventType = 'Private event';
-        if (text.includes('birthday'))                              eventType = 'Birthday party';
+        if (text.includes('birthday'))                                    eventType = 'Birthday party';
         else if (text.includes('bachelorette')||text.includes('bridal')) eventType = 'Bachelorette party';
-        else if (text.includes('wedding'))                          eventType = 'Wedding';
+        else if (text.includes('wedding'))                                eventType = 'Wedding';
         else if (text.includes('corporate')||text.includes('company')||text.includes('team')) eventType = 'Corporate event';
         else if (text.includes('party')||text.includes('celebration'))   eventType = 'Private party';
 
@@ -146,23 +157,24 @@ module.exports = async function handler(req, res) {
             email:         fromEmail,
             event_type:    eventType,
             lead_source:   'Email',
-            status:        'new',
+            status:        extractedStatus,
             notes:         `Email inquiry:\nSubject: ${subject}\n\n${context.slice(0, 500)}`,
             last_activity: new Date().toISOString(),
           }),
         });
-        console.log('New lead created:', fromEmail);
+        console.log('New lead created:', fromEmail, 'name:', clientName, 'status:', extractedStatus);
       } else {
+        const updateData = { last_activity: new Date().toISOString() };
+        if (extractedStatus && extractedStatus !== 'new') updateData.status = extractedStatus;
+        if (extractedName) updateData.name = extractedName;
         await fetch(`${SB_URL}/rest/v1/clients?id=eq.${existing[0].id}`, {
           method: 'PATCH',
           headers: SB_HDR,
-          body: JSON.stringify({ last_activity: new Date().toISOString() }),
+          body: JSON.stringify(updateData),
         });
-        console.log('Existing client updated:', fromEmail);
+        console.log('Existing client updated:', fromEmail, 'status:', extractedStatus);
       }
-    } catch(e) {
-      console.error('Supabase error:', e);
-    }
+    } catch(e) { console.error('Supabase error:', e); }
 
     // ── 3. Send auto-reply to client ─────────────────────────────────────────
     await resend.emails.send({
@@ -176,8 +188,8 @@ module.exports = async function handler(req, res) {
     await resend.emails.send({
       from:    'Shine Booking Assistant <shine@texasmentalist.com>',
       to:      ['shinethementalist@gmail.com'],
-      subject: `📬 New email lead: ${fromEmail}`,
-      text:    `From: ${fromFull}\nSubject: ${subject}\n\n--- Message ---\n${context.slice(0, 1000)}\n\n--- Auto-reply sent ---\n${replyText}\n\nView leads: https://shine-booking.vercel.app`,
+      subject: `📬 New email lead: ${extractedName || fromEmail} [${extractedStatus}]`,
+      text:    `From: ${fromFull}\nSubject: ${subject}\nStatus: ${extractedStatus}\n\n--- Message ---\n${context.slice(0, 1000)}\n\n--- Auto-reply sent ---\n${replyText}\n\nView leads: https://shine-booking.vercel.app`,
     });
 
     return res.status(200).json({ success: true });
