@@ -2204,10 +2204,12 @@ function generateFollowUp(clientId) {
     };
     var followUpContext = statusContext[c.status] || 'Follow up professionally about next steps.';
 
-    fetch('/api/follow-up', {
+    fetch('/api/pending-replies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+            action: 'generate-followup',
+            clientId: clientId,
             clientName: c.name,
             eventType: c.event_type || '',
             eventDate: c.event_date || '',
@@ -2215,7 +2217,9 @@ function generateFollowUp(clientId) {
             guests: c.guests || '',
             status: c.status,
             hoursAgo: hoursAgo,
-            followUpContext: followUpContext
+            followUpContext: followUpContext,
+            toEmail: c.email || null,
+            toPhone: c.phone || null
         })
     })
     .then(function(r) { return r.json(); })
@@ -2224,30 +2228,8 @@ function generateFollowUp(clientId) {
         var draft = data.draft || '';
         if (!draft) throw new Error('No draft generated');
 
-        // Save draft as a pending reply in messages table (same table /api/pending-replies reads from)
-        return fetch(SUPABASE_URL + '/rest/v1/messages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': SUPABASE_KEY,
-                'Authorization': 'Bearer ' + SUPABASE_KEY,
-                'Prefer': 'return=representation'
-            },
-            body: JSON.stringify({
-                client_id: clientId,
-                channel: c.email ? 'email' : 'sms',
-                content: draft,
-                status: 'pending_review',
-                to_address: c.email || c.phone || null,
-                direction: 'outbound',
-                created_at: new Date().toISOString()
-            })
-        });
     })
-    .then(function(r) { return r.json(); })
-    .then(function(saved) {
-        console.log('Supabase save result:', JSON.stringify(saved));
-        if (saved && saved.code) throw new Error('Supabase error: ' + (saved.message || saved.code));
+    .then(function() {
         if (btn) { btn.disabled = false; btn.textContent = '✓ Draft created — see Pending Replies'; btn.style.background = 'rgba(76,175,135,.15)'; btn.style.color = 'var(--green)'; }
         loadPendingReplies();
     })
