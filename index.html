@@ -315,6 +315,7 @@
     .badge-intake_completed { background: rgba(240,165,0,.15); color: var(--amber) }
     .badge-contract_sent  { background: rgba(91,138,245,.15); color: var(--accent2) }
     .badge-contract_signed { background: rgba(76,175,135,.15); color: var(--green) }
+    .badge-negotiating    { background: rgba(240,165,0,.2); color: #ffcc44 }
     .badge-lost           { background: rgba(58,63,88,.4); color: var(--muted) }
 
     .list-empty {
@@ -334,6 +335,37 @@
         border-radius: 10px;
         white-space: nowrap;
         flex-shrink: 0
+    }
+
+    .hot-badge {
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 10px;
+        white-space: nowrap;
+        flex-shrink: 0
+    }
+
+    .section-divider {
+        padding: 10px 16px 6px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--muted);
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 8px
+    }
+
+    .section-divider span {
+        background: var(--surface2);
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 7px;
+        border-radius: 10px
     }
 
     /* ── DETAIL PANE ── */
@@ -1149,6 +1181,7 @@
                     <option value="chatting">Chatting</option>
                     <option value="pricing_requested">Pricing requested</option>
                     <option value="pricing_sent">Pricing sent</option>
+                    <option value="negotiating">Negotiating</option>
                     <option value="package_selected">Package selected</option>
                     <option value="booked">Booked</option>
                     <option value="intake_sent">Intake sent</option>
@@ -1199,11 +1232,15 @@ var activeClientId = null;
 var STATUS_LABELS = {
     new: 'New', chatting: 'Chatting',
     pricing_requested: 'Pricing requested', pricing_sent: 'Pricing sent',
+    negotiating: 'Negotiating',
     package_selected: 'Package selected', booked: 'Booked',
     intake_sent: 'Intake sent', intake_completed: 'Ready for contract',
     contract_sent: 'Contract sent', contract_signed: 'Contract signed',
     lost: 'Lost'
 };
+
+var CONFIRMED_STATUSES = ['booked','intake_sent','intake_completed','contract_sent','contract_signed'];
+var ACTIVE_STATUSES_SORT = ['new','chatting','pricing_requested','pricing_sent','negotiating','package_selected'];
 
 var QUESTION_LABELS = {
     q_honoree: 'Guest of Honour', q_honoree_dob: 'Date of Birth',
@@ -1327,6 +1364,27 @@ function loadLeads() {
     });
 }
 
+function makeLeadRow(c) {
+    var meta = [];
+    if (c.event_type) meta.push(c.event_type);
+    if (c.event_date) meta.push(fmtDate(c.event_date));
+    var statusLabel = STATUS_LABELS[c.status] || c.status;
+    var isSelected = c.id === activeClientId;
+    return '<div class="lead-row' + (isSelected ? ' selected' : '') + '" onclick="selectLead(\'' + c.id + '\')">' +
+        '<div class="lead-row-dot s-' + c.status + '"></div>' +
+        '<div class="lead-row-body">' +
+        '<div class="lead-row-top">' +
+        '<div class="lead-row-name">' + (c.hot_lead ? '🔥 ' : '') + escHtml(c.name) + '</div>' +
+        '<div class="lead-row-time">' + getTimeAgo(c.last_activity) + '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+        (meta.length ? '<div class="lead-row-meta">' + meta.join(' · ') + '</div>' : '') +
+        '<span class="lead-row-status badge-' + c.status + '">' + statusLabel + '</span>' +
+        (isNoReply(c) ? '<span class="no-reply-badge">⏰ ' + Math.floor((Date.now()-new Date(c.last_activity).getTime())/3600000) + 'h no reply</span>' : '') +
+        '</div>' +
+        '</div></div>';
+}
+
 function renderList() {
     var filtered = allClients.filter(matchesFilter);
     document.getElementById('lead-count').textContent = filtered.length;
@@ -1334,26 +1392,41 @@ function renderList() {
         document.getElementById('lead-list').innerHTML = '<div class="list-empty">No leads here</div>';
         return;
     }
-    document.getElementById('lead-list').innerHTML = filtered.map(function(c) {
-        var meta = [];
-        if (c.event_type) meta.push(c.event_type);
-        if (c.event_date) meta.push(fmtDate(c.event_date));
-        var statusLabel = STATUS_LABELS[c.status] || c.status;
-        var isSelected = c.id === activeClientId;
-        return '<div class="lead-row' + (isSelected ? ' selected' : '') + '" onclick="selectLead(\'' + c.id + '\')">' +
-            '<div class="lead-row-dot s-' + c.status + '"></div>' +
-            '<div class="lead-row-body">' +
-            '<div class="lead-row-top">' +
-            '<div class="lead-row-name">' + escHtml(c.name) + '</div>' +
-            '<div class="lead-row-time">' + getTimeAgo(c.last_activity) + '</div>' +
-            '</div>' +
-            '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
-            (meta.length ? '<div class="lead-row-meta">' + meta.join(' · ') + '</div>' : '') +
-            '<span class="lead-row-status badge-' + c.status + '">' + statusLabel + '</span>' +
-            (isNoReply(c) ? '<span class="no-reply-badge">⏰ ' + Math.floor((Date.now()-new Date(c.last_activity).getTime())/3600000) + 'h no reply</span>' : '') +
-            '</div>' +
-            '</div></div>';
-    }).join('');
+
+    var needsAttention = filtered.filter(function(c) {
+        return ACTIVE_STATUSES_SORT.indexOf(c.status) !== -1 && (isNoReply(c) || c.status === 'new');
+    }).sort(function(a,b) {
+        if (b.hot_lead !== a.hot_lead) return (b.hot_lead ? 1 : 0) - (a.hot_lead ? 1 : 0);
+        return new Date(a.last_activity) - new Date(b.last_activity);
+    });
+
+    var active = filtered.filter(function(c) {
+        return ACTIVE_STATUSES_SORT.indexOf(c.status) !== -1 && !isNoReply(c) && c.status !== 'new';
+    }).sort(function(a,b) {
+        if (b.hot_lead !== a.hot_lead) return (b.hot_lead ? 1 : 0) - (a.hot_lead ? 1 : 0);
+        return new Date(b.last_activity) - new Date(a.last_activity);
+    });
+
+    var confirmed = filtered.filter(function(c) {
+        return CONFIRMED_STATUSES.indexOf(c.status) !== -1;
+    }).sort(function(a,b) {
+        return (a.event_date||'9999') < (b.event_date||'9999') ? -1 : 1;
+    });
+
+    var lost = filtered.filter(function(c) { return c.status === 'lost'; });
+
+    function sectionHeader(label, count) {
+        return '<div class="section-divider">' + label + ' <span>' + count + '</span></div>';
+    }
+
+    var html = '';
+    if (needsAttention.length) html += sectionHeader('Needs Attention', needsAttention.length) + needsAttention.map(makeLeadRow).join('');
+    if (active.length)        html += sectionHeader('Active', active.length) + active.map(makeLeadRow).join('');
+    if (confirmed.length)     html += sectionHeader('Confirmed', confirmed.length) + confirmed.map(makeLeadRow).join('');
+    if (lost.length)          html += sectionHeader('Lost', lost.length) + lost.map(makeLeadRow).join('');
+    if (!html) html = '<div class="list-empty">No leads here</div>';
+
+    document.getElementById('lead-list').innerHTML = html;
 }
 
 function selectLead(id) {
@@ -1400,6 +1473,7 @@ function renderDetail(c) {
     if (isNoReply(c)) {
         actions += '<button class="d-btn" style="background:rgba(224,82,82,.15);color:var(--red);border:1px solid rgba(224,82,82,.25)" onclick="generateFollowUp(\'' + esc(c.id) + '\')">⏰ Generate follow-up draft</button>';
     }
+    actions += '<button class="d-btn" style="background:' + (c.hot_lead ? 'rgba(240,165,0,.25);color:#ffcc44;border:1px solid rgba(240,165,0,.3)' : 'rgba(240,165,0,.08);color:#888;border:1px solid var(--border)') + '" onclick="toggleHotLead(\'' + esc(c.id) + '\',' + (c.hot_lead ? 'false' : 'true') + ')">' + (c.hot_lead ? '🔥 Hot lead' : '🔥 Mark as hot') + '</button>';
     var isPlanner = c.contact_type === 'planner';
     actions += '<button class="d-btn ghost" onclick="toggleContactType(\'' + esc(c.id) + '\',\'' + (isPlanner ? 'client' : 'planner') + '\')">Mark as ' + (isPlanner ? 'direct client' : 'planner') + '</button>';
     actions += '<button class="d-btn ghost" onclick="openEditModal(\'' + esc(c.id) + '\')">Edit</button>';
@@ -2261,6 +2335,17 @@ function generateFollowUp(clientId) {
 }
 
 /* ── No-reply settings ── */
+function toggleHotLead(id, val) {
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
+        body: JSON.stringify({ hot_lead: val, last_activity: new Date().toISOString() })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function() { loadLeads(); })
+    .catch(function(e) { alert('Could not update: ' + e.message); });
+}
+
 function openNoReplySettings() {
     var h = prompt('Flag leads with no reply after how many hours? (current: ' + NO_REPLY_HOURS + ')', NO_REPLY_HOURS);
     if (h === null) return;
