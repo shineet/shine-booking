@@ -2191,13 +2191,26 @@ function generateFollowUp(clientId) {
         'Lead source: ' + (c.lead_source || 'unknown'),
     ].filter(Boolean).join('\n');
 
+    var statusContext = {
+        'new':                'You sent them an initial message but they have not replied yet. Follow up warmly, reference their event, and ask if they have any questions.',
+        'chatting':           'You have been chatting with them. They have not replied to your last message. Follow up gently to keep the conversation going.',
+        'pricing_requested':  'They asked about pricing. You sent them pricing information but they have not responded. Follow up to see if they had any questions about the packages.',
+        'pricing_sent':       'You already sent them your pricing page link. Follow up to check if they had a chance to look at the packages and if they have any questions.',
+        'package_selected':   'They selected a package! Follow up to let them know the next step is filling out the event questionnaire so you can personalize the show.',
+        'booked':             'They are booked! Follow up about the next step — completing the event questionnaire/intake form so you can start preparing.',
+        'intake_sent':        'You sent them the event questionnaire/intake form but they have not filled it out yet. Follow up to remind them and offer to help if they have questions.',
+        'intake_completed':   'They completed the questionnaire. Follow up about sending the contract to finalize everything.',
+        'contract_sent':      'You sent them the contract but they have not signed it yet. Follow up to remind them to sign so the booking is confirmed.'
+    };
+    var followUpContext = statusContext[c.status] || 'Follow up professionally about next steps.';
+
     fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             model: 'claude-sonnet-4-6',
             max_tokens: 300,
-            system: 'You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic performer in Texas. Write a short, warm follow-up email to a potential client who has not responded after ' + hoursAgo + ' hours. Be friendly, not pushy. Reference their event naturally. Keep it under 100 words. Sign off as "Shine, The Mentalist" with +1 (612) 865-7681 and www.texasmentalist.com. Return ONLY the email body text, nothing else.',
+            system: 'You are writing on behalf of Shine, The Mentalist — a professional mentalism and magic performer in Texas. Write a short, warm follow-up email. CONTEXT: ' + followUpContext + ' Be friendly, not pushy. Keep it under 80 words. Sign off as "Shine, The Mentalist" with +1 (612) 865-7681. Return ONLY the email body, nothing else. Do NOT introduce yourself as if this is a first contact unless the status is new.',
             messages: [{ role: 'user', content: 'Write a follow-up for this client:\n' + context }],
             clientName: c.name,
             eventType: c.event_type || ''
