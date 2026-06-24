@@ -346,26 +346,67 @@
     }
 
     .section-divider {
-        padding: 10px 16px 6px;
-        font-size: 10px;
+        padding: 10px 16px 8px;
+        font-size: 12px;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        color: var(--muted);
-        background: var(--bg);
-        border-bottom: 1px solid var(--border);
+        letter-spacing: 1.2px;
         display: flex;
         align-items: center;
-        gap: 8px
+        gap: 8px;
+        margin-top: 4px;
+        border-left: 3px solid transparent
     }
 
     .section-divider span {
-        background: var(--surface2);
-        color: var(--muted);
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 700;
-        padding: 1px 7px;
+        padding: 2px 8px;
         border-radius: 10px
+    }
+
+    .section-divider.attention {
+        background: rgba(224,82,82,.08);
+        color: #e07070;
+        border-left-color: var(--red);
+        border-bottom: 1px solid rgba(224,82,82,.15)
+    }
+    .section-divider.attention span {
+        background: rgba(224,82,82,.2);
+        color: #e07070
+    }
+
+    .section-divider.active {
+        background: rgba(124,106,245,.08);
+        color: #9d90f5;
+        border-left-color: var(--accent);
+        border-bottom: 1px solid rgba(124,106,245,.15)
+    }
+    .section-divider.active span {
+        background: rgba(124,106,245,.2);
+        color: #9d90f5
+    }
+
+    .section-divider.confirmed {
+        background: rgba(76,175,135,.08);
+        color: #5ec49a;
+        border-left-color: var(--green);
+        border-bottom: 1px solid rgba(76,175,135,.15)
+    }
+    .section-divider.confirmed span {
+        background: rgba(76,175,135,.2);
+        color: #5ec49a
+    }
+
+    .section-divider.lost {
+        background: rgba(58,63,88,.15);
+        color: var(--muted);
+        border-left-color: #3a3f58;
+        border-bottom: 1px solid rgba(58,63,88,.2)
+    }
+    .section-divider.lost span {
+        background: rgba(58,63,88,.3);
+        color: var(--muted)
     }
 
     /* ── DETAIL PANE ── */
@@ -1415,15 +1456,11 @@ function renderList() {
 
     var lost = filtered.filter(function(c) { return c.status === 'lost'; });
 
-    function sectionHeader(label, count) {
-        return '<div class="section-divider">' + label + ' <span>' + count + '</span></div>';
-    }
-
     var html = '';
-    if (needsAttention.length) html += sectionHeader('Needs Attention', needsAttention.length) + needsAttention.map(makeLeadRow).join('');
-    if (active.length)        html += sectionHeader('Active', active.length) + active.map(makeLeadRow).join('');
-    if (confirmed.length)     html += sectionHeader('Confirmed', confirmed.length) + confirmed.map(makeLeadRow).join('');
-    if (lost.length)          html += sectionHeader('Lost', lost.length) + lost.map(makeLeadRow).join('');
+    if (needsAttention.length) html += '<div class="section-divider attention">Needs Attention <span>' + needsAttention.length + '</span></div>' + needsAttention.map(makeLeadRow).join('');
+    if (active.length)         html += '<div class="section-divider active">Active <span>' + active.length + '</span></div>' + active.map(makeLeadRow).join('');
+    if (confirmed.length)      html += '<div class="section-divider confirmed">Confirmed <span>' + confirmed.length + '</span></div>' + confirmed.map(makeLeadRow).join('');
+    if (lost.length)           html += '<div class="section-divider lost">Lost <span>' + lost.length + '</span></div>' + lost.map(makeLeadRow).join('');
     if (!html) html = '<div class="list-empty">No leads here</div>';
 
     document.getElementById('lead-list').innerHTML = html;
