@@ -324,6 +324,18 @@
         font-size: 13px
     }
 
+    .no-reply-badge {
+        font-size: 10px;
+        font-weight: 700;
+        background: rgba(224,82,82,.15);
+        color: var(--red);
+        border: 1px solid rgba(224,82,82,.25);
+        padding: 2px 6px;
+        border-radius: 10px;
+        white-space: nowrap;
+        flex-shrink: 0
+    }
+
     /* ── DETAIL PANE ── */
     .detail-pane {
         flex: 1;
@@ -804,6 +816,7 @@
         </label>
     </div>
     <button class="topbar-icon-btn" onclick="loadLeads();loadPendingReplies();">&#8635;</button>
+    <button class="topbar-icon-btn" onclick="openNoReplySettings()" title="No-reply threshold">&#9201;</button>
 </div>
 
 <!-- Shell -->
@@ -832,6 +845,7 @@
                     <button class="filter-pill" data-filter="package_selected,booked,intake_sent,intake_completed" onclick="setFilter('package_selected,booked,intake_sent,intake_completed')">Booked</button>
                     <button class="filter-pill" data-filter="contract_sent,contract_signed" onclick="setFilter('contract_sent,contract_signed')">Contract</button>
                     <button class="filter-pill" data-filter="lost" onclick="setFilter('lost')">Lost</button>
+                    <button class="filter-pill" data-filter="noreply" onclick="setFilter('noreply')">⏰ No reply</button>
                 </div>
             </div>
             <div class="lead-list" id="lead-list">
@@ -1173,6 +1187,8 @@
 var SUPABASE_URL = 'https://nkhwttlmtidtippylbzs.supabase.co';
 var SUPABASE_KEY = 'sb_publishable_jvudqPYcwnnqjO8w7DQd2g_SSyb-HJl';
 var currentClientId = null;
+var NO_REPLY_HOURS = parseInt(localStorage.getItem('noReplyHours') || '24', 10);
+var ACTIVE_STATUSES = ['new','chatting','pricing_requested','pricing_sent','package_selected','booked','intake_sent','intake_completed','contract_sent'];
 var selectedPricingOption = null;
 var modalClient = {};
 var messagingExistingClientId = null;
@@ -1245,10 +1261,18 @@ function setFilter(filter) {
 
 var currentSection = 'leads';
 
+function isNoReply(client) {
+    if (!client.last_activity) return false;
+    if (ACTIVE_STATUSES.indexOf(client.status) === -1) return false;
+    var hours = (Date.now() - new Date(client.last_activity).getTime()) / 3600000;
+    return hours >= NO_REPLY_HOURS;
+}
+
 function matchesFilter(client) {
     var clientType = client.contact_type === 'planner' ? 'planner' : 'client';
     var sectionWanted = currentSection === 'planners' ? 'planner' : 'client';
     if (clientType !== sectionWanted) return false;
+    if (activeFilter === 'noreply') return isNoReply(client);
     if (activeFilter === 'all') return true;
     return activeFilter.split(',').indexOf(client.status) !== -1;
 }
@@ -1323,9 +1347,10 @@ function renderList() {
             '<div class="lead-row-name">' + escHtml(c.name) + '</div>' +
             '<div class="lead-row-time">' + getTimeAgo(c.last_activity) + '</div>' +
             '</div>' +
-            '<div style="display:flex;align-items:center;gap:6px">' +
+            '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
             (meta.length ? '<div class="lead-row-meta">' + meta.join(' · ') + '</div>' : '') +
             '<span class="lead-row-status badge-' + c.status + '">' + statusLabel + '</span>' +
+            (isNoReply(c) ? '<span class="no-reply-badge">⏰ ' + Math.floor((Date.now()-new Date(c.last_activity).getTime())/3600000) + 'h no reply</span>' : '') +
             '</div>' +
             '</div></div>';
     }).join('');
@@ -1371,6 +1396,9 @@ function renderDetail(c) {
     }
     if (c.booking_id && ['intake_completed','contract_sent','contract_signed'].indexOf(c.status) !== -1) {
         actions += '<button class="d-btn purple" onclick="loadAndShowAnswers(\'' + esc(c.booking_id) + '\')">View answers</button>';
+    }
+    if (isNoReply(c)) {
+        actions += '<button class="d-btn" style="background:rgba(224,82,82,.15);color:var(--red);border:1px solid rgba(224,82,82,.25)" onclick="generateFollowUp(\'' + esc(c.id) + '\')">⏰ Generate follow-up draft</button>';
     }
     var isPlanner = c.contact_type === 'planner';
     actions += '<button class="d-btn ghost" onclick="toggleContactType(\'' + esc(c.id) + '\',\'' + (isPlanner ? 'client' : 'planner') + '\')">Mark as ' + (isPlanner ? 'direct client' : 'planner') + '</button>';
@@ -2142,6 +2170,90 @@ function sendMessages() {
     })
     .catch(function(e) { showStatus('Error: ' + e.message, 'error'); })
     .finally(function() { btn.disabled = false; btn.textContent = 'Send messages'; });
+}
+
+/* ── Generate follow-up draft ── */
+function generateFollowUp(clientId) {
+    var c = allClients.find(function(x) { return x.id === clientId; });
+    if (!c) return;
+    var btn = document.querySelector('[onclick*="generateFollowUp('' + clientId + '')"]');
+    if (btn) { btn.disabled = true; btn.textContent = '⏰ Generating...'; }
+
+    var hoursAgo = Math.floor((Date.now() - new Date(c.last_activity).getTime()) / 3600000);
+    var context = [
+        'Client name: ' + c.name,
+        'Event type: ' + (c.event_type || 'not specified'),
+        c.event_date ? 'Event date: ' + c.event_date : '',
+        c.guests ? 'Guests: ' + c.guests : '',
+        c.venue ? 'Venue: ' + c.venue : '',
+        'Current status: ' + c.status,
+        'Hours since last contact: ' + hoursAgo,
+        'Lead source: ' + (c.lead_source || 'unknown'),
+    ].filter(Boolean).join('
+');
+
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 300,
+            system: 'You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic performer in Texas. Write a short, warm follow-up email to a potential client who has not responded after ' + hoursAgo + ' hours. Be friendly, not pushy. Reference their event naturally. Keep it under 100 words. Sign off as "Shine, The Mentalist". Return ONLY the email body text, nothing else.',
+            messages: [{ role: 'user', content: 'Write a follow-up for this client:
+' + context }],
+            clientName: c.name,
+            eventType: c.event_type || '',
+            mode: 'followup'
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error.message || data.error);
+        var draft = data.emailBody || data.smsMessage || data.reply || '';
+        if (!draft) throw new Error('No draft generated');
+
+        // Save draft as a pending reply in Supabase
+        return fetch(SUPABASE_URL + '/rest/v1/pending_messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_KEY,
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify({
+                client_id: clientId,
+                client_name: c.name,
+                channel: c.email ? 'email' : 'sms',
+                draft: draft,
+                status: 'pending_review',
+                to_email: c.email || null,
+                to_phone: c.phone || null,
+                created_at: new Date().toISOString()
+            })
+        });
+    })
+    .then(function(r) { return r.json(); })
+    .then(function() {
+        if (btn) { btn.disabled = false; btn.textContent = '✓ Draft created — see Pending Replies'; btn.style.background = 'rgba(76,175,135,.15)'; btn.style.color = 'var(--green)'; }
+        loadPendingReplies();
+    })
+    .catch(function(e) {
+        alert('Could not generate follow-up: ' + e.message);
+        if (btn) { btn.disabled = false; btn.textContent = '⏰ Generate follow-up draft'; }
+    });
+}
+
+/* ── No-reply settings ── */
+function openNoReplySettings() {
+    var h = prompt('Flag leads with no reply after how many hours? (current: ' + NO_REPLY_HOURS + ')', NO_REPLY_HOURS);
+    if (h === null) return;
+    var n = parseInt(h, 10);
+    if (isNaN(n) || n < 1) { alert('Please enter a valid number of hours (e.g. 24)'); return; }
+    NO_REPLY_HOURS = n;
+    localStorage.setItem('noReplyHours', n);
+    renderList();
+    alert('No-reply threshold set to ' + n + ' hours. This will be remembered next time you open the app.');
 }
 
 /* ── Modal backdrop clicks ── */
