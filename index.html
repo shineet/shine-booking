@@ -2220,7 +2220,6 @@ function generateFollowUp(clientId) {
             },
             body: JSON.stringify({
                 client_id: clientId,
-                client_name: c.name,
                 channel: c.email ? 'email' : 'sms',
                 content: draft,
                 status: 'pending_review',
