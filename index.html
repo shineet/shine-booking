@@ -2231,7 +2231,9 @@ function generateFollowUp(clientId) {
         });
     })
     .then(function(r) { return r.json(); })
-    .then(function() {
+    .then(function(saved) {
+        console.log('Supabase save result:', JSON.stringify(saved));
+        if (saved && saved.code) throw new Error('Supabase error: ' + (saved.message || saved.code));
         if (btn) { btn.disabled = false; btn.textContent = '✓ Draft created — see Pending Replies'; btn.style.background = 'rgba(76,175,135,.15)'; btn.style.color = 'var(--green)'; }
         loadPendingReplies();
     })
