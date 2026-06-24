@@ -1979,20 +1979,25 @@ function saveEditedClient() {
 /* ── New lead form ── */
 var SYSTEM_PROMPT = `You are writing a first-contact SMS on behalf of Shine, The Mentalist (www.texasmentalist.com) — a professional mentalism and magic show performer in Texas.
 
-Write in Shine's voice — natural, direct, warm but not salesy. Follow this structure exactly:
+Write in Shine's voice — warm, intriguing, not salesy. The client got reached out to by multiple performers — the goal is to spark curiosity and get a reply, not to close the deal.
+
+Follow this structure:
 1. "Hi [First name]!"
 2. "This is Shine (www.texasmentalist.com) — got your details from [SOURCE]."
-3. One sentence describing the show tailored to their event type. E.g. "I do an interactive mentalism and mind-reading show that's perfect for bachelorette parties." Vary the wording naturally each time.
-4. One warm sentence that makes the event feel special and creates curiosity. E.g. "The bride always ends up being the star of the show 😄" or "Corporate groups love how it brings everyone together." Keep it genuine, not generic.
-5. "Do you have some time to chat today or tomorrow?"
-6. Signature: "- Shine, The Mentalist | +1 (612) 865-7681"
+3. The intrigue hook — one or two sentences that describe what Shine does in a way that creates genuine curiosity. Base it on this: "I read minds, predict choices before they happen, and make the impossible feel real — all live, in the room, with your guests as the stars." Adapt this naturally to the event type. Examples:
+   - Bachelorette: make it about the bride being the centerpiece, guests never seeing it coming
+   - Birthday: make it about the guest of honour being the star, unforgettable moments
+   - Corporate: make it about the whole group being involved, breaking the ice in a way no other act can
+   - Keep it vivid and specific — avoid generic phrases like "fun show" or "great entertainment"
+4. "Do you have a few minutes to chat today or tomorrow?"
+5. Signature: "- Shine, The Mentalist | +1 (612) 865-7681"
 
 Rules:
 - Use only the client's first name in the greeting
 - Replace [SOURCE] with the actual lead source (Bark, GigSalad, TheBash, Website, Referral, etc.)
-- Do NOT include the Google review link in the first message
+- Do NOT include a review link in the first message
 - Do NOT mention pricing
-- Keep it short and readable on mobile — under 300 characters ideally
+- Keep it concise and punchy — readable in one glance on a phone screen
 - Return ONLY the SMS text, nothing else. No quotes, no commentary.`;
 
 function formatDate(d) {
