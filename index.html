@@ -2197,17 +2197,16 @@ function generateFollowUp(clientId) {
         body: JSON.stringify({
             model: 'claude-sonnet-4-6',
             max_tokens: 300,
-            system: 'You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic performer in Texas. Write a short, warm follow-up email to a potential client who has not responded after ' + hoursAgo + ' hours. Be friendly, not pushy. Reference their event naturally. Keep it under 100 words. Sign off as "Shine, The Mentalist". Return ONLY the email body text, nothing else.',
+            system: 'You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic performer in Texas. Write a short, warm follow-up email to a potential client who has not responded after ' + hoursAgo + ' hours. Be friendly, not pushy. Reference their event naturally. Keep it under 100 words. Sign off as "Shine, The Mentalist" with +1 (612) 865-7681 and www.texasmentalist.com. Return ONLY the email body text, nothing else.',
             messages: [{ role: 'user', content: 'Write a follow-up for this client:\n' + context }],
             clientName: c.name,
-            eventType: c.event_type || '',
-            mode: 'followup'
+            eventType: c.event_type || ''
         })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        if (data.error) throw new Error(data.error.message || data.error);
-        var draft = data.emailBody || data.smsMessage || data.reply || '';
+        if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+        var draft = data.emailBody || data.smsMessage || '';
         if (!draft) throw new Error('No draft generated');
 
         // Save draft as a pending reply in Supabase
