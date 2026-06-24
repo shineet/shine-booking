@@ -1671,11 +1671,28 @@ function loadPendingReplies() {
                 '<textarea class="pending-draft" id="pending-draft-' + p.id + '">' + escHtml(p.draft) + '</textarea>' +
                 '<div class="pending-actions">' +
                 '<button class="pending-discard" onclick="discardPendingReply(\'' + p.id + '\')">Discard</button>' +
+                (p.channel === 'sms' && p.toAddress ? '<button class="pending-send" style="background:var(--surface2);color:var(--accent2);border:1px solid var(--border)" onclick="openPendingInMessages(\'' + p.id + '\')">Open in Messages</button>' : '') +
                 '<button class="pending-send" onclick="approvePendingReply(\'' + p.id + '\')">Send</button>' +
                 '</div></div>';
         }).join('');
     })
     .catch(function() {});
+}
+
+function openPendingInMessages(id) {
+    var text = document.getElementById('pending-draft-' + id);
+    if (!text) return;
+    // Find the pending item to get the phone number
+    fetch('/api/pending-replies')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var p = (data.pending || []).find(function(x) { return x.id === id; });
+        if (!p || !p.toAddress) { alert('No phone number on file for this lead.'); return; }
+        var phone = p.toAddress.replace(/[^\d+]/g, '');
+        var msg = text.value.trim();
+        window.location.href = 'sms:' + phone + '&body=' + encodeURIComponent(msg);
+    })
+    .catch(function(e) { alert('Error: ' + e.message); });
 }
 
 function approvePendingReply(id) {
