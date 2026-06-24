@@ -2176,7 +2176,7 @@ function sendMessages() {
 function generateFollowUp(clientId) {
     var c = allClients.find(function(x) { return x.id === clientId; });
     if (!c) return;
-    var btn = document.querySelector('[onclick*="generateFollowUp('' + clientId + '')"]');
+    var btn = document.querySelector('.d-btn[onclick*="generateFollowUp"]');
     if (btn) { btn.disabled = true; btn.textContent = '⏰ Generating...'; }
 
     var hoursAgo = Math.floor((Date.now() - new Date(c.last_activity).getTime()) / 3600000);
@@ -2189,8 +2189,7 @@ function generateFollowUp(clientId) {
         'Current status: ' + c.status,
         'Hours since last contact: ' + hoursAgo,
         'Lead source: ' + (c.lead_source || 'unknown'),
-    ].filter(Boolean).join('
-');
+    ].filter(Boolean).join('\n');
 
     fetch('/api/chat', {
         method: 'POST',
@@ -2199,8 +2198,7 @@ function generateFollowUp(clientId) {
             model: 'claude-sonnet-4-6',
             max_tokens: 300,
             system: 'You are a booking assistant for Shine, The Mentalist — a professional mentalism and magic performer in Texas. Write a short, warm follow-up email to a potential client who has not responded after ' + hoursAgo + ' hours. Be friendly, not pushy. Reference their event naturally. Keep it under 100 words. Sign off as "Shine, The Mentalist". Return ONLY the email body text, nothing else.',
-            messages: [{ role: 'user', content: 'Write a follow-up for this client:
-' + context }],
+            messages: [{ role: 'user', content: 'Write a follow-up for this client:\n' + context }],
             clientName: c.name,
             eventType: c.event_type || '',
             mode: 'followup'
