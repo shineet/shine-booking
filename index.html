@@ -2209,8 +2209,8 @@ function generateFollowUp(clientId) {
         var draft = data.emailBody || data.smsMessage || '';
         if (!draft) throw new Error('No draft generated');
 
-        // Save draft as a pending reply in Supabase
-        return fetch(SUPABASE_URL + '/rest/v1/pending_messages', {
+        // Save draft as a pending reply in messages table (same table /api/pending-replies reads from)
+        return fetch(SUPABASE_URL + '/rest/v1/messages', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -2222,10 +2222,10 @@ function generateFollowUp(clientId) {
                 client_id: clientId,
                 client_name: c.name,
                 channel: c.email ? 'email' : 'sms',
-                draft: draft,
+                content: draft,
                 status: 'pending_review',
-                to_email: c.email || null,
-                to_phone: c.phone || null,
+                to_address: c.email || c.phone || null,
+                direction: 'outbound',
                 created_at: new Date().toISOString()
             })
         });
