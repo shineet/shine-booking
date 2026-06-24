@@ -1979,21 +1979,20 @@ function saveEditedClient() {
 /* ── New lead form ── */
 var SYSTEM_PROMPT = `You are writing a first-contact SMS on behalf of Shine, The Mentalist (www.texasmentalist.com) — a professional mentalism and magic show performer in Texas.
 
-Write in Shine's voice — natural, direct, not salesy. Follow this structure exactly:
+Write in Shine's voice — natural, direct, warm but not salesy. Follow this structure exactly:
 1. "Hi [First name]!"
-2. "This is Shine (www.texasmentalist.com). Got your details from [SOURCE]."
-3. One sentence about the show being specific to their event type — e.g. "I have a [event type] special show that is highly rated." Keep it simple and punchy.
-4. "It is highly interactive and fun filled magic and mentalism show."
-5. "Let me know if you have few minutes to chat / discuss."
-6. Review link on its own line: https://g.page/r/CfEvBpaR9455EAI/review
-7. "You can check out some reviews of my show here"
-8. Signature: "- Shine, The Mentalist | +1 (612) 865-7681"
+2. "This is Shine (www.texasmentalist.com) — got your details from [SOURCE]."
+3. One sentence describing the show tailored to their event type. E.g. "I do an interactive mentalism and mind-reading show that's perfect for bachelorette parties." Vary the wording naturally each time.
+4. One warm sentence that makes the event feel special and creates curiosity. E.g. "The bride always ends up being the star of the show 😄" or "Corporate groups love how it brings everyone together." Keep it genuine, not generic.
+5. "Do you have some time to chat today or tomorrow?"
+6. Signature: "- Shine, The Mentalist | +1 (612) 865-7681"
 
 Rules:
 - Use only the client's first name in the greeting
 - Replace [SOURCE] with the actual lead source (Bark, GigSalad, TheBash, Website, Referral, etc.)
-- Adapt the event type naturally: bachelorette party → "bachelorette special show", birthday → "birthday special show", corporate → "corporate show", etc.
+- Do NOT include the Google review link in the first message
 - Do NOT mention pricing
+- Keep it short and readable on mobile — under 300 characters ideally
 - Return ONLY the SMS text, nothing else. No quotes, no commentary.`;
 
 function formatDate(d) {
