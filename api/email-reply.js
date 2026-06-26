@@ -192,17 +192,25 @@ Only include this block once. Do not mention this block or its contents in the v
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 500,
+        max_tokens: 1024,
         system: systemPrompt,
         messages: messages
       })
     });
 
-    const claudeData = await claudeResponse.json();
-    if (claudeData.error) throw new Error(claudeData.error.message);
+    let claudeData;
+    const claudeRawText = await claudeResponse.text();
+    try {
+      claudeData = JSON.parse(claudeRawText);
+    } catch(parseErr) {
+      throw new Error(`Claude response was not valid JSON (HTTP ${claudeResponse.status}): ${claudeRawText.substring(0, 500)}`);
+    }
+    if (!claudeResponse.ok || claudeData.error) {
+      throw new Error(`Claude API error (HTTP ${claudeResponse.status}): ${claudeData.error?.message || claudeRawText.substring(0, 500)}`);
+    }
     if (!claudeData.content || !claudeData.content[0] || !claudeData.content[0].text) {
-      console.error('Unexpected Claude response shape:', JSON.stringify(claudeData).substring(0, 2000));
-      throw new Error('Claude returned an unexpected response shape (no text content)');
+      console.error('Unexpected Claude response shape:', JSON.stringify(claudeData));
+      throw new Error(`Claude returned no text content. stop_reason: ${claudeData.stop_reason}, content: ${JSON.stringify(claudeData.content)}`);
     }
 
     const replyText = claudeData.content[0].text;
