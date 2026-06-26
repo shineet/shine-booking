@@ -2504,6 +2504,8 @@ function openComposeModal(id, name, email, phone) {
     var channel = phone ? 'sms' : 'email';
     document.getElementById('compose-channel').value = channel;
     onComposeChannelChange();
+    var btn = document.getElementById('compose-send-btn');
+    btn.disabled = false; btn.textContent = 'Send';
     document.getElementById('compose-modal').classList.add('show');
 }
 
