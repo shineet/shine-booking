@@ -12,11 +12,60 @@ export default async function handler(req, res) {
       return;
     }
 
-    if (from.includes('texasmentalist.com') ||
-        from.includes('shinethementalist@gmail.com') ||
-        from.includes('2020shine@gmail.com') ||
-        from.includes('resend.com') ||
-        from.includes('noreply')) {
+    const isOwnSystem = from.includes('resend.com') || from.includes('noreply');
+    const isShineManual = !isOwnSystem && (
+      from.includes('texasmentalist.com') ||
+      from.includes('shinethementalist@gmail.com') ||
+      from.includes('2020shine@gmail.com')
+    );
+
+    if (isOwnSystem || isShineManual) {
+      // If Shine manually emailed a client and BCC'd log@texasmentalist.com, log it as outbound
+      if (isShineManual && to) {
+        const toEmail = to.match(/<(.+)>/)?.[1] || to.split(',')[0].trim();
+        if (toEmail && !toEmail.includes('texasmentalist.com') && !toEmail.includes('resend.com')) {
+          let manualBody = body || '';
+          if (!manualBody && rawEmail) {
+            const textMatch = rawEmail.match(/Content-Type: text\/plain[\s\S]*?\r?\n\r?\n([\s\S]*?)(?:\r?\n--|\r?\n\r?\nContent-Type)/);
+            if (textMatch) {
+              manualBody = textMatch[1].trim();
+            } else {
+              const headerEnd = rawEmail.indexOf('\r\n\r\n') !== -1 ? rawEmail.indexOf('\r\n\r\n') : rawEmail.indexOf('\n\n');
+              if (headerEnd > -1) manualBody = rawEmail.substring(headerEnd).trim().substring(0, 2000);
+            }
+          }
+          try {
+            const clientRes = await fetch(
+              `${process.env.SUPABASE_URL}/rest/v1/clients?email=eq.${encodeURIComponent(toEmail)}&order=created_at.desc&limit=1`,
+              { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
+            );
+            const clients = await clientRes.json();
+            const manualClient = Array.isArray(clients) ? (clients[0] || null) : null;
+            if (manualClient) {
+              await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+                body: JSON.stringify([{
+                  client_id: manualClient.id,
+                  channel: 'email',
+                  direction: 'outbound',
+                  content: manualBody || `[Email with subject: ${subject}]`,
+                  status: 'sent',
+                  to_address: toEmail,
+                  email_subject: subject
+                }])
+              });
+              await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${manualClient.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+                body: JSON.stringify({ last_activity: new Date().toISOString(), last_channel: 'email' })
+              });
+            }
+          } catch(e) {
+            console.error('Manual outbound log failed:', e.message);
+          }
+        }
+      }
       res.status(200).json({ received: true, skipped: 'own email' });
       return;
     }
