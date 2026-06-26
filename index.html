@@ -1257,6 +1257,35 @@
     </div>
 </div>
 
+<!-- Compose modal -->
+<div class="modal-overlay" id="compose-modal">
+    <div class="modal">
+        <h2>Send message</h2>
+        <p id="compose-client-name" style="color:var(--muted);font-size:14px"></p>
+        <div class="field">
+            <label>Channel</label>
+            <select id="compose-channel" onchange="onComposeChannelChange()">
+                <option value="email">Email</option>
+                <option value="sms">SMS</option>
+            </select>
+        </div>
+        <div id="compose-email-subject-field" class="field">
+            <label>Subject</label>
+            <input type="text" id="compose-subject" placeholder="e.g. Following up on your event">
+        </div>
+        <div class="field">
+            <label>Message</label>
+            <textarea id="compose-body" rows="7" placeholder="Write your message here..." oninput="if(document.getElementById('compose-channel').value==='sms')updateComposeCharCount()"></textarea>
+        </div>
+        <div id="compose-char-count" style="font-size:11px;color:var(--muted);text-align:right;margin-top:-10px;margin-bottom:10px;display:none"></div>
+        <div class="modal-actions">
+            <button class="modal-cancel" onclick="closeComposeModal()">Cancel</button>
+            <button class="modal-cancel" id="compose-imessage-btn" style="display:none" onclick="openComposeInMessages()">Open in Messages</button>
+            <button class="modal-send" id="compose-send-btn" onclick="sendCompose()">Send</button>
+        </div>
+    </div>
+</div>
+
 <script>
 var SUPABASE_URL = 'https://nkhwttlmtidtippylbzs.supabase.co';
 var SUPABASE_KEY = 'sb_publishable_jvudqPYcwnnqjO8w7DQd2g_SSyb-HJl';
@@ -1511,6 +1540,7 @@ function renderDetail(c) {
         actions += '<button class="d-btn" style="background:rgba(224,82,82,.15);color:var(--red);border:1px solid rgba(224,82,82,.25)" onclick="generateFollowUp(\'' + esc(c.id) + '\')">⏰ Generate follow-up draft</button>';
     }
     actions += '<button class="d-btn" style="background:' + (c.hot_lead ? 'rgba(240,165,0,.25);color:#ffcc44;border:1px solid rgba(240,165,0,.3)' : 'rgba(240,165,0,.08);color:#888;border:1px solid var(--border)') + '" onclick="toggleHotLead(\'' + esc(c.id) + '\',' + (c.hot_lead ? 'false' : 'true') + ')">' + (c.hot_lead ? '🔥 Hot lead' : '🔥 Mark as hot') + '</button>';
+        actions += '<button class="d-btn blue" data-rid="' + esc(c.id) + '" data-rname="' + esc(c.name) + '" data-remail="' + esc(c.email||'') + '" data-rphone="' + esc(c.phone||'') + '" onclick="openComposeModal(this.dataset.rid,this.dataset.rname,this.dataset.remail,this.dataset.rphone)">✉️ Send message</button>';
     var isPlanner = c.contact_type === 'planner';
     actions += '<button class="d-btn ghost" onclick="toggleContactType(\'' + esc(c.id) + '\',\'' + (isPlanner ? 'client' : 'planner') + '\')">Mark as ' + (isPlanner ? 'direct client' : 'planner') + '</button>';
     actions += '<button class="d-btn ghost" onclick="openEditModal(\'' + esc(c.id) + '\')">Edit</button>';
@@ -1954,11 +1984,13 @@ function copyPricingLinkToClipboard() {
 
 /* ── Intake ── */
 function sendIntakeForm(id, name, email, eventType, price) {
-    if (!email) { alert('No email on file — intake form needs an email to send.'); return; }
+    var c = allClients.find(function(x) { return x.id === id; });
+    var phone = c ? c.phone : null;
+    if (!email && !phone) { alert('No email or phone on file — cannot send intake form.'); return; }
     if (!confirm('Send intake questionnaire to ' + name + '?')) return;
     fetch('/api/intake', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send', clientId: id, clientName: name, clientEmail: email, eventType: eventType, fee: price || null })
+        body: JSON.stringify({ action: 'send', clientId: id, clientName: name, clientEmail: email || null, clientPhone: phone || null, eventType: eventType, fee: price || null })
     })
     .then(function(r) { return r.json(); })
     .then(function(d) { if (d.error) throw new Error(d.error); alert('Intake form sent to ' + name + '!'); loadLeads(); })
@@ -2389,6 +2421,86 @@ function generateFollowUp(clientId) {
 }
 
 /* ── No-reply settings ── */
+/* ── Compose modal ── */
+var composeClient = {};
+
+function openComposeModal(id, name, email, phone) {
+    composeClient = { id: id, name: name, email: email, phone: phone };
+    document.getElementById('compose-client-name').textContent = 'To: ' + name;
+    document.getElementById('compose-body').value = '';
+    document.getElementById('compose-subject').value = '';
+    document.getElementById('compose-char-count').textContent = '';
+    // Default to SMS if phone available, email otherwise
+    var channel = phone ? 'sms' : 'email';
+    document.getElementById('compose-channel').value = channel;
+    onComposeChannelChange();
+    document.getElementById('compose-modal').classList.add('show');
+}
+
+function onComposeChannelChange() {
+    var ch = document.getElementById('compose-channel').value;
+    document.getElementById('compose-email-subject-field').style.display = ch === 'email' ? 'block' : 'none';
+    document.getElementById('compose-char-count').style.display = ch === 'sms' ? 'block' : 'none';
+    document.getElementById('compose-imessage-btn').style.display = (ch === 'sms' && composeClient.phone) ? 'inline-flex' : 'none';
+    if (ch === 'sms') updateComposeCharCount();
+}
+
+function updateComposeCharCount() {
+    var txt = document.getElementById('compose-body').value;
+    var el = document.getElementById('compose-char-count');
+    el.textContent = txt.length + ' / 160 characters';
+    el.style.color = txt.length > 160 ? 'var(--red)' : 'var(--muted)';
+}
+
+function closeComposeModal() {
+    document.getElementById('compose-modal').classList.remove('show');
+    composeClient = {};
+}
+
+function openComposeInMessages() {
+    var phone = composeClient.phone;
+    var msg = document.getElementById('compose-body').value.trim();
+    if (!phone || !msg) return;
+    var digits = phone.replace(/[^0-9]/g, '');
+    if (digits.length === 10) digits = '1' + digits;
+    window.location.href = 'sms:+' + digits + '&body=' + encodeURIComponent(msg);
+}
+
+function sendCompose() {
+    var ch = document.getElementById('compose-channel').value;
+    var body = document.getElementById('compose-body').value.trim();
+    var subject = document.getElementById('compose-subject').value.trim() || 'Message from Shine, The Mentalist';
+    if (!body) { alert('Please write a message first.'); return; }
+    if (ch === 'sms' && !composeClient.phone) { alert('No phone number on file for this client.'); return; }
+    if (ch === 'email' && !composeClient.email) { alert('No email on file for this client.'); return; }
+
+    var btn = document.getElementById('compose-send-btn');
+    btn.disabled = true; btn.textContent = 'Sending...';
+
+    fetch('/api/chat?mode=compose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'compose',
+            clientId: composeClient.id,
+            channel: ch,
+            toPhone: ch === 'sms' ? composeClient.phone : null,
+            toEmail: ch === 'email' ? composeClient.email : null,
+            subject: subject,
+            body: body
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.error) throw new Error(d.error);
+        closeComposeModal();
+        loadLeads();
+        alert('Message sent to ' + composeClient.name + '!');
+    })
+    .catch(function(e) { alert('Error: ' + e.message); })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Send'; });
+}
+
 function toggleHotLead(id, val) {
     fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id, {
         method: 'PATCH',
@@ -2412,7 +2524,7 @@ function openNoReplySettings() {
 }
 
 /* ── Modal backdrop clicks ── */
-[['pricing-modal', closeModal], ['contract-modal', closeContractModal], ['edit-modal', closeEditModal], ['copy-link-modal', closeCopyLinkModal]].forEach(function(pair) {
+[['pricing-modal', closeModal], ['contract-modal', closeContractModal], ['edit-modal', closeEditModal], ['copy-link-modal', closeCopyLinkModal], ['compose-modal', closeComposeModal]].forEach(function(pair) {
     document.getElementById(pair[0]).addEventListener('click', function(e) { if (e.target === this) pair[1](); });
 });
 
