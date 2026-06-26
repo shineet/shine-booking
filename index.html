@@ -2563,12 +2563,12 @@ function sendCompose() {
     .then(function(r) { return r.json(); })
     .then(function(d) {
         if (d.error) throw new Error(d.error);
+        var sentName = composeClient.name;
         closeComposeModal();
         loadLeads();
-        alert('Message sent to ' + composeClient.name + '!');
+        alert('Message sent to ' + sentName + '!');
     })
-    .catch(function(e) { alert('Error: ' + e.message); })
-    .finally(function() { btn.disabled = false; btn.textContent = 'Send'; });
+    .catch(function(e) { alert('Error: ' + e.message); btn.disabled = false; btn.textContent = 'Send'; });
 }
 
 function toggleHotLead(id, val) {
