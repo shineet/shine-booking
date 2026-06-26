@@ -1292,7 +1292,11 @@
             <input type="text" id="compose-subject" placeholder="e.g. Following up on your event">
         </div>
         <div class="field">
-            <label>Message</label>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <label style="margin:0">Message</label>
+                <button class="generate-btn" id="compose-ai-btn" onclick="generateComposeReply()" style="font-size:12px;padding:4px 10px;">✨ AI Draft</button>
+            </div>
+            <div id="compose-ai-status" style="font-size:12px;color:var(--muted);margin-bottom:6px;display:none"></div>
             <textarea id="compose-body" rows="7" placeholder="Write your message here..." oninput="if(document.getElementById('compose-channel').value==='sms')updateComposeCharCount()"></textarea>
         </div>
         <div id="compose-char-count" style="font-size:11px;color:var(--muted);text-align:right;margin-top:-10px;margin-bottom:10px;display:none"></div>
@@ -2495,18 +2499,54 @@ function generateFollowUp(clientId) {
 var composeClient = {};
 
 function openComposeModal(id, name, email, phone) {
-    composeClient = { id: id, name: name, email: email, phone: phone };
+    var fullClient = allClients.find(function(c) { return c.id === id; }) || {};
+    composeClient = Object.assign({ id: id, name: name, email: email, phone: phone }, fullClient);
     document.getElementById('compose-client-name').textContent = 'To: ' + name;
     document.getElementById('compose-body').value = '';
     document.getElementById('compose-subject').value = '';
     document.getElementById('compose-char-count').textContent = '';
-    // Default to SMS if phone available, email otherwise
+    document.getElementById('compose-ai-status').style.display = 'none';
     var channel = phone ? 'sms' : 'email';
     document.getElementById('compose-channel').value = channel;
     onComposeChannelChange();
     var btn = document.getElementById('compose-send-btn');
     btn.disabled = false; btn.textContent = 'Send';
     document.getElementById('compose-modal').classList.add('show');
+}
+
+function generateComposeReply() {
+    var c = composeClient;
+    var btn = document.getElementById('compose-ai-btn');
+    var statusEl = document.getElementById('compose-ai-status');
+    btn.disabled = true; btn.textContent = '✨ Drafting...';
+    statusEl.style.display = 'block'; statusEl.textContent = 'Claude is writing a reply...';
+    fetch('/api/pending-replies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'generate-reply',
+            clientName: c.name,
+            eventType: c.event_type || '',
+            eventDate: c.event_date || '',
+            venue: c.venue || '',
+            guests: c.guests || '',
+            status: c.status || '',
+            notes: c.notes || ''
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error);
+        document.getElementById('compose-body').value = data.draft || '';
+        statusEl.textContent = '✓ Draft ready — review and edit before sending.';
+        statusEl.style.color = 'var(--green)';
+        if (document.getElementById('compose-channel').value === 'sms') updateComposeCharCount();
+    })
+    .catch(function(e) {
+        statusEl.textContent = 'Could not generate: ' + e.message;
+        statusEl.style.color = 'var(--red)';
+    })
+    .finally(function() { btn.disabled = false; btn.textContent = '✨ AI Draft'; });
 }
 
 function onComposeChannelChange() {

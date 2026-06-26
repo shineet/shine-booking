@@ -152,6 +152,66 @@ Hours since last contact: ${hoursAgo}`;
       return;
     }
 
+    // POST action=generate-reply -> draft a contextual reply for the compose modal
+    if (req.method === 'POST' && req.body.action === 'generate-reply') {
+      const { clientName, eventType, eventDate, venue, guests, status, notes } = req.body;
+
+      const systemPrompt = `You are writing a reply SMS on behalf of Shine, The Mentalist — a professional mentalism and magic performer in Texas.
+
+RULES:
+- This is a reply to a client who has already been in contact, NOT a first introduction
+- Warm, direct, natural tone — not salesy
+- Keep it concise — readable in one glance on a phone screen
+- Sign off as: - Shine | +1 (612) 865-7681
+- Return ONLY the message text, no commentary
+
+PRICING:
+- Shine's minimum rate is $350 for any show
+- If the client's notes mention a budget below $350, the reply MUST:
+  1. State the rate clearly and without apology: "My rate starts at $350"
+  2. Acknowledge their stated budget briefly and without judgment
+  3. Ask if there's any flexibility: "Is there any wiggle room on budget?"
+  4. Offer a scope adjustment as an alternative if appropriate (e.g. shorter set)
+  5. Keep the door open — warm but firm on the minimum`;
+
+      const userPrompt = [
+        `Client: ${clientName}`,
+        eventType ? `Event: ${eventType}` : '',
+        eventDate ? `Date: ${eventDate}` : '',
+        venue ? `Venue: ${venue}` : '',
+        guests ? `Guests: ${guests}` : '',
+        status ? `Status: ${status}` : '',
+        notes ? `Notes: ${notes}` : ''
+      ].filter(Boolean).join('\n');
+
+      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 300,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+      });
+
+      const claudeData = await claudeRes.json();
+      if (claudeData.error) throw new Error(claudeData.error.message || JSON.stringify(claudeData.error));
+
+      let draft = '';
+      if (claudeData.content && Array.isArray(claudeData.content)) {
+        claudeData.content.forEach(b => { if (b.type === 'text') draft += b.text; });
+      }
+      if (!draft) throw new Error('No draft generated');
+
+      res.status(200).json({ success: true, draft });
+      return;
+    }
+
     // POST action=toggle -> flip review-mode
     if (req.method === 'POST' && req.body.action === 'toggle') {
       const { reviewMode } = req.body;
