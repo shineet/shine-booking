@@ -281,7 +281,7 @@ www.texasmentalist.com`;
     const EXTRACTION_INSTRUCTION = `
 
 This person is not yet in my client records — they're a brand new inquiry. After writing your reply, on a new line at the very end, output an extraction block in this exact format (after any [PRICING_REQUESTED] or [BOOKING_INTENT] tags, as the last thing in your response):
-[LEAD_INFO]{"name":"their name if mentioned or inferable from the email, else null","eventType":"one of: Birthday party, Bachelorette party, Corporate event, Private celebration, Anniversary, Other, or null if unclear","eventDate":"YYYY-MM-DD if a specific date is mentioned, else null","guests":"a short string like '25-50' or a number if mentioned, else null","contactType":"either 'planner' or 'client'"}[/LEAD_INFO]
+[LEAD_INFO]{"name":"their name if mentioned or inferable from the email, else null","eventType":"one of: Birthday party, Bachelorette party, Bachelor party, Wedding, Corporate event, Graduation, Baby Shower, Private celebration, Anniversary, Other, or null if unclear","eventDate":"YYYY-MM-DD if a specific date is mentioned, else null","guests":"a short string like '25-50' or a number if mentioned, else null","contactType":"either 'planner' or 'client'"}[/LEAD_INFO]
 
 For contactType, classify based on the whole email, weighing these signals together (no single one is decisive on its own):
 - A job title suggesting they book entertainment for OTHERS, e.g. "Event Producer", "Event Coordinator", "Wedding Planner", "Director of Events", "DMC" (Destination Management Company)
