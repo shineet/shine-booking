@@ -14,9 +14,18 @@ export default async function handler(req, res) {
   if (action === 'send') {
     // ── formerly send-intake.js ───────────────────────────────────────────────
     try {
-      const { clientId, clientName, clientEmail, eventType, fee } = req.body;
-      if (!clientName || !clientEmail) {
-        return res.status(400).json({ error: 'Missing client name or email' });
+      const { clientId, clientName, clientEmail, clientPhone, eventType, fee } = req.body;
+      if (!clientName || (!clientEmail && !clientPhone)) {
+        return res.status(400).json({ error: 'Missing client name and contact info' });
+      }
+
+      function normalizePhone(phone) {
+        if (!phone) return phone;
+        var digits = phone.replace(/[^0-9]/g, '');
+        if (digits.length === 10) return '+1' + digits;
+        if (digits.length === 11 && digits[0] === '1') return '+' + digits;
+        if (phone.trim().startsWith('+')) return '+' + digits;
+        return phone;
       }
 
       // Fetch live client record for event_date
@@ -30,7 +39,11 @@ export default async function handler(req, res) {
         });
         const clientRows = await clientRes.json();
         const client = Array.isArray(clientRows) ? clientRows[0] : null;
-        if (client) eventDate = client.event_date || null;
+        if (client) {
+          eventDate = client.event_date || null;
+          // Use phone from client record if not passed in
+          if (!clientPhone && client.phone) clientPhone = client.phone;
+        }
       }
 
       // Create booking record
@@ -59,17 +72,32 @@ export default async function handler(req, res) {
 
       const intakeLink = `https://shine-booking.vercel.app/intake.html?bid=${booking.id}`;
 
-      // Email the client
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
-        body: JSON.stringify({
-          from: 'Shine, The Mentalist <shine@texasmentalist.com>',
-          to:   clientEmail,
-          subject: 'Quick questionnaire for your upcoming show',
-          text: `Hi ${clientName.split(' ')[0]},\n\nSo excited to be part of your event! To get everything set up — including your performance agreement — could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`
-        })
-      });
+      const firstName = clientName.split(' ')[0];
+      const intakeMessage = `Hi ${firstName}! So excited to be part of your event! Please fill out this short questionnaire so I can personalize your show: ${intakeLink} — Shine, The Mentalist`;
+
+      // Send via SMS if phone available, otherwise email
+      if (clientPhone) {
+        const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+        await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: normalizePhone(clientPhone), Body: intakeMessage }).toString()
+        });
+      }
+
+      // Always send email too if we have it
+      if (clientEmail) {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+          body: JSON.stringify({
+            from: 'Shine, The Mentalist <shine@texasmentalist.com>',
+            to:   clientEmail,
+            subject: 'Quick questionnaire for your upcoming show',
+            text: `Hi ${firstName},\n\nSo excited to be part of your event! To get everything set up — including your performance agreement — could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`
+          })
+        });
+      }
 
       // Update client status
       if (clientId) {
