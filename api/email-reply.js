@@ -4,6 +4,77 @@ export default async function handler(req, res) {
     return;
   }
 
+  // Handle outbound email.sent events (Gmail sends via Resend SMTP)
+  if (req.body && req.body.type === 'email.sent') {
+    try {
+      const emailId  = req.body.data?.email_id;
+      const fromAddr = req.body.data?.from || '';
+      const toList   = req.body.data?.to   || [];
+      const subj     = req.body.data?.subject || '';
+
+      if (!fromAddr.includes('texasmentalist.com')) {
+        return res.status(200).json({ received: true, skipped: 'not from texasmentalist' });
+      }
+
+      const toEmail = Array.isArray(toList) ? toList[0] : toList;
+      if (!toEmail || toEmail.includes('texasmentalist.com') || toEmail.includes('resend.com') || toEmail === 'shinethementalist@gmail.com') {
+        return res.status(200).json({ received: true, skipped: 'internal email' });
+      }
+
+      // Skip if the booking app already logged this send in the last 90s
+      const since = new Date(Date.now() - 90000).toISOString();
+      const dupRes = await fetch(
+        `${process.env.SUPABASE_URL}/rest/v1/messages?channel=eq.email&direction=eq.outbound&to_address=eq.${encodeURIComponent(toEmail)}&created_at=gte.${since}&limit=1`,
+        { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
+      );
+      const dups = await dupRes.json();
+      if (Array.isArray(dups) && dups.length > 0) {
+        return res.status(200).json({ received: true, skipped: 'already logged by app' });
+      }
+
+      // Fetch full email body from Resend
+      let emailBody = `[Email with subject: ${subj}]`;
+      if (emailId) {
+        try {
+          const emailRes = await fetch(`https://api.resend.com/emails/${emailId}`, {
+            headers: { 'Authorization': `Bearer ${process.env.RESEND_KEY}` }
+          });
+          const emailData = await emailRes.json();
+          const rawText = emailData.text || (emailData.html || '').replace(/<[^>]+>/g, '').trim();
+          if (rawText) emailBody = rawText.substring(0, 4000);
+        } catch(e) {
+          console.error('Failed to fetch email content from Resend:', e.message);
+        }
+      }
+
+      // Find matching client by recipient email
+      const clientRes = await fetch(
+        `${process.env.SUPABASE_URL}/rest/v1/clients?email=eq.${encodeURIComponent(toEmail)}&order=created_at.desc&limit=1`,
+        { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
+      );
+      const clients = await clientRes.json();
+      const client  = Array.isArray(clients) ? (clients[0] || null) : null;
+
+      if (client) {
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+          body: JSON.stringify([{ client_id: client.id, channel: 'email', direction: 'outbound', content: emailBody, status: 'sent', to_address: toEmail, email_subject: subj }])
+        });
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+          body: JSON.stringify({ last_activity: new Date().toISOString(), last_channel: 'email' })
+        });
+      }
+
+      return res.status(200).json({ received: true, logged: !!client });
+    } catch(e) {
+      console.error('email.sent handler error:', e.message);
+      return res.status(200).json({ received: true, error: e.message });
+    }
+  }
+
   try {
     const { from, to, subject, body, rawEmail } = req.body;
 
