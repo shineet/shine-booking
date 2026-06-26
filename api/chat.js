@@ -40,10 +40,16 @@ export default async function handler(req, res) {
         });
       }
       if (clientId) {
+        const now = new Date().toISOString();
         await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
-          body: JSON.stringify({ last_activity: new Date().toISOString() })
+          body: JSON.stringify({ last_activity: now })
+        });
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+          body: JSON.stringify({ client_id: clientId, channel, direction: 'outbound', content: body, status: 'sent', created_at: now })
         });
       }
       return res.status(200).json({ success: true });
