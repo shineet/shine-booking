@@ -28,6 +28,24 @@ export default async function handler(req, res) {
       console.error('Supabase lookup failed:', e.message);
     }
 
+    // Forward incoming SMS to Shine's personal phone — failure safe
+    try {
+      const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
+      const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+      const senderLabel = client?.name ? client.name : From;
+      await fetch(twilioUrl, {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          From: process.env.TWILIO_FROM,
+          To: '+16128657681',
+          Body: `📱 ${senderLabel}: ${Body}`
+        }).toString()
+      });
+    } catch(e) {
+      console.error('Forward to Shine failed:', e.message);
+    }
+
     const SYSTEM_PROMPT = `You are Shine Thankappan, a mentalist and magician based in Texas, texting your own clients personally. Write exactly the way you'd actually text someone on your phone — not the way a business or an AI assistant would text.
 
 About me:
