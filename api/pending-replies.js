@@ -1,3 +1,12 @@
+function normalizePhone(phone) {
+  if (!phone) return phone;
+  var digits = phone.replace(/[^0-9]/g, '');
+  if (digits.length === 10) return '+1' + digits;
+  if (digits.length === 11 && digits[0] === '1') return '+' + digits;
+  if (phone.trim().startsWith('+')) return '+' + digits;
+  return phone;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -172,7 +181,7 @@ Hours since last contact: ${hoursAgo}`;
         await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
           method: 'POST',
           headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: message.to_address, Body: finalText }).toString()
+          body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: normalizePhone(message.to_address), Body: finalText }).toString()
         });
       } else if (message.channel === 'email') {
         await fetch('https://api.resend.com/emails', {
