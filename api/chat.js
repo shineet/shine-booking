@@ -1,3 +1,16 @@
+function normalizePhone(phone) {
+  if (!phone) return phone;
+  // Strip everything except digits and leading +
+  var digits = phone.replace(/[^\d]/g, '');
+  // If 10 digits, add +1
+  if (digits.length === 10) return '+1' + digits;
+  // If 11 digits starting with 1, add +
+  if (digits.length === 11 && digits[0] === '1') return '+' + digits;
+  // Already has +, return cleaned
+  if (phone.trim().startsWith('+')) return '+' + digits;
+  return phone;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -5,6 +18,39 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   const mode = req.query.mode || 'default';
+
+  // ── Compose mode (free-form send) ─────────────────────────────────────────
+  if (req.body.action === 'compose') {
+    try {
+      const { clientId, channel, toPhone, toEmail, subject, body } = req.body;
+      if (channel === 'sms' && toPhone) {
+        const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+        const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: normalizePhone(toPhone), Body: body }).toString()
+        });
+        const d = await r.json();
+        if (d.status === 'failed' || d.error_code) throw new Error(d.message || 'SMS failed');
+      } else if (channel === 'email' && toEmail) {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+          body: JSON.stringify({ from: 'Shine, The Mentalist <shine@texasmentalist.com>', to: toEmail, subject: subject || 'Message from Shine, The Mentalist', text: body })
+        });
+      }
+      if (clientId) {
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+          body: JSON.stringify({ last_activity: new Date().toISOString() })
+        });
+      }
+      return res.status(200).json({ success: true });
+    } catch(e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
 
   if (mode === 'pricing') {
     try {
@@ -20,7 +66,7 @@ export default async function handler(req, res) {
         const twilioRes = await fetch(twilioUrl, {
           method: 'POST',
           headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: phone, Body: message }).toString()
+          body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: normalizePhone(phone), Body: message }).toString()
         });
         const twilioData = await twilioRes.json();
         if (!twilioData.error_code) sent = true;
@@ -141,7 +187,7 @@ Rules:
       const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
       const smsBody = new URLSearchParams({
         From: process.env.TWILIO_FROM,
-        To: toPhone,
+        To: normalizePhone(toPhone),
         Body: smsMessage
       });
       const twilioResponse = await fetch(twilioUrl, {
