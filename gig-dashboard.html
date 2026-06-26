@@ -392,6 +392,30 @@ td { padding: 9px 14px; vertical-align: middle; }
 }
 .done-total { font-size: 18px; font-weight: 700; color: var(--green); margin-top: 6px; }
 
+/* ── Conversation thread ── */
+.convo-section { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px; }
+.convo-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 12px; }
+.convo-thread { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; padding-right: 4px; }
+.convo-msg { max-width: 85%; display: flex; flex-direction: column; gap: 4px; }
+.convo-msg.outbound { align-self: flex-end; align-items: flex-end; }
+.convo-msg.inbound  { align-self: flex-start; align-items: flex-start; }
+.convo-bubble {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.convo-msg.outbound .convo-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 3px; }
+.convo-msg.inbound  .convo-bubble { background: var(--surface2); color: var(--text); border-bottom-left-radius: 3px; }
+.convo-meta { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); }
+.convo-channel { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+.convo-subject { font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 2px; }
+.convo-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0; }
+.convo-loading { color: var(--muted); font-size: 13px; padding: 8px 0; }
+.convo-pending { color: var(--amber); }
+
 @media (max-width: 900px) {
   .kpi-row { grid-template-columns: repeat(3, 1fr); }
   .charts-row { grid-template-columns: 1fr; }
@@ -912,9 +936,16 @@ function openDetail(clientId) {
       <div style="margin:16px 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)">Notes</div>
       <div class="detail-notes">${esc(c.notes)}</div>
     ` : ''}
+
+    <div class="convo-section">
+      <div class="convo-title">Conversation</div>
+      <div class="convo-loading" id="convo-loading">Loading messages...</div>
+      <div class="convo-thread" id="convo-thread" style="display:none"></div>
+    </div>
   `;
 
   openModal('detail-modal');
+  loadConversation(clientId);
 }
 
 // ── Mark as Done ─────────────────────────────────────────────────────────────
@@ -1396,6 +1427,55 @@ function esc(s) {
 
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── Conversation thread ───────────────────────────────────────────────────────
+async function loadConversation(clientId) {
+  const threadEl  = document.getElementById('convo-thread');
+  const loadingEl = document.getElementById('convo-loading');
+  if (!threadEl || !loadingEl) return;
+
+  try {
+    const messages = await sbGet(
+      `messages?client_id=eq.${clientId}&order=created_at.asc&limit=100`
+    );
+
+    loadingEl.style.display = 'none';
+    threadEl.style.display  = 'flex';
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+      threadEl.innerHTML = '<div class="convo-empty">No messages yet</div>';
+      return;
+    }
+
+    threadEl.innerHTML = messages.map(m => {
+      const isOut   = m.direction === 'outbound';
+      const channel = m.channel === 'sms' ? '💬 SMS' : '📧 Email';
+      const time    = m.created_at ? new Date(m.created_at).toLocaleString('en-US', {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+      }) : '';
+      const pending = m.status === 'pending_review'
+        ? '<span class="convo-pending">⏳ Pending review</span>' : '';
+      const subject = m.email_subject
+        ? `<div class="convo-subject">${esc(m.email_subject)}</div>` : '';
+
+      return `
+        <div class="convo-msg ${isOut ? 'outbound' : 'inbound'}">
+          ${subject}
+          <div class="convo-bubble">${esc(m.content || '')}</div>
+          <div class="convo-meta">
+            <span class="convo-channel">${channel}</span>
+            <span>${time}</span>
+            ${pending}
+          </div>
+        </div>`;
+    }).join('');
+
+    // Scroll thread to bottom so latest message is visible
+    threadEl.scrollTop = threadEl.scrollHeight;
+  } catch(e) {
+    loadingEl.textContent = 'Could not load messages.';
+  }
+}
 
 // Close on overlay click
 document.querySelectorAll('.modal-overlay').forEach(el => {
