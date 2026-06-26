@@ -15,6 +15,58 @@ export default async function handler(req, res) {
       return;
     }
 
+    // If Shine is replying from his personal phone, forward to the most recent client
+    if (From === '+16128657681') {
+      try {
+        const lastMsgRes = await fetch(
+          `${process.env.SUPABASE_URL}/rest/v1/messages?channel=eq.sms&direction=eq.inbound&order=created_at.desc&limit=1`,
+          { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
+        );
+        const lastMsgs = await lastMsgRes.json();
+        const lastMsg  = Array.isArray(lastMsgs) ? lastMsgs[0] : null;
+
+        if (lastMsg?.client_id) {
+          const clientRes = await fetch(
+            `${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${lastMsg.client_id}&select=id,name,phone`,
+            { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
+          );
+          const clients     = await clientRes.json();
+          const targetClient = Array.isArray(clients) ? clients[0] : null;
+
+          if (targetClient?.phone) {
+            const twilioUrl  = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
+            const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+
+            await fetch(twilioUrl, {
+              method: 'POST',
+              headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: targetClient.phone, Body }).toString()
+            });
+
+            await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+              body: JSON.stringify([{
+                client_id: targetClient.id, channel: 'sms', direction: 'outbound',
+                content: Body, status: 'sent', to_address: targetClient.phone
+              }])
+            });
+
+            await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${targetClient.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+              body: JSON.stringify({ last_activity: new Date().toISOString(), last_channel: 'sms' })
+            });
+          }
+        }
+      } catch(e) {
+        console.error('Shine personal reply forward failed:', e.message);
+      }
+      res.setHeader('Content-Type', 'text/xml');
+      res.status(200).send('<Response></Response>');
+      return;
+    }
+
     // Look up client in Supabase — failure safe
     let client = null;
     try {
