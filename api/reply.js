@@ -15,44 +15,37 @@ export default async function handler(req, res) {
       return;
     }
 
-    // If Shine is replying from his personal phone, forward to the most recent client
+    // If Shine is replying from his personal phone, route to the last forwarded client
     if (From === '+16128657681') {
       try {
-        const lastMsgRes = await fetch(
-          `${process.env.SUPABASE_URL}/rest/v1/messages?channel=eq.sms&direction=eq.inbound&order=created_at.desc&limit=1`,
+        const settingsRes = await fetch(
+          `${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1&select=last_forwarded_sms_phone,last_forwarded_sms_client_id`,
           { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
         );
-        const lastMsgs = await lastMsgRes.json();
-        const lastMsg  = Array.isArray(lastMsgs) ? lastMsgs[0] : null;
+        const settings = await settingsRes.json();
+        const lastPhone    = settings[0]?.last_forwarded_sms_phone || null;
+        const lastClientId = settings[0]?.last_forwarded_sms_client_id || null;
 
-        if (lastMsg?.client_id) {
-          const clientRes = await fetch(
-            `${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${lastMsg.client_id}&select=id,name,phone`,
-            { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
-          );
-          const clients     = await clientRes.json();
-          const targetClient = Array.isArray(clients) ? clients[0] : null;
+        if (lastPhone) {
+          const twilioUrl  = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
+          const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
 
-          if (targetClient?.phone) {
-            const twilioUrl  = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
-            const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+          await fetch(twilioUrl, {
+            method: 'POST',
+            headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: lastPhone, Body }).toString()
+          });
 
-            await fetch(twilioUrl, {
-              method: 'POST',
-              headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: targetClient.phone, Body }).toString()
-            });
-
+          if (lastClientId) {
             await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
               body: JSON.stringify([{
-                client_id: targetClient.id, channel: 'sms', direction: 'outbound',
-                content: Body, status: 'sent', to_address: targetClient.phone
+                client_id: lastClientId, channel: 'sms', direction: 'outbound',
+                content: Body, status: 'sent', to_address: lastPhone
               }])
             });
-
-            await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${targetClient.id}`, {
+            await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${lastClientId}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
               body: JSON.stringify({ last_activity: new Date().toISOString(), last_channel: 'sms' })
@@ -80,7 +73,7 @@ export default async function handler(req, res) {
       console.error('Supabase lookup failed:', e.message);
     }
 
-    // Forward incoming SMS to Shine's personal phone — failure safe
+    // Forward incoming SMS to Shine's personal phone and record who sent it — failure safe
     try {
       const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
       const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
@@ -93,6 +86,12 @@ export default async function handler(req, res) {
           To: '+16128657681',
           Body: `📱 ${senderLabel}: ${Body}`
         }).toString()
+      });
+      // Save exactly who was forwarded so replies route to the right client
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+        body: JSON.stringify({ last_forwarded_sms_phone: From, last_forwarded_sms_client_id: client?.id || null })
       });
     } catch(e) {
       console.error('Forward to Shine failed:', e.message);
