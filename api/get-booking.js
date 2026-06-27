@@ -24,7 +24,23 @@ export default async function handler(req, res) {
       }
       const dbBodies = dbInbound.map(m => (m.content || '').trim());
       const missing = inbound.filter(m => !dbBodies.includes((m.body || '').trim()));
-      res.status(200).json({ client_id: client?.id || null, twilio_inbound_count: inbound.length, db_inbound_count: dbInbound.length, twilio_inbound: inbound, db_inbound: dbInbound, missing });
+
+      let inserted = [];
+      if (req.query.apply === '1' && client && missing.length) {
+        for (const m of missing) {
+          let createdAt; try { createdAt = new Date(m.date).toISOString(); } catch { createdAt = undefined; }
+          const row = { client_id: client.id, channel: 'sms', direction: 'inbound', content: m.body, status: 'received', to_address: null };
+          if (createdAt) row.created_at = createdAt;
+          const ins = await fetch(`${base}/messages`, { method: 'POST', headers: { ...supaHeaders, 'Content-Type': 'application/json', 'Prefer': 'return=representation' }, body: JSON.stringify([row]) });
+          const insBody = await ins.json();
+          inserted.push({ ok: ins.ok, id: Array.isArray(insBody) ? insBody[0]?.id : null, body: m.body, detail: ins.ok ? undefined : insBody });
+        }
+        // Bump client so the newest activity surfaces
+        const newest = missing.map(m => { try { return new Date(m.date).toISOString(); } catch { return null; } }).filter(Boolean).sort().pop();
+        await fetch(`${base}/clients?id=eq.${client.id}`, { method: 'PATCH', headers: { ...supaHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ last_channel: 'sms', last_activity: newest || undefined }) });
+      }
+
+      res.status(200).json({ client_id: client?.id || null, twilio_inbound_count: inbound.length, db_inbound_count: dbInbound.length, missing_count: missing.length, missing, inserted });
       return;
     } catch (e) { res.status(500).json({ error: e.message }); return; }
   }
