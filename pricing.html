@@ -634,14 +634,14 @@
 
     <script>
     const PRIVATE_FEATURES = {
-        deluxe: ['45-min interactive show', 'Mind reading & thought prediction', 'Visual magic woven with mentalism', 'Mind-blowing card magic', 'Psychological influence & suggestion', 'Sealed envelope predictions', 'Audience participation throughout'],
-        signature: ['60-min interactive show', 'All Deluxe effects included', 'Visual magic & impossible illusions', 'Personalized custom effects', 'Connection between 2 people', 'Grand finale with guest of honor in focus'],
-        premium: ['60-min show', 'All Signature effects included', 'Mind-bending visual surprises', 'Audience member reading minds', 'Fully custom effects built for your event', 'Exclusive grand finale — all eyes on the guest of honor']
+        deluxe: ['45-min interactive show', 'Mentalism and visual magic, woven together', 'Mind reading, card magic & sealed predictions', 'Full audience participation, nobody just watches'],
+        signature: ['Everything in Deluxe, plus:', '+15 minutes, a full 60-min show', 'A custom effect built around your guest of honor', 'The "impossible connection" moment between two people', 'A grand finale that makes your guest of honor the star'],
+        premium: ['Everything in Signature, plus:', 'A fully bespoke, Las Vegas-caliber production', 'A guest appears to read minds, the moment everyone films', 'Personalized magic woven through the entire night', 'A grand, theatrical finale with all eyes on your VIP']
     };
     const CORPORATE_FEATURES = {
-        deluxe: ['45-min stage show', 'Mind reading & prediction reveals', 'Visual magic woven with mentalism', 'Mind-blowing card magic', 'Psychological influence demonstrations', 'Sealed envelope predictions', 'Interactive audience participation'],
-        signature: ['60-min show', 'All Deluxe effects included', 'Visual magic & impossible illusions', 'Personalized custom effects', 'Connection between 2 people', 'VIP / executive spotlight moments', 'Grand finale with guest of honor in focus'],
-        premium: ['60–75 min show', 'All Signature effects included', 'Mind-bending visual surprises', 'Audience member reading minds', 'Fully custom effects tied to your brand', 'Keynote-style narrative arc', 'Exclusive grand finale — all eyes on your VIP']
+        deluxe: ['45-min stage show', 'Mentalism and visual magic, woven together', 'Mind reading, card magic & sealed predictions', 'Full audience participation, nobody just watches'],
+        signature: ['Everything in Deluxe, plus:', '+15 minutes, a full 60-min show', 'A custom effect built around your VIP or guest of honor', 'The "impossible connection" moment between two people', 'A grand finale with your VIP in the spotlight'],
+        premium: ['Everything in Signature, plus:', 'A fully bespoke, Las Vegas-caliber production', 'A guest appears to read minds, the moment everyone films', 'Personalized magic tied to your brand and message', 'A keynote-stage finale with all eyes on your VIP']
     };
 
     const STROLLING_FEATURES = {
@@ -724,14 +724,14 @@
             cp = p.d3 || 1500;
 
         const privateTaglines = {
-            deluxe: 'Mentalism and visual magic blended into one captivating show that leaves your guests questioning reality.',
-            signature: 'Everything in Deluxe, elevated with grand illusions and personalized custom effects.',
-            premium: 'The ultimate experience — a fully bespoke show built around your special occasion.'
+            deluxe: 'A polished mentalism and visual magic show that captivates any room.',
+            signature: 'The full theatrical experience, personalized and built to be the centerpiece of your event.',
+            premium: 'A Las Vegas headline show. A jaw-dropping production designed entirely around you, in any venue, for any size crowd.'
         };
         const corporateTaglines = {
-            deluxe: 'High-impact mentalism and visual magic that energizes and unites any corporate crowd.',
-            signature: 'Mentalism meets grand illusions — with personalized effects for your team.',
-            premium: 'A bespoke performance designed around your brand, message, and people.'
+            deluxe: 'A polished mentalism and visual magic show that captivates any corporate crowd.',
+            signature: 'The full theatrical experience, personalized and built to be the centerpiece of your event.',
+            premium: 'A Las Vegas-caliber keynote production designed entirely around your brand, in any venue, for any size crowd.'
         };
 
         if (isPrivate || showBoth) {
