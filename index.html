@@ -817,8 +817,8 @@
     .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px }
 
     .price-field label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em }
-    .price-field input { width: 100%; padding: 8px 10px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); color: var(--text); font-family: inherit }
-    .price-field input:focus { outline: none; border-color: var(--accent) }
+    .price-field input, .price-field select { width: 100%; padding: 8px 10px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); color: var(--text); font-family: inherit }
+    .price-field input:focus, .price-field select:focus { outline: none; border-color: var(--accent) }
 
     /* ── New lead form ── */
     .new-lead-inner { max-width: 680px; margin: 0 auto }
@@ -1071,6 +1071,17 @@
             <button class="format-toggle-btn" id="format-btn-strolling" onclick="switchFormat('strolling')">Strolling</button>
         </div>
         <div class="format-section show" id="format-section-stage">
+            <div class="pricing-option" onclick="selectPricingOption('agreed')" id="opt-agreed">
+                <div class="pricing-option-icon">&#129309;</div>
+                <div class="pricing-option-text"><div class="pricing-option-title">Agreed price — single card</div><div class="pricing-option-desc">Price already agreed: send one package with a direct booking CTA</div></div>
+            </div>
+            <div class="custom-price-inputs" id="agreed-inputs">
+                <div class="three-col">
+                    <div class="price-field"><label>Type</label><select id="ag-type"><option value="private">Private</option><option value="corporate">Corporate</option></select></div>
+                    <div class="price-field"><label>Package</label><select id="ag-tier"><option value="signature">Signature</option><option value="premium">Premium</option><option value="deluxe">Deluxe</option></select></div>
+                    <div class="price-field"><label>Agreed $</label><input type="number" id="ag-price" placeholder="2500"></div>
+                </div>
+            </div>
             <div class="pricing-option" onclick="selectPricingOption('private-standard')" id="opt-private-standard">
                 <div class="pricing-option-icon">&#127874;</div>
                 <div class="pricing-option-text"><div class="pricing-option-title">Private — Standard</div><div class="pricing-option-desc">Deluxe $400 · Signature $500 · Premium $600</div></div>
@@ -1927,7 +1938,7 @@ function selectPricingOption(option) {
     document.querySelectorAll('.pricing-option').forEach(function(o) { o.classList.remove('selected'); });
     document.getElementById('opt-' + option).classList.add('selected');
     document.querySelectorAll('.custom-price-inputs').forEach(function(el) { el.classList.remove('show'); });
-    var map = { 'private-custom': 'private-custom-inputs', 'corporate-custom': 'corporate-custom-inputs', 'strolling-private-custom': 'strolling-private-custom-inputs', 'strolling-corporate-custom': 'strolling-corporate-custom-inputs' };
+    var map = { 'agreed': 'agreed-inputs', 'private-custom': 'private-custom-inputs', 'corporate-custom': 'corporate-custom-inputs', 'strolling-private-custom': 'strolling-private-custom-inputs', 'strolling-corporate-custom': 'strolling-corporate-custom-inputs' };
     if (map[option]) document.getElementById(map[option]).classList.add('show');
     document.getElementById('modal-send-btn').disabled = false;
     document.getElementById('modal-manual-btn').disabled = false;
@@ -1937,6 +1948,12 @@ function selectPricingOption(option) {
 function buildPricingLink() {
     var base = 'https://shine-booking.vercel.app/pricing.html';
     var extra = '&cname=' + encodeURIComponent(modalClient.name||'') + '&etype=' + encodeURIComponent(modalClient.eventType||'');
+    if (selectedPricingOption === 'agreed') {
+        var agTier = document.getElementById('ag-tier').value;
+        var agType = document.getElementById('ag-type').value;
+        var agPrice = document.getElementById('ag-price').value;
+        return base + '?type=' + agType + '&only=' + agTier + (agPrice ? '&price=' + agPrice : '') + '&cid=' + currentClientId + extra;
+    }
     if (selectedPricingOption === 'private-standard')           return base + '?type=private&cid=' + currentClientId + extra;
     if (selectedPricingOption === 'corporate-standard')         return base + '?type=corporate&cid=' + currentClientId + extra;
     if (selectedPricingOption === 'private-custom')             return base + '?type=private&cid=' + currentClientId + '&d1=' + (document.getElementById('pc-d1').value||400) + '&d2=' + (document.getElementById('pc-d2').value||500) + '&d3=' + (document.getElementById('pc-d3').value||600) + extra;

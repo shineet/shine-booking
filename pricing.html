@@ -567,7 +567,7 @@
             <div class="cards" id="strolling-cards"></div>
         </div>
 
-        <div class="cta">Tap a package to select it — you can change your mind before confirming.</div>
+        <div class="cta" id="cta-line">Tap a package to select it — you can change your mind before confirming.</div>
 
         <div class="footer">
             <a href="https://www.texasmentalist.com">www.texasmentalist.com</a>
@@ -663,6 +663,8 @@
         return {
             type: p.get('type') || 'both',
             format: p.get('format') || 'stage',
+            only: (p.get('only') || '').toLowerCase(),
+            priceOverride: parseInt(p.get('price')) || null,
             clientId: p.get('cid') || '',
             d1: parseInt(p.get('d1')) || null,
             d2: parseInt(p.get('d2')) || null,
@@ -687,17 +689,19 @@
         return fallback;
     }
 
-    function makeCard(category, tier, label, price, tagline, features, featured) {
+    function makeCard(category, tier, label, price, tagline, features, featured, single) {
         const badgeHtml = featured ? '<div class="badge">Most popular</div>' : '';
         const featuresHtml = features.map(f => `<div class="feature"><span class="check">✓</span>${f}</div>`).join('');
+        const btnText = single ? 'Confirm &amp; reserve your date' : 'Select this package';
+        const btnClick = single ? `pickAndConfirm('${category}','${tier}','${label}',${price})` : `pickPackage('${category}','${tier}','${label}',${price})`;
         return `
-    <div class="card${featured ? ' featured' : ''}" id="card-${category}-${tier}">
+    <div class="card${featured ? ' featured' : ''}${single ? ' picked' : ''}" id="card-${category}-${tier}">
       ${badgeHtml}
       <div class="tier">${label}</div>
       <div class="price">$${price.toLocaleString()} <span>/ show</span></div>
       <div class="tagline">${tagline}</div>
       ${featuresHtml}
-      <button class="select-btn" id="btn-${category}-${tier}" onclick="pickPackage('${category}','${tier}','${label}',${price})">Select this package</button>
+      <button class="select-btn" id="btn-${category}-${tier}" onclick="${btnClick}">${btnText}</button>
     </div>
   `
 
@@ -733,6 +737,27 @@
             signature: 'The full theatrical experience, personalized and built to be the centerpiece of your event.',
             premium: 'A Las Vegas-caliber keynote production designed entirely around your brand, in any venue, for any size crowd.'
         };
+
+        // Single-card mode: a price was already agreed, so show only that one package with a direct booking CTA
+        if (p.only === 'deluxe' || p.only === 'signature' || p.only === 'premium') {
+            const cat = isCorporate ? 'corporate' : 'private';
+            const priceMap = cat === 'corporate' ? { deluxe: cd, signature: cs, premium: cp } : { deluxe: pd, signature: ps, premium: pp };
+            const tagMap = cat === 'corporate' ? corporateTaglines : privateTaglines;
+            const featMap = cat === 'corporate' ? CORPORATE_FEATURES : PRIVATE_FEATURES;
+            const label = p.only.charAt(0).toUpperCase() + p.only.slice(1);
+            const price = p.priceOverride || priceMap[p.only];
+            const sectionId = cat === 'corporate' ? 'corporate-section' : 'private-section';
+            const cardsId = cat === 'corporate' ? 'corporate-cards' : 'private-cards';
+            const section = document.getElementById(sectionId);
+            section.style.display = 'block';
+            section.querySelector('.section-title').textContent = 'Your package';
+            document.getElementById(cardsId).innerHTML =
+            makeCard(cat, p.only, label, price, tagMap[p.only], featMap[p.only], false, true);
+            document.getElementById('subtitle').textContent = buildSubtitle(p, 'Ready to reserve your date · Texas');
+            const ctaEl = document.getElementById('cta-line');
+            if (ctaEl) ctaEl.textContent = 'This is the package we discussed. Reserve your date below.';
+            return;
+        }
 
         if (isPrivate || showBoth) {
             document.getElementById('private-section').style.display = 'block';
@@ -847,6 +872,14 @@
   `
 
         ;
+    }
+
+    function pickAndConfirm(category, tier, label, price) {
+        pickedCategory = category;
+        pickedTier = tier;
+        pickedLabel = label;
+        pickedPrice = price;
+        onConfirmBarClick();
     }
 
     function pickPackage(category, tier, label, price) {
