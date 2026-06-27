@@ -1,19 +1,6 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  // TEMP read-only (token-gated) — does Maggie have an email on file? Remove after.
-  if (req.query.checkmaggie === '16774083175a705e990689c71b2cec0b') {
-    const supaHeaders = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-    const base = `${process.env.SUPABASE_URL}/rest/v1`;
-    const last10 = p => { const d = String(p || '').replace(/\D/g, ''); return d.length > 10 ? d.slice(-10) : d; };
-    try {
-      const all = await (await fetch(`${base}/clients?select=id,name,email,phone,status,event_type,event_date&order=created_at.desc`, { headers: supaHeaders })).json();
-      const c = Array.isArray(all) ? all.find(x => last10(x.phone) === '6109086678') : null;
-      res.status(200).json({ found: !!c, client: c });
-      return;
-    } catch (e) { res.status(500).json({ error: e.message }); return; }
-  }
-
   function normalizeTime(value) {
     if (!value) return value;
     const match = String(value).trim().match(/^(\d{1,2})(?::(\d{1,2}))?/);
