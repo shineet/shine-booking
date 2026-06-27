@@ -1078,9 +1078,10 @@
             <div class="custom-price-inputs" id="agreed-inputs">
                 <div class="three-col">
                     <div class="price-field"><label>Type</label><select id="ag-type"><option value="private">Private</option><option value="corporate">Corporate</option></select></div>
-                    <div class="price-field"><label>Package</label><select id="ag-tier"><option value="signature">Signature</option><option value="premium">Premium</option><option value="deluxe">Deluxe</option></select></div>
-                    <div class="price-field"><label>Agreed $</label><input type="number" id="ag-price" placeholder="2500"></div>
+                    <div class="price-field"><label>Package</label><select id="ag-tier"><option value="deluxe">Deluxe</option><option value="signature">Signature</option><option value="premium">Premium</option></select></div>
+                    <div class="price-field"><label>Duration</label><select id="ag-dur"><option value="45">45 min</option><option value="60" selected>60 min</option></select></div>
                 </div>
+                <div class="price-field" style="margin-top:8px"><label>Agreed $</label><input type="number" id="ag-price" placeholder="2500"></div>
             </div>
             <div class="pricing-option" onclick="selectPricingOption('private-standard')" id="opt-private-standard">
                 <div class="pricing-option-icon">&#127874;</div>
@@ -1952,7 +1953,8 @@ function buildPricingLink() {
         var agTier = document.getElementById('ag-tier').value;
         var agType = document.getElementById('ag-type').value;
         var agPrice = document.getElementById('ag-price').value;
-        return base + '?type=' + agType + '&only=' + agTier + (agPrice ? '&price=' + agPrice : '') + '&cid=' + currentClientId + extra;
+        var agDur = document.getElementById('ag-dur').value;
+        return base + '?type=' + agType + '&only=' + agTier + '&dur=' + agDur + (agPrice ? '&price=' + agPrice : '') + '&cid=' + currentClientId + extra;
     }
     if (selectedPricingOption === 'private-standard')           return base + '?type=private&cid=' + currentClientId + extra;
     if (selectedPricingOption === 'corporate-standard')         return base + '?type=corporate&cid=' + currentClientId + extra;

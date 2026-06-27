@@ -644,6 +644,26 @@
         premium: ['Everything in Signature, plus:', 'A fully bespoke, Las Vegas-caliber production', 'A guest appears to read minds, the moment everyone films', 'Personalized magic tied to your brand and message', 'A keynote-stage finale with all eyes on your VIP']
     };
 
+    // Self-contained feature lists for single-card (agreed price) mode. The client may not have seen
+    // the other tiers, so each package lists everything it includes (no "Everything in X, plus").
+    // The leading duration line is added separately based on the chosen duration.
+    const PRIVATE_CORE = ['Mentalism and visual magic, woven together', 'Mind reading, card magic & sealed predictions', 'Full audience participation, nobody just watches'];
+    const PRIVATE_SIG_ADD = ['A custom effect built around your guest of honor', 'The "impossible connection" moment between two people', 'A grand finale that makes your guest of honor the star'];
+    const PRIVATE_PREM_ADD = ['A fully bespoke, Las Vegas-caliber production', 'A guest appears to read minds, the moment everyone films', 'Personalized magic woven through the entire night', 'A grand, theatrical finale with all eyes on your VIP'];
+    const CORPORATE_CORE = ['Mentalism and visual magic, woven together', 'Mind reading, card magic & sealed predictions', 'Full audience participation, nobody just watches'];
+    const CORPORATE_SIG_ADD = ['A custom effect built around your VIP or guest of honor', 'The "impossible connection" moment between two people', 'A grand finale with your VIP in the spotlight'];
+    const CORPORATE_PREM_ADD = ['A fully bespoke, Las Vegas-caliber production', 'A guest appears to read minds, the moment everyone films', 'Personalized magic tied to your brand and message', 'A keynote-stage finale with all eyes on your VIP'];
+    const PRIVATE_FULL = {
+        deluxe: PRIVATE_CORE,
+        signature: PRIVATE_CORE.concat(PRIVATE_SIG_ADD),
+        premium: PRIVATE_CORE.concat(PRIVATE_SIG_ADD, PRIVATE_PREM_ADD)
+    };
+    const CORPORATE_FULL = {
+        deluxe: CORPORATE_CORE,
+        signature: CORPORATE_CORE.concat(CORPORATE_SIG_ADD),
+        premium: CORPORATE_CORE.concat(CORPORATE_SIG_ADD, CORPORATE_PREM_ADD)
+    };
+
     const STROLLING_FEATURES = {
         only: ['Up-close mind reading & card magic, table to table', 'Mingles naturally with guests during cocktail hour or reception', 'No staging, mic, or setup needed — works anywhere', 'Personalized moments for small groups throughout your event'],
         finale: ['Everything in Strolling Only', '15-minute grand finale bringing the whole audience together', 'A big shared moment to close out the experience', 'Perfect for weddings & corporate events with a cocktail hour + program']
@@ -665,6 +685,7 @@
             format: p.get('format') || 'stage',
             only: (p.get('only') || '').toLowerCase(),
             priceOverride: parseInt(p.get('price')) || null,
+            dur: parseInt(p.get('dur')) || null,
             clientId: p.get('cid') || '',
             d1: parseInt(p.get('d1')) || null,
             d2: parseInt(p.get('d2')) || null,
@@ -743,16 +764,19 @@
             const cat = isCorporate ? 'corporate' : 'private';
             const priceMap = cat === 'corporate' ? { deluxe: cd, signature: cs, premium: cp } : { deluxe: pd, signature: ps, premium: pp };
             const tagMap = cat === 'corporate' ? corporateTaglines : privateTaglines;
-            const featMap = cat === 'corporate' ? CORPORATE_FEATURES : PRIVATE_FEATURES;
+            const fullMap = cat === 'corporate' ? CORPORATE_FULL : PRIVATE_FULL;
             const label = p.only.charAt(0).toUpperCase() + p.only.slice(1);
             const price = p.priceOverride || priceMap[p.only];
+            const dur = p.dur || (p.only === 'deluxe' ? 45 : 60);
+            const durLine = (cat === 'corporate' ? dur + '-minute stage show' : dur + '-minute interactive show');
+            const features = [durLine].concat(fullMap[p.only]);
             const sectionId = cat === 'corporate' ? 'corporate-section' : 'private-section';
             const cardsId = cat === 'corporate' ? 'corporate-cards' : 'private-cards';
             const section = document.getElementById(sectionId);
             section.style.display = 'block';
             section.querySelector('.section-title').textContent = 'Your package';
             document.getElementById(cardsId).innerHTML =
-            makeCard(cat, p.only, label, price, tagMap[p.only], featMap[p.only], false, true);
+            makeCard(cat, p.only, label, price, tagMap[p.only], features, false, true);
             document.getElementById('subtitle').textContent = buildSubtitle(p, 'Ready to reserve your date · Texas');
             const ctaEl = document.getElementById('cta-line');
             if (ctaEl) ctaEl.textContent = 'This is the package we discussed. Reserve your date below.';
