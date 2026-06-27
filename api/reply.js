@@ -1,5 +1,13 @@
 const conversations = {};
 
+// Last 10 digits of any phone format — used to match an inbound E.164 number
+// against client records that may have been stored in a non-normalized format.
+function last10(phone) {
+  if (!phone) return '';
+  const d = String(phone).replace(/\D/g, '');
+  return d.length > 10 ? d.slice(-10) : d;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Content-Type', 'text/xml');
@@ -60,17 +68,62 @@ export default async function handler(req, res) {
       return;
     }
 
-    // Look up client in Supabase — failure safe
+    // Look up client in Supabase — failure safe.
+    // Inbound Twilio `From` is E.164 (+1XXXXXXXXXX). Older client records may have been
+    // saved in a non-normalized format (e.g. "(610) 908-6678"), so an exact match can miss.
+    // Match on the last 10 digits as a fallback, then self-heal the stored phone to E.164.
+    const supaHeaders = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+    const fromDigits = last10(From);
     let client = null;
     try {
-      const clientRes = await fetch(
+      const exactRes = await fetch(
         `${process.env.SUPABASE_URL}/rest/v1/clients?phone=eq.${encodeURIComponent(From)}&order=created_at.desc&limit=1`,
-        { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
+        { headers: supaHeaders }
       );
-      const clients = await clientRes.json();
-      client = Array.isArray(clients) ? (clients[0] || null) : null;
+      const exact = await exactRes.json();
+      client = Array.isArray(exact) ? (exact[0] || null) : null;
+
+      // Fallback: scan and match by last 10 digits (handles legacy/unnormalized formats)
+      if (!client && fromDigits) {
+        const allRes = await fetch(
+          `${process.env.SUPABASE_URL}/rest/v1/clients?select=*&order=created_at.desc`,
+          { headers: supaHeaders }
+        );
+        const all = await allRes.json();
+        if (Array.isArray(all)) client = all.find(c => last10(c.phone) === fromDigits) || null;
+      }
+
+      // Self-heal: rewrite a matched-but-misformatted phone to E.164 so future lookups hit the fast path
+      if (client && client.phone !== From && last10(client.phone) === fromDigits) {
+        try {
+          await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
+            method: 'PATCH',
+            headers: { ...supaHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: From })
+          });
+          client.phone = From;
+        } catch(healErr) { console.error('Phone self-heal failed:', healErr.message); }
+      }
     } catch(e) {
       console.error('Supabase lookup failed:', e.message);
+    }
+
+    // Cold inbound (never messaged from the app) — capture the lead so it still shows in the dashboard
+    if (!client) {
+      try {
+        const createRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
+          method: 'POST',
+          headers: { ...supaHeaders, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+          body: JSON.stringify([{
+            phone: From, status: 'new', lead_source: 'Inbound SMS',
+            last_channel: 'sms', last_activity: new Date().toISOString()
+          }])
+        });
+        const created = await createRes.json();
+        client = Array.isArray(created) ? (created[0] || null) : null;
+      } catch(e) {
+        console.error('Auto-create inbound client failed:', e.message);
+      }
     }
 
     // Forward incoming SMS to Shine's personal phone and record who sent it — failure safe
@@ -291,8 +344,8 @@ Rules:
             to: 'shinethementalist@gmail.com',
             subject: bookingIntent ? `🎯 ${client?.name || From} wants to book!` : `💰 ${client?.name || From} is asking about pricing`,
             text: bookingIntent
-              ? `Client is ready to book!\n\nPhone: ${From}\nName: ${client?.name}\nEvent: ${client?.event_type}\n\n${client?.email ? "A thank-you note with the intake questionnaire was sent automatically." : "They have no email on file, so the questionnaire wasn't sent — follow up to get one."}\n\nshine-booking.vercel.app`
-              : `Client is asking about pricing via SMS!\n\nPhone: ${From}\nName: ${client?.name}\nEvent: ${client?.event_type}\n\nOpen the app to send their pricing:\nshine-booking.vercel.app${strollingHint}`
+              ? `Client is ready to book!\n\nPhone: ${From}\nName: ${client?.name || 'Unknown (new lead)'}\nEvent: ${client?.event_type || 'Not specified'}\n\n${client?.email ? "A thank-you note with the intake questionnaire was sent automatically." : "They have no email on file, so the questionnaire wasn't sent — follow up to get one."}\n\nshine-booking.vercel.app`
+              : `Client is asking about pricing via SMS!\n\nPhone: ${From}\nName: ${client?.name || 'Unknown (new lead)'}\nEvent: ${client?.event_type || 'Not specified'}\n\nOpen the app to send their pricing:\nshine-booking.vercel.app${strollingHint}`
           })
         });
       } catch(e) {

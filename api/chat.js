@@ -233,7 +233,7 @@ Rules:
     if (toPhone || toEmail) {
       const clientPayload = {
         name: clientName,
-        phone: toPhone || null,
+        phone: normalizePhone(toPhone) || null,
         email: toEmail || null,
         event_type: eventType,
         venue: venue || null,
