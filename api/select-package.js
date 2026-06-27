@@ -15,6 +15,7 @@ export default async function handler(req, res) {
     let finalClientName = name;
     let finalClientEmail = null;
     let finalClientPhone = null;
+    let finalClientChannel = null;
     let finalEventType = category === 'corporate' ? 'Corporate event' : 'Private celebration';
     let finalEventDate = null;
 
@@ -50,6 +51,7 @@ export default async function handler(req, res) {
         finalClientName = client.name;
         finalClientEmail = client.email;
         finalClientPhone = client.phone || null;
+        finalClientChannel = client.last_channel || null;
         finalEventType = client.event_type || finalEventType;
         finalEventDate = client.event_date || null;
       }
@@ -84,6 +86,7 @@ export default async function handler(req, res) {
         finalClientName = newClient.name;
         finalClientEmail = newClient.email;
         finalClientPhone = newClient.phone || null;
+        finalClientChannel = newClient.email ? 'email' : (newClient.phone ? 'sms' : null);
       }
     }
 
@@ -93,8 +96,15 @@ export default async function handler(req, res) {
     const formatLine = format === 'strolling' && strollingDurationMinutes
       ? `\nDuration: ${strollingDurationMinutes / 60} hour${strollingDurationMinutes > 60 ? 's' : ''} of strolling`
       : '';
-    const willSendQuestionnaire = readyToBook && finalClientId && (finalClientEmail || finalClientPhone);
-    const questionnaireChannel = finalClientEmail ? 'email' : (finalClientPhone ? 'text' : null);
+    // Send the intake on the SAME channel used to communicate (last_channel); fall back to
+    // whatever contact info we actually have if the preferred channel is missing.
+    let intakeChannel = null;
+    if (finalClientChannel === 'sms' && finalClientPhone) intakeChannel = 'sms';
+    else if (finalClientChannel === 'email' && finalClientEmail) intakeChannel = 'email';
+    else if (finalClientEmail) intakeChannel = 'email';
+    else if (finalClientPhone) intakeChannel = 'sms';
+    const willSendQuestionnaire = readyToBook && finalClientId && !!intakeChannel;
+    const questionnaireChannel = intakeChannel === 'sms' ? 'text' : (intakeChannel === 'email' ? 'email' : null);
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -142,7 +152,7 @@ export default async function handler(req, res) {
           const intakeLink = `https://shine-booking.vercel.app/intake.html?bid=${booking.id}`;
           const firstName = finalClientName ? finalClientName.split(' ')[0] : 'there';
 
-          if (finalClientEmail) {
+          if (intakeChannel === 'email') {
             await fetch('https://api.resend.com/emails', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
@@ -153,7 +163,7 @@ export default async function handler(req, res) {
                 text: `Hi ${firstName},\n\nThank you so much for booking — I'm really looking forward to your event!\n\nTo get everything set up, including your performance agreement, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`
               })
             });
-          } else if (finalClientPhone) {
+          } else if (intakeChannel === 'sms') {
             const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
             const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
             await fetch(twilioUrl, {
