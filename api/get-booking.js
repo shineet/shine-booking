@@ -1,50 +1,6 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  // TEMP read-only (token-gated) — list Maggie's Twilio inbound vs what's in the DB. Remove after.
-  if (req.query.twiliocheck === '16774083175a705e990689c71b2cec0b') {
-    const PHONE = '+16109086678';
-    try {
-      const sid = process.env.TWILIO_SID;
-      const auth = Buffer.from(`${sid}:${process.env.TWILIO_TOKEN}`).toString('base64');
-      // Messages SHE sent to the Twilio number (inbound)
-      const tw = await (await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json?From=${encodeURIComponent(PHONE)}&PageSize=50`, { headers: { 'Authorization': `Basic ${auth}` } })).json();
-      const inbound = (tw.messages || []).map(m => ({ sid: m.sid, date: m.date_sent || m.date_created, body: m.body }));
-
-      const supaHeaders = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const base = `${process.env.SUPABASE_URL}/rest/v1`;
-      const last10 = p => { const d = String(p || '').replace(/\D/g, ''); return d.length > 10 ? d.slice(-10) : d; };
-      let client = null;
-      const all = await (await fetch(`${base}/clients?select=*&order=created_at.desc`, { headers: supaHeaders })).json();
-      if (Array.isArray(all)) client = all.find(c => last10(c.phone) === last10(PHONE)) || null;
-      let dbInbound = [];
-      if (client) {
-        const msgs = await (await fetch(`${base}/messages?client_id=eq.${client.id}&direction=eq.inbound&select=id,content,created_at&order=created_at.asc`, { headers: supaHeaders })).json();
-        if (Array.isArray(msgs)) dbInbound = msgs.map(m => ({ id: m.id, created_at: m.created_at, content: m.content }));
-      }
-      const dbBodies = dbInbound.map(m => (m.content || '').trim());
-      const missing = inbound.filter(m => !dbBodies.includes((m.body || '').trim()));
-
-      let inserted = [];
-      if (req.query.apply === '1' && client && missing.length) {
-        for (const m of missing) {
-          let createdAt; try { createdAt = new Date(m.date).toISOString(); } catch { createdAt = undefined; }
-          const row = { client_id: client.id, channel: 'sms', direction: 'inbound', content: m.body, status: 'received', to_address: null };
-          if (createdAt) row.created_at = createdAt;
-          const ins = await fetch(`${base}/messages`, { method: 'POST', headers: { ...supaHeaders, 'Content-Type': 'application/json', 'Prefer': 'return=representation' }, body: JSON.stringify([row]) });
-          const insBody = await ins.json();
-          inserted.push({ ok: ins.ok, id: Array.isArray(insBody) ? insBody[0]?.id : null, body: m.body, detail: ins.ok ? undefined : insBody });
-        }
-        // Bump client so the newest activity surfaces
-        const newest = missing.map(m => { try { return new Date(m.date).toISOString(); } catch { return null; } }).filter(Boolean).sort().pop();
-        await fetch(`${base}/clients?id=eq.${client.id}`, { method: 'PATCH', headers: { ...supaHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ last_channel: 'sms', last_activity: newest || undefined }) });
-      }
-
-      res.status(200).json({ client_id: client?.id || null, twilio_inbound_count: inbound.length, db_inbound_count: dbInbound.length, missing_count: missing.length, missing, inserted });
-      return;
-    } catch (e) { res.status(500).json({ error: e.message }); return; }
-  }
-
   function normalizeTime(value) {
     if (!value) return value;
     const match = String(value).trim().match(/^(\d{1,2})(?::(\d{1,2}))?/);
