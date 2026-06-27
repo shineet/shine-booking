@@ -677,6 +677,7 @@
     let pickedCategory = null;
     let capturedName = '';
     let capturedContact = '';
+    let directBook = false;
 
     function getParams() {
         const p = new URLSearchParams(window.location.search);
@@ -780,6 +781,7 @@
             document.getElementById('subtitle').textContent = buildSubtitle(p, 'Ready to reserve your date · Texas');
             const ctaEl = document.getElementById('cta-line');
             if (ctaEl) ctaEl.textContent = 'This is the package we discussed. Reserve your date below.';
+            directBook = true;
             return;
         }
 
@@ -903,6 +905,24 @@
         pickedTier = tier;
         pickedLabel = label;
         pickedPrice = price;
+
+        // Single-card (agreed price) mode books directly — the price is already settled,
+        // so skip the good/better/best decision screen.
+        if (directBook) {
+            const params = getParams();
+            if (params.clientId) {
+                const btn = document.getElementById(`btn-${category}-${tier}`);
+                if (btn) { btn.disabled = true; btn.textContent = 'Reserving your date...'; }
+                document.getElementById('main-page').style.display = 'none';
+                submitFinalSelection(true);
+            } else {
+                document.getElementById('picked-summary').innerHTML =
+                `<strong>${pickedLabel}</strong><br>$${pickedPrice.toLocaleString()}`;
+                document.getElementById('confirm-modal').classList.add('show');
+            }
+            return;
+        }
+
         onConfirmBarClick();
     }
 
@@ -1005,7 +1025,7 @@
             if (readyToBook) {
                 document.getElementById('success-title').textContent = 'Thank you for booking!';
                 document.getElementById('success-text').textContent =
-                `I'm so excited to be part of your event! I've just sent a quick questionnaire to your email — filling it out helps me personalize the show and get your performance agreement ready. Talk soon!`;
+                `I'm so excited to be part of your event! I've just sent over a quick questionnaire — filling it out helps me personalize the show and get your performance agreement ready. Talk soon!`;
             } else {
                 document.getElementById('success-title').textContent = "No rush at all";
                 document.getElementById('success-text').textContent =
@@ -1014,6 +1034,12 @@
         })
         .catch(e => {
             alert('Something went wrong — please try again or text me directly!');
+            if (directBook) {
+                document.getElementById('main-page').style.display = 'block';
+                const btn = document.getElementById(`btn-${pickedCategory}-${pickedTier}`);
+                if (btn) { btn.disabled = false; btn.textContent = 'Confirm & reserve your date'; }
+                return;
+            }
             setDecisionButtonsDisabled(false);
             document.getElementById('book-shine-btn').innerHTML = 'Book Shine<span class="sub">I\'m ready — let\'s confirm the date</span>';
             document.getElementById('need-time-btn').innerHTML = 'I need more time<span class="sub">Just save my interest for now</span>';
@@ -1035,7 +1061,12 @@
         capturedName = name;
         capturedContact = contact;
         document.getElementById('confirm-modal').classList.remove('show');
-        showDecisionPage();
+        if (directBook) {
+            document.getElementById('main-page').style.display = 'none';
+            submitFinalSelection(true);
+        } else {
+            showDecisionPage();
+        }
     }
 
     document.getElementById('confirm-modal').addEventListener('click', function(e) {

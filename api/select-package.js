@@ -14,6 +14,7 @@ export default async function handler(req, res) {
     let finalClientId = clientId || null;
     let finalClientName = name;
     let finalClientEmail = null;
+    let finalClientPhone = null;
     let finalEventType = category === 'corporate' ? 'Corporate event' : 'Private celebration';
     let finalEventDate = null;
 
@@ -48,6 +49,7 @@ export default async function handler(req, res) {
       if (client) {
         finalClientName = client.name;
         finalClientEmail = client.email;
+        finalClientPhone = client.phone || null;
         finalEventType = client.event_type || finalEventType;
         finalEventDate = client.event_date || null;
       }
@@ -81,6 +83,7 @@ export default async function handler(req, res) {
         finalClientId = newClient.id;
         finalClientName = newClient.name;
         finalClientEmail = newClient.email;
+        finalClientPhone = newClient.phone || null;
       }
     }
 
@@ -90,6 +93,8 @@ export default async function handler(req, res) {
     const formatLine = format === 'strolling' && strollingDurationMinutes
       ? `\nDuration: ${strollingDurationMinutes / 60} hour${strollingDurationMinutes > 60 ? 's' : ''} of strolling`
       : '';
+    const willSendQuestionnaire = readyToBook && finalClientId && (finalClientEmail || finalClientPhone);
+    const questionnaireChannel = finalClientEmail ? 'email' : (finalClientPhone ? 'text' : null);
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -101,13 +106,14 @@ export default async function handler(req, res) {
         to: 'shinethementalist@gmail.com',
         subject: readyToBook ? `🎯 ${notifyName} is ready to book!` : `${notifyName} selected the ${label} package`,
         text: readyToBook
-          ? `Great news!\n\n${notifyName} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}${formatLine}\n\nContact: ${notifyContact}\n\nThey confirmed they're ready to book — a thank-you note with the intake questionnaire is being sent automatically.`
+          ? `Great news!\n\n${notifyName} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}${formatLine}\n\nContact: ${notifyContact}\n\nThey confirmed they're ready to book.${willSendQuestionnaire ? ` A thank-you note with the intake questionnaire is being sent to them now by ${questionnaireChannel}.` : ` Heads up: no email or phone is on file, so the questionnaire could not be sent automatically. Follow up to collect their contact info.`}`
           : `${notifyName} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}${formatLine}\n\nContact: ${notifyContact}\n\nThey chose "I need more time" — not ready to confirm yet. No questionnaire was sent.`
       })
     });
 
-    // If they confirmed they're ready to book, send the thank-you + intake questionnaire now
-    if (readyToBook && finalClientEmail) {
+    // If they confirmed they're ready to book, create the booking and send the questionnaire.
+    // Send by email when we have one; otherwise by SMS (this flow is often used with SMS-only leads).
+    if (readyToBook && finalClientId) {
       try {
         const bookingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings`, {
           method: 'POST',
@@ -134,29 +140,43 @@ export default async function handler(req, res) {
 
         if (booking) {
           const intakeLink = `https://shine-booking.vercel.app/intake.html?bid=${booking.id}`;
-          await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
-            body: JSON.stringify({
-              from: 'Shine, The Mentalist <shine@texasmentalist.com>',
-              to: finalClientEmail,
-              subject: 'Thank you for booking! Quick questionnaire inside',
-              text: `Hi ${finalClientName ? finalClientName.split(' ')[0] : 'there'},\n\nThank you so much for booking — I'm really looking forward to your event!\n\nTo get everything set up, including your performance agreement, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`
-            })
-          });
+          const firstName = finalClientName ? finalClientName.split(' ')[0] : 'there';
 
-          if (finalClientId) {
-            await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${finalClientId}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+          if (finalClientEmail) {
+            await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
               body: JSON.stringify({
-                status: 'intake_sent',
-                booking_id: booking.id,
-                last_activity: new Date().toISOString(),
-                notes: `Intake form sent: ${intakeLink}`
+                from: 'Shine, The Mentalist <shine@texasmentalist.com>',
+                to: finalClientEmail,
+                subject: 'Thank you for booking! Quick questionnaire inside',
+                text: `Hi ${firstName},\n\nThank you so much for booking — I'm really looking forward to your event!\n\nTo get everything set up, including your performance agreement, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`
               })
             });
+          } else if (finalClientPhone) {
+            const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
+            const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+            await fetch(twilioUrl, {
+              method: 'POST',
+              headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                From: process.env.TWILIO_FROM,
+                To: finalClientPhone,
+                Body: `Hi ${firstName}, thank you so much for booking! Here's a quick 2-minute questionnaire so I can personalize your show and get your performance agreement ready: ${intakeLink}`
+              }).toString()
+            });
           }
+
+          await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${finalClientId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+            body: JSON.stringify({
+              status: 'intake_sent',
+              booking_id: booking.id,
+              last_activity: new Date().toISOString(),
+              notes: `Intake form sent: ${intakeLink}`
+            })
+          });
         }
       } catch (intakeErr) {
         console.error('Send intake on readyToBook failed:', intakeErr);
