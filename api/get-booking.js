@@ -1,6 +1,39 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
+  // TEMP one-off backfill (token-gated) — inserts Maggie's lost inbound SMS. Remove after running.
+  if (req.query.backfill === '16774083175a705e990689c71b2cec0b') {
+    const supaHeaders = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+    const base = `${process.env.SUPABASE_URL}/rest/v1`;
+    const FROM = '+16109086678';
+    const MESSAGE = "Hi Shine! Sorry I am just seeing this message – I love your website and your performances! I am traveling this weekend so I won't be able to chat on the phone, however I can message. What is your quote for a private group of around 20 people? Thank you!";
+    const RECEIVED_AT = '2026-06-27T14:00:00Z';
+    const last10 = p => { const d = String(p || '').replace(/\D/g, ''); return d.length > 10 ? d.slice(-10) : d; };
+    try {
+      let client = null;
+      const ex = await (await fetch(`${base}/clients?phone=eq.${encodeURIComponent(FROM)}&order=created_at.desc&limit=1`, { headers: supaHeaders })).json();
+      client = Array.isArray(ex) ? (ex[0] || null) : null;
+      if (!client) {
+        const all = await (await fetch(`${base}/clients?select=*&order=created_at.desc`, { headers: supaHeaders })).json();
+        if (Array.isArray(all)) client = all.find(c => last10(c.phone) === last10(FROM)) || null;
+      }
+      if (!client) { res.status(404).json({ error: 'no client matched' }); return; }
+      if (client.phone !== FROM) {
+        await fetch(`${base}/clients?id=eq.${client.id}`, { method: 'PATCH', headers: { ...supaHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: FROM }) });
+      }
+      const existing = await (await fetch(`${base}/messages?client_id=eq.${client.id}&direction=eq.inbound&select=id,content`, { headers: supaHeaders })).json();
+      if (Array.isArray(existing) && existing.some(m => (m.content || '').trim() === MESSAGE.trim())) {
+        res.status(200).json({ status: 'already_present', client_id: client.id, client_name: client.name }); return;
+      }
+      const ins = await fetch(`${base}/messages`, { method: 'POST', headers: { ...supaHeaders, 'Content-Type': 'application/json', 'Prefer': 'return=representation' }, body: JSON.stringify([{ client_id: client.id, channel: 'sms', direction: 'inbound', content: MESSAGE, status: 'received', to_address: null, created_at: RECEIVED_AT }]) });
+      const insBody = await ins.json();
+      if (!ins.ok) { res.status(500).json({ error: 'insert failed', detail: insBody }); return; }
+      await fetch(`${base}/clients?id=eq.${client.id}`, { method: 'PATCH', headers: { ...supaHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'pricing_requested', last_channel: 'sms', last_activity: RECEIVED_AT }) });
+      res.status(200).json({ status: 'inserted', client_id: client.id, client_name: client.name, message_id: Array.isArray(insBody) ? insBody[0]?.id : null });
+      return;
+    } catch (e) { res.status(500).json({ error: e.message }); return; }
+  }
+
   function normalizeTime(value) {
     if (!value) return value;
     const match = String(value).trim().match(/^(\d{1,2})(?::(\d{1,2}))?/);
