@@ -210,8 +210,11 @@ function buildInvoicePDF(data) {
 
     var dep    = data.depositPercent || 50;
     var depAmt = Math.round((data.total||0)*dep/100).toLocaleString();
+    var fullPay = dep >= 100;
     doc.font('Helvetica').fontSize(8.5).fillColor(GRAY)
-       .text('* A '+dep+'% deposit ($'+depAmt+') is required to secure the date. Remaining balance due on or before '+(data.eventDate||'.')+'.',
+       .text(fullPay
+              ? '* Full payment ($'+Number(data.total||0).toLocaleString()+') is due on or before the event date'+(data.eventDate ? ' ('+data.eventDate+')' : '')+'.'
+              : '* A '+dep+'% deposit ($'+depAmt+') is required to secure the date. Remaining balance due on or before '+(data.eventDate||'.')+'.',
              50, y+8, {width:512});
     y += 28;
     doc.moveTo(50,y+8).lineTo(562,y+8).lineWidth(1).strokeColor(GOLD).stroke();
@@ -248,11 +251,16 @@ function buildInvoicePDF(data) {
        .text('Also: Zelle 2020shine@gmail.com  |  Venmo @Shine-Thankappan  |  PayPal shine_e_thankappan@yahoo.com  |  Cash',
              col1, yc, { width: colW });
 
-    // Col 2 — Payment Terms
-    doc.font('Helvetica').fontSize(9).fillColor(DARK)
-       .text(dep+'% deposit due upon booking.',      col2,88)
-       .text('Balance due on day of performance.',   col2,104)
-       .text('Cancellation policy per agreement.',   col2,120);
+    // Col 2 — Payment Terms (full payment vs deposit + balance)
+    doc.font('Helvetica').fontSize(9).fillColor(DARK);
+    if (fullPay) {
+      doc.text('Full payment due on or before the event date.', col2, 88, { width: colW })
+         .text('Cancellation policy per agreement.',            col2, 124, { width: colW });
+    } else {
+      doc.text(dep + '% deposit due upon booking.',     col2, 88)
+         .text('Balance due on day of performance.',    col2, 104)
+         .text('Cancellation policy per agreement.',    col2, 120);
+    }
 
     // Col 3 — Questions
     doc.font('Helvetica').fontSize(9).fillColor(DARK)
@@ -262,8 +270,8 @@ function buildInvoicePDF(data) {
 
     doc.font('Helvetica').fontSize(10).fillColor(GRAY)
        .text('Thank you for choosing Shine, The Mentalist. Looking forward to an unforgettable evening!',
-             50,200,{align:'center',width:512});
-    doc.moveTo(50,224).lineTo(562,224).lineWidth(1).strokeColor(GOLD).stroke();
+             50,250,{align:'center',width:512});
+    doc.moveTo(50,274).lineTo(562,274).lineWidth(1).strokeColor(GOLD).stroke();
 
     doc.end();
   });
