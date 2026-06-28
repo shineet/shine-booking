@@ -34,7 +34,7 @@ module.exports = async function handler(req, res) {
       const dep        = invoiceData.depositPercent || 50;
       const depAmt     = Math.round((invoiceData.total || 0) * dep / 100).toLocaleString();
       const body       = customMessage ||
-        `Please find your invoice attached for the ${invoiceData.eventName || 'upcoming event'}.\n\nA ${dep}% deposit ($${depAmt}) is required to secure your date — payment details are on page 2 of the invoice.\n\nLooking forward to an unforgettable performance!`;
+        `Please find your invoice attached for the ${invoiceData.eventName || 'upcoming event'}.\n\nA ${dep}% deposit ($${depAmt}) is required to secure your date. Payment details are on page 2 of the invoice.\n\nLooking forward to an unforgettable performance!`;
 
       await resend.emails.send({
         from:    'Shine, The Mentalist <shine@texasmentalist.com>',
