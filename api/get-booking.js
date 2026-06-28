@@ -1,6 +1,23 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
+  // TEMP read-only (token-gated) — inspect Paget's records. Remove after.
+  if (req.query.checkpaget === '16774083175a705e990689c71b2cec0b') {
+    const supaHeaders = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+    const base = `${process.env.SUPABASE_URL}/rest/v1`;
+    try {
+      const clients = await (await fetch(`${base}/clients?or=(name.ilike.*paget*,email.ilike.*paget*)&select=*`, { headers: supaHeaders })).json();
+      const out = [];
+      for (const c of (Array.isArray(clients) ? clients : [])) {
+        const messages = await (await fetch(`${base}/messages?client_id=eq.${c.id}&select=id,channel,direction,status,email_subject,content,created_at&order=created_at.asc`, { headers: supaHeaders })).json();
+        const bookings = await (await fetch(`${base}/bookings?client_id=eq.${c.id}&select=id,status,contract_status,contract_signed_at,intake_status,fee,event_date,created_at`, { headers: supaHeaders })).json();
+        out.push({ client: c, message_count: Array.isArray(messages) ? messages.length : 0, messages, bookings });
+      }
+      res.status(200).json({ matched: out.length, results: out });
+      return;
+    } catch (e) { res.status(500).json({ error: e.message }); return; }
+  }
+
   function normalizeTime(value) {
     if (!value) return value;
     const match = String(value).trim().match(/^(\d{1,2})(?::(\d{1,2}))?/);

@@ -311,6 +311,48 @@ Only include this block once. Do not mention this block or its contents in the v
       }
     }
 
+    // If the assistant can't produce a reply (API error, or a refusal with empty content),
+    // we must NOT lose the email. Save the inbound to the dashboard and ask Shine to reply
+    // manually, rather than throwing and dropping it entirely.
+    async function saveInboundForManualReply(reasonLabel) {
+      const supaHdrs = { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+      let saveClient = client;
+      if (!saveClient) {
+        try {
+          const createRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
+            method: 'POST', headers: { ...supaHdrs, 'Prefer': 'return=representation' },
+            body: JSON.stringify([{ name: fromName || fromEmail, email: fromEmail, status: 'new', lead_source: 'Inbound email', last_channel: 'email', last_activity: new Date().toISOString() }])
+          });
+          const rows = await createRes.json();
+          saveClient = Array.isArray(rows) ? (rows[0] || null) : null;
+        } catch(e) { console.error('Auto-create client (manual-reply path) failed:', e.message); }
+      }
+      if (saveClient) {
+        try {
+          await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+            method: 'POST', headers: supaHdrs,
+            body: JSON.stringify([{ client_id: saveClient.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: subject || null }])
+          });
+          await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${saveClient.id}`, {
+            method: 'PATCH', headers: supaHdrs,
+            body: JSON.stringify({ last_activity: new Date().toISOString(), last_channel: 'email' })
+          });
+        } catch(e) { console.error('Save inbound (manual-reply path) failed:', e.message); }
+      }
+      try {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+          body: JSON.stringify({
+            from: 'Shine Booking Assistant <shine@texasmentalist.com>',
+            to: 'shinethementalist@gmail.com',
+            subject: `📥 Email saved — reply manually (${fromName || fromEmail})`,
+            text: `An email came in from ${fromName ? fromName + ' (' + fromEmail + ')' : fromEmail} and is now saved on your dashboard, but I couldn't draft a reply automatically (${reasonLabel}).\n\nSubject: ${subject || '(none)'}\n\n"${(emailBody || '').substring(0, 1500)}"\n\nReply from the dashboard or Gmail.`
+          })
+        });
+      } catch(notifyErr) { console.error('Manual-reply notification failed:', notifyErr.message); }
+      return !!saveClient;
+    }
+
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
@@ -330,11 +372,16 @@ Only include this block once. Do not mention this block or its contents in the v
       throw new Error(`Claude response was not valid JSON (HTTP ${claudeResponse.status}): ${claudeRawText.substring(0, 500)}`);
     }
     if (!claudeResponse.ok || claudeData.error) {
-      throw new Error(`Claude API error (HTTP ${claudeResponse.status}): ${claudeData.error?.message || claudeRawText.substring(0, 500)}`);
+      console.error('Claude API error:', claudeResponse.status, claudeData.error?.message || claudeRawText.substring(0, 500));
+      const saved = await saveInboundForManualReply(`API error HTTP ${claudeResponse.status}`);
+      res.status(200).json({ received: true, saved: saved, aiDrafted: false, reason: 'claude_api_error' });
+      return;
     }
     if (!claudeData.content || !claudeData.content[0] || !claudeData.content[0].text) {
-      console.error('Unexpected Claude response shape:', JSON.stringify(claudeData));
-      throw new Error(`Claude returned no text content. stop_reason: ${claudeData.stop_reason}, content: ${JSON.stringify(claudeData.content)}`);
+      console.error('Claude returned no usable text. stop_reason:', claudeData.stop_reason, 'content:', JSON.stringify(claudeData.content));
+      const saved = await saveInboundForManualReply(claudeData.stop_reason === 'refusal' ? 'the assistant declined this one' : 'no text content returned');
+      res.status(200).json({ received: true, saved: saved, aiDrafted: false, reason: 'claude_no_text' });
+      return;
     }
 
     const replyText = claudeData.content[0].text;
