@@ -232,7 +232,7 @@ function buildInvoicePDF(data) {
 
     // Col 1 — Payment Methods. Lead with the check details an AP department needs
     // (exactly what to write on the cheque), then the digital options.
-    var REMIT_ADDRESS = '';  // Shine's remit-to mailing address; set to print "Mail check to:"
+    var REMIT_ADDRESS = '230 Carrack Dr\nRound Rock, TX 78681';  // remit-to mailing address printed as "Mail check to:"
     var remit = data.remitAddress || REMIT_ADDRESS;
     doc.font('Helvetica-Bold').fontSize(9).fillColor(DARK).text('Pay by check', col1, 88);
     doc.font('Helvetica').fontSize(9).fillColor(DARK).text('Pay to the order of:', col1, 101);

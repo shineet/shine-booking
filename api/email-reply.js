@@ -353,38 +353,41 @@ Only include this block once. Do not mention this block or its contents in the v
       return !!saveClient;
     }
 
-    const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: messages
-      })
-    });
+    // Generate the reply. If Sonnet declines (stop_reason: refusal) or errors, retry once on
+    // Opus 4.8 — more capable and far less prone to false-positive refusals on benign business
+    // email. Only if BOTH fail do we save the inbound for a manual reply.
+    async function callClaude(model) {
+      try {
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: model, max_tokens: 1024, system: systemPrompt, messages: messages })
+        });
+        const rawText = await resp.text();
+        let data;
+        try { data = JSON.parse(rawText); } catch(e) { return { text: null, reason: `invalid JSON (HTTP ${resp.status})` }; }
+        if (!resp.ok || data.error) { return { text: null, reason: `API error HTTP ${resp.status}: ${data.error?.message || ''}`.trim() }; }
+        const t = (data.content && data.content[0] && data.content[0].text) ? data.content[0].text : null;
+        if (!t) { return { text: null, reason: data.stop_reason === 'refusal' ? 'declined (refusal)' : 'no text content' }; }
+        return { text: t };
+      } catch(e) {
+        return { text: null, reason: e.message };
+      }
+    }
 
-    let claudeData;
-    const claudeRawText = await claudeResponse.text();
-    try {
-      claudeData = JSON.parse(claudeRawText);
-    } catch(parseErr) {
-      throw new Error(`Claude response was not valid JSON (HTTP ${claudeResponse.status}): ${claudeRawText.substring(0, 500)}`);
+    let result = await callClaude('claude-sonnet-4-6');
+    if (!result.text) {
+      console.error('Sonnet did not return a reply:', result.reason, '-- retrying on Opus 4.8');
+      result = await callClaude('claude-opus-4-8');
     }
-    if (!claudeResponse.ok || claudeData.error) {
-      console.error('Claude API error:', claudeResponse.status, claudeData.error?.message || claudeRawText.substring(0, 500));
-      const saved = await saveInboundForManualReply(`API error HTTP ${claudeResponse.status}`);
-      res.status(200).json({ received: true, saved: saved, aiDrafted: false, reason: 'claude_api_error' });
-      return;
-    }
-    if (!claudeData.content || !claudeData.content[0] || !claudeData.content[0].text) {
-      console.error('Claude returned no usable text. stop_reason:', claudeData.stop_reason, 'content:', JSON.stringify(claudeData.content));
-      const saved = await saveInboundForManualReply(claudeData.stop_reason === 'refusal' ? 'the assistant declined this one' : 'no text content returned');
+    if (!result.text) {
+      console.error('Both models failed to return a reply:', result.reason);
+      const saved = await saveInboundForManualReply(result.reason || 'no reply generated');
       res.status(200).json({ received: true, saved: saved, aiDrafted: false, reason: 'claude_no_text' });
       return;
     }
 
-    const replyText = claudeData.content[0].text;
+    const replyText = result.text;
     const bookingIntent = replyText.includes('[BOOKING_INTENT]');
     const pricingRequested = replyText.includes('[PRICING_REQUESTED]');
 
