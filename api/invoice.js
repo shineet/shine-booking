@@ -230,14 +230,23 @@ function buildInvoicePDF(data) {
       doc.moveTo(x,76).lineTo(x+colW,76).lineWidth(1).strokeColor(GOLD).stroke();
     });
 
-    // Col 1 — Payment Methods (smaller font so long emails don't overflow)
-    doc.font('Helvetica').fontSize(9).fillColor(DARK)
-       .text('Zelle: 2020shine@gmail.com',          col1,88)
-       .text('Venmo: @Shine-Thankappan',             col1,104)
-       .text('PayPal: shine_e_thankappan',           col1,120)
-       .text('  @yahoo.com',                         col1,131)
-       .text('Check: payable to Shine Thankappan',   col1,146)
-       .text('Cash also accepted',                   col1,161);
+    // Col 1 — Payment Methods. Lead with the check details an AP department needs
+    // (exactly what to write on the cheque), then the digital options.
+    var REMIT_ADDRESS = '';  // Shine's remit-to mailing address; set to print "Mail check to:"
+    var remit = data.remitAddress || REMIT_ADDRESS;
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(DARK).text('Pay by check', col1, 88);
+    doc.font('Helvetica').fontSize(9).fillColor(DARK).text('Pay to the order of:', col1, 101);
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(DARK).text('Shine Thankappan', col1, 112);
+    doc.font('Helvetica').fontSize(9).fillColor(DARK).text('Memo: Invoice ' + (data.invoiceNumber || ''), col1, 125);
+    var yc = 138;
+    if (remit) {
+      doc.font('Helvetica').fontSize(9).fillColor(DARK).text('Mail check to:', col1, yc); yc += 11;
+      String(remit).split('\n').forEach(function (ln) { doc.font('Helvetica').fontSize(9).fillColor(DARK).text(ln, col1, yc); yc += 11; });
+    }
+    yc += 4;
+    doc.font('Helvetica').fontSize(8).fillColor(GRAY)
+       .text('Also: Zelle 2020shine@gmail.com  |  Venmo @Shine-Thankappan  |  PayPal shine_e_thankappan@yahoo.com  |  Cash',
+             col1, yc, { width: colW });
 
     // Col 2 — Payment Terms
     doc.font('Helvetica').fontSize(9).fillColor(DARK)
