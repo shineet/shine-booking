@@ -261,7 +261,7 @@ function buildInvoicePDF(data) {
        .text('+1 (612) 865-7681',   col3,120);
 
     doc.font('Helvetica').fontSize(10).fillColor(GRAY)
-       .text('Thank you for choosing Shine, The Mentalist — looking forward to an unforgettable evening!',
+       .text('Thank you for choosing Shine, The Mentalist. Looking forward to an unforgettable evening!',
              50,200,{align:'center',width:512});
     doc.moveTo(50,224).lineTo(562,224).lineWidth(1).strokeColor(GOLD).stroke();
 
