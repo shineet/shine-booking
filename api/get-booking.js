@@ -44,7 +44,7 @@ export default async function handler(req, res) {
         const diag = (Array.isArray(msgs) ? msgs : []).map(m => {
           const c = m.content || '';
           const t = c.replace(/\s+/g, '');
-          return { id: m.id, client_id: m.client_id, created_at: m.created_at, len: c.length, noSpace: !/ /.test(c.trim()), mod4: t.length % 4, head: c.slice(0, 50), wouldDecode: decodeLeadingBase64(c) !== c };
+          return { id: m.id, client_id: m.client_id, created_at: m.created_at, len: c.length, noSpace: !/ /.test(c.trim()), mod4: t.length % 4, head: (m.id==="80b2259f-9716-40d3-a6fe-91270ebab790"? c : c.slice(0,50)), wouldDecode: decodeLeadingBase64(c) !== c };
         });
         res.status(200).json({ scanned: diag.length, diag });
         return;
