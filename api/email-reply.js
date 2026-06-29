@@ -1,3 +1,66 @@
+// ── Inbound email body decoding ──────────────────────────────────────────────
+// Some mail servers send the text/plain part with Content-Transfer-Encoding
+// base64 or quoted-printable. If we don't decode it, the dashboard + the
+// "reply manually" notification show a wall of base64/=XX garbage. These helpers
+// decode both, with a safety net for when the parsed `body` arrives already-encoded.
+
+function decodeQuotedPrintable(str) {
+  const collapsed = String(str || '').replace(/=\r?\n/g, ''); // soft line breaks
+  const bytes = [];
+  for (let i = 0; i < collapsed.length; i++) {
+    if (collapsed[i] === '=' && /[0-9A-Fa-f]{2}/.test(collapsed.substr(i + 1, 2))) {
+      bytes.push(parseInt(collapsed.substr(i + 1, 2), 16));
+      i += 2;
+    } else {
+      bytes.push(collapsed.charCodeAt(i) & 0xff);
+    }
+  }
+  try { return Buffer.from(bytes).toString('utf-8'); } catch (e) { return collapsed; }
+}
+
+// A long, whitespace-only-broken run of base64 chars (no spaces/punctuation) that
+// isn't readable prose — i.e. an encoded body that slipped through undecoded.
+function looksLikeBase64Block(s) {
+  const t = String(s || '').replace(/\s+/g, '');
+  return t.length >= 24 && t.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(t) && !/\s/.test((s || '').trim());
+}
+
+function decodeBase64Body(s) {
+  try {
+    const out = Buffer.from(String(s).replace(/\s+/g, ''), 'base64').toString('utf-8');
+    // Only accept if it decoded to mostly-printable text (guards against false positives)
+    const printable = out.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '');
+    return printable.length >= out.length * 0.8 ? out : s;
+  } catch (e) { return s; }
+}
+
+// Extract + decode the text/plain part from a raw MIME email, honouring its
+// Content-Transfer-Encoding. Returns '' if no text/plain part is found.
+function extractPlainText(rawEmail) {
+  if (!rawEmail) return '';
+  const partMatch = rawEmail.match(/Content-Type:\s*text\/plain[\s\S]*?(?:\r?\n\r?\n)([\s\S]*?)(?:\r?\n--|\r?\n\r?\nContent-Type:|$)/i);
+  if (!partMatch) return '';
+  const headerSection = partMatch[0].slice(0, partMatch[0].indexOf(partMatch[1]));
+  const cteMatch = headerSection.match(/Content-Transfer-Encoding:\s*([^\s;]+)/i);
+  const cte = cteMatch ? cteMatch[1].toLowerCase() : '7bit';
+  const payload = partMatch[1].trim();
+  if (cte === 'base64') return decodeBase64Body(payload);
+  if (cte === 'quoted-printable') return decodeQuotedPrintable(payload);
+  return payload;
+}
+
+// Decode an already-extracted body that may itself be an encoded blob.
+function normalizeBody(body) {
+  let b = String(body || '');
+  if (looksLikeBase64Block(b)) b = decodeBase64Body(b);
+  else if (/=[0-9A-Fa-f]{2}/.test(b) && /=\r?\n|=[0-9A-Fa-f]{2}/.test(b)) {
+    // Heuristic: contains quoted-printable escapes
+    const decoded = decodeQuotedPrintable(b);
+    if (decoded && decoded !== b) b = decoded;
+  }
+  return b;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -95,15 +158,11 @@ export default async function handler(req, res) {
       if (isShineManual && to) {
         const toEmail = to.match(/<(.+)>/)?.[1] || to.split(',')[0].trim();
         if (toEmail && !toEmail.includes('texasmentalist.com') && !toEmail.includes('resend.com')) {
-          let manualBody = body || '';
+          let manualBody = normalizeBody(body || '');
+          if (!manualBody) manualBody = extractPlainText(rawEmail);
           if (!manualBody && rawEmail) {
-            const textMatch = rawEmail.match(/Content-Type: text\/plain[\s\S]*?\r?\n\r?\n([\s\S]*?)(?:\r?\n--|\r?\n\r?\nContent-Type)/);
-            if (textMatch) {
-              manualBody = textMatch[1].trim();
-            } else {
-              const headerEnd = rawEmail.indexOf('\r\n\r\n') !== -1 ? rawEmail.indexOf('\r\n\r\n') : rawEmail.indexOf('\n\n');
-              if (headerEnd > -1) manualBody = rawEmail.substring(headerEnd).trim().substring(0, 2000);
-            }
+            const headerEnd = rawEmail.indexOf('\r\n\r\n') !== -1 ? rawEmail.indexOf('\r\n\r\n') : rawEmail.indexOf('\n\n');
+            if (headerEnd > -1) manualBody = normalizeBody(rawEmail.substring(headerEnd).trim().substring(0, 2000));
           }
           try {
             const clientRes = await fetch(
@@ -141,15 +200,13 @@ export default async function handler(req, res) {
       return;
     }
 
-    let emailBody = body || '';
+    let emailBody = normalizeBody(body || '');
+    if (!emailBody) {
+      emailBody = extractPlainText(rawEmail);
+    }
     if (!emailBody && rawEmail) {
-      const textMatch = rawEmail.match(/Content-Type: text\/plain[\s\S]*?\r?\n\r?\n([\s\S]*?)(?:\r?\n--|\r?\n\r?\nContent-Type)/);
-      if (textMatch) {
-        emailBody = textMatch[1].trim();
-      } else {
-        const headerEnd = rawEmail.indexOf('\r\n\r\n') || rawEmail.indexOf('\n\n');
-        if (headerEnd > -1) emailBody = rawEmail.substring(headerEnd).trim().substring(0, 1000);
-      }
+      const headerEnd = rawEmail.indexOf('\r\n\r\n') !== -1 ? rawEmail.indexOf('\r\n\r\n') : rawEmail.indexOf('\n\n');
+      if (headerEnd > -1) emailBody = normalizeBody(rawEmail.substring(headerEnd).trim().substring(0, 1000));
     }
     if (!emailBody) emailBody = `Client sent an email with subject: ${subject}`;
     // Cap length defensively — long reply threads can carry the full quoted history,
