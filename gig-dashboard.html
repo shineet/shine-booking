@@ -536,6 +536,8 @@ td { padding: 9px 14px; vertical-align: middle; }
     <div id="detail-content"></div>
     <div class="modal-actions">
       <button class="secondary" onclick="closeModal('detail-modal')">Close</button>
+      <button class="secondary" onclick="downloadEventIcs()">📅 Add to Calendar</button>
+      <button class="secondary" onclick="downloadContactVcf()">👤 Save Contact</button>
       <button class="success" id="detail-done-btn" onclick="openMarkDone()">Mark as Done</button>
     </div>
   </div>
@@ -946,6 +948,144 @@ function openDetail(clientId) {
 
   openModal('detail-modal');
   loadConversation(clientId);
+}
+
+// ── Calendar / Contact downloads (dashboard backup for the auto email on sign) ─
+// Mirrors the .ics / .vcf builders in api/sign-contract.js so the files match
+// whether they arrive by email or are pulled here. Runs fully client-side — no
+// API call — so it does not touch the 12-function Vercel limit.
+
+function _parseStartTime(timeStr, eventDateStr) {
+  if (!timeStr || !eventDateStr) return { confident: false };
+  const cleaned = String(timeStr).trim().toLowerCase();
+  const firstPart = cleaned.split('-')[0].trim();
+  const match = firstPart.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+  if (!match) return { confident: false };
+  let hour = parseInt(match[1], 10);
+  const minute = match[2] ? parseInt(match[2], 10) : 0;
+  let meridiem = match[3];
+  if (isNaN(hour) || hour > 23 || minute > 59) return { confident: false };
+  if (!meridiem) { const m = cleaned.match(/(am|pm)/); if (m) meridiem = m[1]; }
+  if (meridiem === 'pm' && hour < 12) hour += 12;
+  if (meridiem === 'am' && hour === 12) hour = 0;
+  const startDate = new Date(eventDateStr + 'T00:00:00');
+  startDate.setHours(hour, minute, 0, 0);
+  return { startDate, confident: true };
+}
+
+function _parseDurationMinutes(durationStr) {
+  if (!durationStr) return null;
+  const match = String(durationStr).match(/(\d+(?:\.\d+)?)\s*(hour|hr|minute|min)/i);
+  if (!match) return null;
+  const num = parseFloat(match[1]);
+  const unit = match[2].toLowerCase();
+  if (unit.startsWith('hour') || unit.startsWith('hr')) return Math.round(num * 60);
+  return Math.round(num);
+}
+
+function _icsDateTime(date) {
+  const pad = n => String(n).padStart(2, '0');
+  return date.getFullYear() + pad(date.getMonth() + 1) + pad(date.getDate()) + 'T' +
+    pad(date.getHours()) + pad(date.getMinutes()) + pad(date.getSeconds());
+}
+
+function _icsEsc(str) {
+  return String(str || '').replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
+}
+
+function _triggerDownload(text, mime, filename) {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Pull the booking fields off the currently-open client
+function _activeBookingFields() {
+  const c = activeClient;
+  if (!c) return null;
+  const booking = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings;
+  return {
+    id:         c.booking_id || (booking && booking.id) || c.id,
+    clientName: c.name || 'Client',
+    eventTitle: (booking && booking.event_title) || c.event_type || 'Performance',
+    eventDate:  c.event_date || '',
+    startTime:  (booking && booking.start_time) || '',
+    duration:   (booking && booking.duration) || '',
+    fee:        c.selected_price || '',
+    venue:      (booking && booking.venue_address) || c.venue || '',
+    phone:      c.phone || '',
+    email:      c.email || ''
+  };
+}
+
+function downloadEventIcs() {
+  const b = _activeBookingFields();
+  if (!b) { alert('No booking selected.'); return; }
+  if (!b.eventDate) { alert('This booking has no event date, so a calendar event cannot be built.'); return; }
+
+  const timeResult = _parseStartTime(b.startTime, b.eventDate);
+  const durationMinutes = _parseDurationMinutes(b.duration) || 60;
+
+  let startDate, needsTimeConfirmation;
+  if (timeResult.confident) {
+    startDate = timeResult.startDate;
+    needsTimeConfirmation = false;
+  } else {
+    startDate = new Date(b.eventDate + 'T00:00:00');
+    startDate.setHours(12, 0, 0, 0); // noon placeholder
+    needsTimeConfirmation = true;
+  }
+  const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+
+  let description = `Performance for ${b.clientName}.`;
+  if (b.fee) description += ` Fee: $${b.fee}.`;
+  if (needsTimeConfirmation) {
+    description += ` ⚠️ Start time could not be read from the booking record (original value: "${b.startTime || 'none given'}") — this was set to a placeholder noon start. Please confirm the real time with the client and update this event manually.`;
+  }
+  const title = needsTimeConfirmation
+    ? `[CONFIRM TIME] ${b.eventTitle} — ${b.clientName}`
+    : `${b.eventTitle} — ${b.clientName}`;
+
+  const uid = 'shine-booking-' + (b.id || b.eventDate) + '@texasmentalist.com';
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Shine The Mentalist//Booking App//EN',
+    'BEGIN:VEVENT',
+    'UID:' + uid,
+    'DTSTAMP:' + _icsDateTime(new Date()),
+    'DTSTART:' + _icsDateTime(startDate),
+    'DTEND:' + _icsDateTime(endDate),
+    'SUMMARY:' + _icsEsc(title),
+    'DESCRIPTION:' + _icsEsc(description),
+    'LOCATION:' + _icsEsc(b.venue),
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+
+  _triggerDownload(ics, 'text/calendar', 'event.ics');
+}
+
+function downloadContactVcf() {
+  const b = _activeBookingFields();
+  if (!b) { alert('No booking selected.'); return; }
+
+  const lines = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `N:Magic Show Client;${_icsEsc(b.clientName)};;;`,
+    `FN:${_icsEsc(b.clientName)} Magic Show Client`
+  ];
+  if (b.phone) lines.push(`TEL;TYPE=CELL:${_icsEsc(b.phone)}`);
+  if (b.email) lines.push(`EMAIL:${_icsEsc(b.email)}`);
+  if (b.venue) lines.push(`ADR;TYPE=WORK:;;${_icsEsc(b.venue)};;;;`);
+  lines.push('END:VCARD');
+
+  _triggerDownload(lines.join('\r\n'), 'text/vcard', 'contact.vcf');
 }
 
 // ── Mark as Done ─────────────────────────────────────────────────────────────
