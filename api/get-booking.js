@@ -32,8 +32,17 @@ export default async function handler(req, res) {
           const p = out.replace(/[^\x09\x0A\x0D\x20-\x7E -￿]/g, ''); return p.length >= out.length * 0.8 ? out : s; } catch (e) { return s; }
       }
       const hdrs = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const mr = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?channel=eq.email&direction=eq.inbound&select=id,content,client_id&order=created_at.desc&limit=200`, { headers: hdrs });
+      const mr = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?channel=eq.email&direction=eq.inbound&select=id,content,client_id,created_at&order=created_at.desc&limit=200`, { headers: hdrs });
       const msgs = await mr.json();
+      if (req.query.debug === '1') {
+        const diag = (Array.isArray(msgs) ? msgs : []).map(m => {
+          const c = m.content || '';
+          const t = c.replace(/\s+/g, '');
+          return { id: m.id, client_id: m.client_id, created_at: m.created_at, len: c.length, noSpace: !/ /.test(c.trim()), mod4: t.length % 4, head: c.slice(0, 50), isB64: looksLikeBase64Block(c) };
+        });
+        res.status(200).json({ scanned: diag.length, diag });
+        return;
+      }
       const changes = [];
       for (const m of (Array.isArray(msgs) ? msgs : [])) {
         const orig = m.content || '';
