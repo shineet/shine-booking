@@ -21,15 +21,21 @@ export default async function handler(req, res) {
     // unreadable base64 block. Base64-only on purpose — readable quoted-printable
     // messages are left alone. Dry-run unless apply=1. Remove after running.
     if (req.query.fixenc === 'enc-fix-9f3a7c-2026') {
-      function looksLikeBase64Block(s) {
-        const raw = String(s || '').trim();
-        if (/ /.test(raw)) return false;
-        const t = raw.replace(/\s+/g, '');
-        return t.length >= 24 && t.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(t);
-      }
-      function decodeBase64Body(s) {
-        try { const out = Buffer.from(String(s).replace(/\s+/g, ''), 'base64').toString('utf-8');
-          const p = out.replace(/[^\x09\x0A\x0D\x20-\x7E -￿]/g, ''); return p.length >= out.length * 0.8 ? out : s; } catch (e) { return s; }
+      // Pull the leading run of base64 chars (handles a trailing truncation marker
+      // appended by the old capping code). Returns decoded text, or the original if
+      // it is not a base64 blob / does not decode to mostly-printable text.
+      function decodeLeadingBase64(s) {
+        const raw = String(s || "");
+        const m = raw.match(/^[A-Za-z0-9+/\r\n]{24,}={0,2}/);
+        if (!m) return s;
+        let b64 = m[0].replace(/\s+/g, "");
+        b64 = b64.slice(0, b64.length - (b64.length % 4));
+        if (b64.length < 24) return s;
+        try {
+          const out = Buffer.from(b64, "base64").toString("utf-8");
+          const p = out.replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\uFFFF]/g, "");
+          return p.length >= out.length * 0.8 ? out : s;
+        } catch (e) { return s; }
       }
       const hdrs = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
       const mr = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?channel=eq.email&direction=eq.inbound&select=id,content,client_id,created_at&order=created_at.desc&limit=200`, { headers: hdrs });
@@ -38,7 +44,7 @@ export default async function handler(req, res) {
         const diag = (Array.isArray(msgs) ? msgs : []).map(m => {
           const c = m.content || '';
           const t = c.replace(/\s+/g, '');
-          return { id: m.id, client_id: m.client_id, created_at: m.created_at, len: c.length, noSpace: !/ /.test(c.trim()), mod4: t.length % 4, head: c.slice(0, 50), isB64: looksLikeBase64Block(c) };
+          return { id: m.id, client_id: m.client_id, created_at: m.created_at, len: c.length, noSpace: !/ /.test(c.trim()), mod4: t.length % 4, head: c.slice(0, 50), wouldDecode: decodeLeadingBase64(c) !== c };
         });
         res.status(200).json({ scanned: diag.length, diag });
         return;
@@ -47,7 +53,7 @@ export default async function handler(req, res) {
       for (const m of (Array.isArray(msgs) ? msgs : [])) {
         const orig = m.content || '';
         let dec = orig;
-        if (looksLikeBase64Block(orig)) dec = decodeBase64Body(orig);
+        dec = decodeLeadingBase64(orig);
         if (dec !== orig) {
           changes.push({ id: m.id, client_id: m.client_id, before: orig.slice(0, 60), after: dec.slice(0, 120) });
           if (req.query.apply === '1') {
