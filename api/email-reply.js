@@ -18,11 +18,14 @@ function decodeQuotedPrintable(str) {
   try { return Buffer.from(bytes).toString('utf-8'); } catch (e) { return collapsed; }
 }
 
-// A long, whitespace-only-broken run of base64 chars (no spaces/punctuation) that
-// isn't readable prose — i.e. an encoded body that slipped through undecoded.
+// A run of base64 chars (possibly newline-wrapped) that isn't readable prose — i.e.
+// an encoded body that slipped through undecoded. Real prose contains spaces; a
+// wrapped base64 block only contains line breaks, so a space rules it out.
 function looksLikeBase64Block(s) {
-  const t = String(s || '').replace(/\s+/g, '');
-  return t.length >= 24 && t.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(t) && !/\s/.test((s || '').trim());
+  const raw = String(s || '').trim();
+  if (/ /.test(raw)) return false;
+  const t = raw.replace(/\s+/g, '');
+  return t.length >= 24 && t.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(t);
 }
 
 function decodeBase64Body(s) {
@@ -52,11 +55,14 @@ function extractPlainText(rawEmail) {
 // Decode an already-extracted body that may itself be an encoded blob.
 function normalizeBody(body) {
   let b = String(body || '');
-  if (looksLikeBase64Block(b)) b = decodeBase64Body(b);
-  else if (/=[0-9A-Fa-f]{2}/.test(b) && /=\r?\n|=[0-9A-Fa-f]{2}/.test(b)) {
-    // Heuristic: contains quoted-printable escapes
+  if (looksLikeBase64Block(b)) return decodeBase64Body(b);
+  // Quoted-printable: only when soft breaks or =XX escapes are present, and only
+  // accept the result if it stays mostly-printable (guards against corrupting a
+  // literal "=" that isn't actually an encoding marker).
+  if (/=\r?\n/.test(b) || /=[0-9A-Fa-f]{2}/.test(b)) {
     const decoded = decodeQuotedPrintable(b);
-    if (decoded && decoded !== b) b = decoded;
+    const printable = decoded.replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\uFFFF]/g, "");
+    if (decoded !== b && printable.length >= decoded.length * 0.95) b = decoded;
   }
   return b;
 }
