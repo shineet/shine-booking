@@ -17,24 +17,19 @@ export default async function handler(req, res) {
   try {
     const { bid, mode } = req.query;
 
-    // TEMP one-off (token-gated): decode any inbound email messages stored as raw
-    // base64 / quoted-printable. Dry-run unless apply=1. Remove after running.
+    // TEMP one-off (token-gated): decode inbound email messages stored as a raw,
+    // unreadable base64 block. Base64-only on purpose — readable quoted-printable
+    // messages are left alone. Dry-run unless apply=1. Remove after running.
     if (req.query.fixenc === 'enc-fix-9f3a7c-2026') {
-      function decodeQuotedPrintable(str) {
-        const c = String(str || '').replace(/=\r?\n/g, ''); const b = [];
-        for (let i = 0; i < c.length; i++) {
-          if (c[i] === '=' && /[0-9A-Fa-f]{2}/.test(c.substr(i + 1, 2))) { b.push(parseInt(c.substr(i + 1, 2), 16)); i += 2; }
-          else { b.push(c.charCodeAt(i) & 0xff); }
-        }
-        try { return Buffer.from(b).toString('utf-8'); } catch (e) { return c; }
-      }
       function looksLikeBase64Block(s) {
-        const t = String(s || '').replace(/\s+/g, '');
-        return t.length >= 24 && t.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(t) && !/\s/.test((s || '').trim());
+        const raw = String(s || '').trim();
+        if (/ /.test(raw)) return false;
+        const t = raw.replace(/\s+/g, '');
+        return t.length >= 24 && t.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(t);
       }
       function decodeBase64Body(s) {
         try { const out = Buffer.from(String(s).replace(/\s+/g, ''), 'base64').toString('utf-8');
-          const p = out.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, ''); return p.length >= out.length * 0.8 ? out : s; } catch (e) { return s; }
+          const p = out.replace(/[^\x09\x0A\x0D\x20-\x7E -￿]/g, ''); return p.length >= out.length * 0.8 ? out : s; } catch (e) { return s; }
       }
       const hdrs = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
       const mr = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?channel=eq.email&direction=eq.inbound&select=id,content,client_id&order=created_at.desc&limit=200`, { headers: hdrs });
@@ -44,7 +39,6 @@ export default async function handler(req, res) {
         const orig = m.content || '';
         let dec = orig;
         if (looksLikeBase64Block(orig)) dec = decodeBase64Body(orig);
-        else if (/=[0-9A-Fa-f]{2}/.test(orig) && /=\r?\n|=[0-9A-Fa-f]{2}/.test(orig)) { const q = decodeQuotedPrintable(orig); if (q && q !== orig) dec = q; }
         if (dec !== orig) {
           changes.push({ id: m.id, client_id: m.client_id, before: orig.slice(0, 60), after: dec.slice(0, 120) });
           if (req.query.apply === '1') {
