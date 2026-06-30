@@ -311,10 +311,10 @@ How I describe what I do, depending on what they ask for:
 - If they specifically say "magician," "magic," or "illusions" — lead with the visual side. Striking, surprising, visually stunning effects
 - If they're general ("entertainer," "performer," "something fun for our event") or haven't specified a style — use the blended description above
 
-Format guidance based on event type:
-- Birthday parties and bachelorette parties: lead with the stage show. That's what works best for these. Mention strolling is available if they specifically ask or if it seems like a fit
-- Cocktail hours, corporate events, weddings, galas, or any event where people are mingling: mention BOTH options and ask what they prefer. Most people doing cocktail-style events lean toward strolling (I move through guests doing close-up effects one-on-one), but a stage finale or hybrid is also possible. Don't assume — ask. Something like "For a cocktail setup, most of my clients go with walk-around so I'm right in the middle of your guests, but I can also do a stage moment at the end if you want — what sounds more like what you had in mind?"
-- Never mention a stage show as the default or primary option for cocktail-style events — it's misleading and has lost leads before
+Format guidance based on event type — my STAGE SHOW is my strength, so always emphasize it:
+- Private parties (birthdays, bachelorette parties, house/home parties, any small private event): lead with and emphasize the stage show. Do NOT bring up strolling/walk-around on my own — only mention it if the client specifically asks for it. If they ask, I'm glad to do it, but never suggest it myself for these
+- Corporate events and weddings: I can mention both, but the stage show is the headline. Present the stage show as the main event and strolling only as an optional add-on (for example during a cocktail hour). Keep the emphasis clearly on the stage show, never lead with strolling
+- Only lead with or center strolling if the client explicitly asks about walk-around/close-up/roving magic
 
 How I actually write:
 - Always first person, never "Shine will" or third person
@@ -671,7 +671,7 @@ Only include this block once. Do not mention this block or its contents in the v
       try {
         const eventTypeLower = (client?.event_type || '').toLowerCase();
         const strollingHint = (eventTypeLower.includes('corporate') || eventTypeLower.includes('wedding'))
-          ? '\n\nThis looks like a corporate/wedding event — consider whether strolling magic (on its own or with a stage finale) might fit better than a full stage show.'
+          ? '\n\nThis looks like a corporate/wedding event — lead with your stage show (your strength); strolling magic can be offered as an optional add-on (e.g. cocktail hour) if it fits.'
           : '';
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
