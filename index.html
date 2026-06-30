@@ -1032,12 +1032,12 @@
             <button class="generate-btn" onclick="generateMessages()" id="gen-btn">Generate AI messages</button>
             <div id="messages-area" style="display:none">
                 <div class="msg-label">SMS message</div>
-                <div class="field"><textarea id="sms-text" rows="3" oninput="updateCharCount()"></textarea></div>
+                <div class="field"><textarea id="sms-text" class="autogrow" rows="3" oninput="updateCharCount()"></textarea></div>
                 <div class="char-count" id="char-count">0 / 160 characters</div>
                 <div class="msg-label" style="margin-top:16px">Email subject</div>
                 <div class="field"><input type="text" id="email-subject"></div>
                 <div class="msg-label">Email body</div>
-                <div class="field"><textarea id="email-body" rows="8"></textarea></div>
+                <div class="field"><textarea id="email-body" class="autogrow" rows="8"></textarea></div>
                 <p class="edit-note">Edit any message above before sending.</p>
                 <div class="followup-row">
                     <input type="checkbox" id="followup" checked>
@@ -1309,7 +1309,7 @@
                 <button class="generate-btn" id="compose-ai-btn" onclick="generateComposeReply()" style="font-size:12px;padding:4px 10px;">✨ AI Draft</button>
             </div>
             <div id="compose-ai-status" style="font-size:12px;color:var(--muted);margin-bottom:6px;display:none"></div>
-            <textarea id="compose-body" rows="7" placeholder="Write your message here..." oninput="if(document.getElementById('compose-channel').value==='sms')updateComposeCharCount()"></textarea>
+            <textarea id="compose-body" class="autogrow" rows="7" placeholder="Write your message here..." oninput="if(document.getElementById('compose-channel').value==='sms')updateComposeCharCount()"></textarea>
         </div>
         <div id="compose-char-count" style="font-size:11px;color:var(--muted);text-align:right;margin-top:-10px;margin-bottom:10px;display:none"></div>
         <div class="modal-actions">
@@ -1784,13 +1784,14 @@ function loadPendingReplies() {
             return '<div class="pending-card" id="pending-' + p.id + '">' +
                 '<div class="pending-header"><div class="pending-client">' + escHtml(p.clientName) + '</div>' +
                 '<div class="pending-channel">' + ch + ' · ' + getTimeAgo(p.createdAt) + '</div></div>' +
-                '<textarea class="pending-draft" id="pending-draft-' + p.id + '">' + escHtml(p.draft) + '</textarea>' +
+                '<textarea class="pending-draft autogrow" id="pending-draft-' + p.id + '">' + escHtml(p.draft) + '</textarea>' +
                 '<div class="pending-actions">' +
                 '<button class="pending-discard" onclick="discardPendingReply(\'' + p.id + '\')">Discard</button>' +
                 (p.channel === 'sms' && p.toAddress ? '<button class="pending-send" style="background:var(--surface2);color:var(--accent2);border:1px solid var(--border)" onclick="openPendingInMessages(\'' + p.id + '\')">Open in Messages</button>' : '') +
                 '<button class="pending-send" onclick="approvePendingReply(\'' + p.id + '\')">Send</button>' +
                 '</div></div>';
         }).join('');
+        requestAnimationFrame(autoGrowAll);
     })
     .catch(function() {});
 }
@@ -2400,6 +2401,7 @@ function generateMessages() {
         document.getElementById('email-subject').value = data.emailSubject;
         document.getElementById('email-body').value = data.emailBody;
         document.getElementById('messages-area').style.display = 'block';
+        requestAnimationFrame(autoGrowAll);
         document.getElementById('send-btn').disabled = false;
         document.getElementById('sms-imessage-btn').disabled = false;
         updateCharCount();
@@ -2513,6 +2515,26 @@ function generateFollowUp(clientId) {
     });
 }
 
+/* ── Auto-grow textareas (show the full draft without scrolling) ── */
+function autoGrow(el) {
+    if (!el) return;
+    el.style.overflowY = 'hidden';
+    el.style.height = 'auto';
+    var max = Math.round((window.innerHeight || 800) * 0.6);
+    var h = el.scrollHeight;
+    if (h > max) { el.style.height = max + 'px'; el.style.overflowY = 'auto'; }
+    else { el.style.height = h + 'px'; }
+}
+function autoGrowAll() {
+    var els = document.querySelectorAll('textarea.autogrow');
+    for (var i = 0; i < els.length; i++) autoGrow(els[i]);
+}
+// Grow on user typing
+document.addEventListener('input', function(e) {
+    var t = e.target;
+    if (t && t.tagName === 'TEXTAREA' && t.classList && t.classList.contains('autogrow')) autoGrow(t);
+});
+
 /* ── No-reply settings ── */
 /* ── Compose modal ── */
 var composeClient = {};
@@ -2531,6 +2553,7 @@ function openComposeModal(id, name, email, phone) {
     var btn = document.getElementById('compose-send-btn');
     btn.disabled = false; btn.textContent = 'Send';
     document.getElementById('compose-modal').classList.add('show');
+    requestAnimationFrame(function(){ autoGrow(document.getElementById('compose-body')); });
 }
 
 function generateComposeReply() {
@@ -2557,6 +2580,7 @@ function generateComposeReply() {
     .then(function(data) {
         if (data.error) throw new Error(data.error);
         document.getElementById('compose-body').value = data.draft || '';
+        autoGrow(document.getElementById('compose-body'));
         statusEl.textContent = '✓ Draft ready — review and edit before sending.';
         statusEl.style.color = 'var(--green)';
         if (document.getElementById('compose-channel').value === 'sms') updateComposeCharCount();
