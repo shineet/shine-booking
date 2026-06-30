@@ -678,7 +678,7 @@ td { padding: 9px 14px; vertical-align: middle; }
 <script>
 // ── Config ──────────────────────────────────────────────────────────────────
 const SB_URL = 'https://nkhwttlmtidtippylbzs.supabase.co';
-const SB_KEY = 'sb_publishable_jvudqPYcwnnqjO8w7DQd2g_SSyb-HJl';
+const SB_KEY = ''; // moved server-side: all Supabase calls now route through /api/get-booking (RLS-protected)
 const TODAY  = new Date().toISOString().split('T')[0];
 
 const SB_HEADERS = {
@@ -687,6 +687,71 @@ const SB_HEADERS = {
   'Content-Type': 'application/json',
   'Prefer': 'return=representation',
 };
+
+// ── Auth + Supabase proxy shim ───────────────────────────────────────────────
+// Every fetch to the Supabase REST URL is transparently rerouted through our
+// server proxy, which holds the secret key and enforces the password gate.
+let DASH_TOKEN = sessionStorage.getItem('dashToken') || '';
+(function () {
+  const SB_PREFIX = SB_URL + '/rest/v1/';
+  const _f = window.fetch.bind(window);
+  window.fetch = function (url, opts) {
+    opts = opts || {};
+    if (typeof url === 'string' && url.indexOf(SB_PREFIX) === 0) {
+      const path = url.slice(SB_PREFIX.length);
+      const method = (opts.method || 'GET').toUpperCase();
+      let bodyObj = opts.body;
+      if (typeof bodyObj === 'string') { try { bodyObj = JSON.parse(bodyObj); } catch (e) {} }
+      let prefer;
+      if (opts.headers) prefer = opts.headers['Prefer'] || opts.headers['prefer'];
+      return _f('/api/get-booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'db', token: DASH_TOKEN, method, path, body: bodyObj, prefer })
+      }).then(function (r) {
+        if (r.status === 401) { DASH_TOKEN = ''; sessionStorage.removeItem('dashToken'); showLogin('Session expired. Log in again.'); }
+        return r;
+      });
+    }
+    return _f(url, opts);
+  };
+})();
+
+function showLogin(msg) {
+  let ov = document.getElementById('dash-login');
+  if (ov) { if (msg) document.getElementById('dash-login-msg').textContent = msg; return; }
+  ov = document.createElement('div');
+  ov.id = 'dash-login';
+  ov.style.cssText = 'position:fixed;inset:0;background:#0b0b0f;display:flex;align-items:center;justify-content:center;z-index:99999;';
+  ov.innerHTML = '<div style="background:#16161c;padding:28px;border-radius:14px;width:90%;max-width:320px;box-shadow:0 10px 40px rgba(0,0,0,.5);">'
+    + '<div style="color:#f5f5f5;font-size:18px;font-weight:600;margin-bottom:6px;">Dashboard locked</div>'
+    + '<div style="color:#9a9aa5;font-size:13px;margin-bottom:16px;">Enter the dashboard password.</div>'
+    + '<input id="dash-pw" type="password" placeholder="Password" style="width:100%;box-sizing:border-box;padding:11px 12px;border-radius:9px;border:1px solid #2a2a33;background:#0f0f14;color:#fff;font-size:15px;margin-bottom:10px;">'
+    + '<div id="dash-login-msg" style="color:#ff6b6b;font-size:12px;min-height:16px;margin-bottom:8px;"></div>'
+    + '<button id="dash-login-btn" style="width:100%;padding:11px;border:none;border-radius:9px;background:#d4af37;color:#1a1a1a;font-weight:700;font-size:15px;cursor:pointer;">Unlock</button>'
+    + '</div>';
+  document.body.appendChild(ov);
+  if (msg) document.getElementById('dash-login-msg').textContent = msg;
+  const submit = function () { doLogin(document.getElementById('dash-pw').value); };
+  document.getElementById('dash-login-btn').onclick = submit;
+  document.getElementById('dash-pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
+  document.getElementById('dash-pw').focus();
+}
+function doLogin(pw) {
+  const msgEl = document.getElementById('dash-login-msg');
+  msgEl.style.color = '#9a9aa5'; msgEl.textContent = 'Checking...';
+  window.fetch('/api/get-booking', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'login', password: pw }) })
+    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.d.token) { msgEl.style.color = '#ff6b6b'; msgEl.textContent = res.d.error || 'Login failed'; return; }
+      DASH_TOKEN = res.d.token;
+      sessionStorage.setItem('dashToken', DASH_TOKEN);
+      const ov = document.getElementById('dash-login'); if (ov) ov.remove();
+      bootDashboard();
+    })
+    .catch(function (e) { msgEl.style.color = '#ff6b6b'; msgEl.textContent = 'Error: ' + e.message; });
+}
+function bootDashboard() { loadAll(); }
 
 // ── State ────────────────────────────────────────────────────────────────────
 let allGigs     = [];   // from gigs table
@@ -1624,7 +1689,7 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.getElementById('th-date').classList.add('sorted');
-loadAll();
+if (DASH_TOKEN) { bootDashboard(); } else { showLogin(); }
 
 
 // ── Repertoire button on upcoming cards ───────────────────────────────────────
