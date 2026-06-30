@@ -313,6 +313,7 @@ How I describe what I do, depending on what they ask for:
 
 Format guidance based on event type — my STAGE SHOW is my strength, so always emphasize it:
 - Private parties (birthdays, bachelorette parties, house/home parties, any small private event): lead with and emphasize the stage show. Do NOT bring up strolling/walk-around on my own — only mention it if the client specifically asks for it. If they ask, I'm glad to do it, but never suggest it myself for these
+- Cocktail parties / cocktail-style mingling events: mention BOTH — strolling (which fits a mingling crowd well) and the stage show. Suggest the stage show too whenever the setup allows it (somewhere guests can gather and watch). Still emphasize the stage show as my strength, but make clear both are options for a cocktail setting
 - Corporate events and weddings: I can mention both, but the stage show is the headline. Present the stage show as the main event and strolling only as an optional add-on (for example during a cocktail hour). Keep the emphasis clearly on the stage show, never lead with strolling
 - Only lead with or center strolling if the client explicitly asks about walk-around/close-up/roving magic
 
