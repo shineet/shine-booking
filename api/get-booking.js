@@ -22,6 +22,67 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
+  // ── TEMP diagnostic: missed-response check (remove after use) ────────────────
+  if (req.method === 'GET' && req.query.diag === '40fbe49ac84170ce6af39805f7bd700d') {
+    try {
+      const sbHeaders = {
+        apikey: process.env.SUPABASE_SECRET_KEY,
+        Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+      };
+      const [msgsR, clientsR] = await Promise.all([
+        fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?select=*&order=created_at.desc&limit=200`, { headers: sbHeaders }),
+        fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?select=id,name,phone,email,status,last_channel&limit=1000`, { headers: sbHeaders }),
+      ]);
+      const msgs = await msgsR.json();
+      const clients = await clientsR.json();
+      const clientById = {};
+      (clients || []).forEach((c) => { clientById[c.id] = c; });
+
+      const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+      // Latest message per client (msgs are desc by created_at)
+      const latestByClient = {};
+      for (const m of (msgs || [])) { if (!latestByClient[m.client_id]) latestByClient[m.client_id] = m; }
+      const awaitingReply = Object.values(latestByClient)
+        .filter((m) => m.direction === 'inbound')
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+        .map((m) => ({
+          client: (clientById[m.client_id] || {}).name || m.client_id,
+          status: (clientById[m.client_id] || {}).status,
+          channel: m.channel,
+          when: m.created_at,
+          body: String(m.body || '').slice(0, 240),
+        }));
+
+      // Twilio inbound (recent) vs DB inbound SMS -> anything Twilio has that DB is missing
+      let twilioInbound = [];
+      let twilioError = null;
+      try {
+        const twR = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json?PageSize=100`, {
+          headers: { Authorization: 'Basic ' + Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64') },
+        });
+        const tw = await twR.json();
+        twilioInbound = (tw.messages || []).filter((x) => x.direction === 'inbound')
+          .map((x) => ({ from: x.from, body: x.body, date: x.date_sent }));
+      } catch (e) { twilioError = e.message; }
+
+      const dbSmsInbound = new Set((msgs || []).filter((m) => m.channel === 'sms' && m.direction === 'inbound').map((m) => norm(m.body)));
+      const twilioNotInDb = twilioInbound.filter((t) => t.body && !dbSmsInbound.has(norm(t.body)))
+        .map((t) => ({ from: t.from, when: t.date, body: String(t.body).slice(0, 240) }));
+
+      res.status(200).json({
+        counts: { messagesScanned: (msgs || []).length, clients: (clients || []).length, twilioInboundFetched: twilioInbound.length },
+        awaitingReply,
+        twilioInboundNotInDb: twilioNotInDb,
+        twilioError,
+        recentInbound: (msgs || []).filter((m) => m.direction === 'inbound').slice(0, 20).map((m) => ({
+          client: (clientById[m.client_id] || {}).name, channel: m.channel, when: m.created_at, status: m.status, body: String(m.body || '').slice(0, 180),
+        })),
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+    return;
+  }
+
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;
