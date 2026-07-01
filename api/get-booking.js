@@ -22,27 +22,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  // TEMP diagnostic: does clients.hot_lead exist + can we PATCH it? (remove after use)
-  if (req.method === 'GET' && req.query.hotdiag === '3f5f81dc1008d46e559e6022') {
-    try {
-      const h = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}`, 'Content-Type': 'application/json' };
-      const one = await (await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?select=*&limit=1`, { headers: h })).json();
-      const sample = Array.isArray(one) && one[0] ? one[0] : null;
-      const hasColInSample = sample ? Object.prototype.hasOwnProperty.call(sample, 'hot_lead') : null;
-      let patchStatus = null, patchBody = null;
-      if (sample) {
-        const pr = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${sample.id}`, {
-          method: 'PATCH', headers: { ...h, Prefer: 'return=representation' },
-          body: JSON.stringify({ hot_lead: sample.hot_lead === true ? true : false })
-        });
-        patchStatus = pr.status;
-        patchBody = await pr.text();
-      }
-      res.status(200).json({ sampleKeys: sample ? Object.keys(sample) : [], hasHotLeadInSample: hasColInSample, patchStatus, patchBody: String(patchBody).slice(0, 300) });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-    return;
-  }
-
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;
