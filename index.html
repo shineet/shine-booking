@@ -1359,18 +1359,22 @@ function showLogin(msg) {
   ov = document.createElement('div');
   ov.id = 'dash-login';
   ov.style.cssText = 'position:fixed;inset:0;background:#0b0b0f;display:flex;align-items:center;justify-content:center;z-index:99999;';
-  ov.innerHTML = '<div style="background:#16161c;padding:28px;border-radius:14px;width:90%;max-width:320px;box-shadow:0 10px 40px rgba(0,0,0,.5);">'
-    + '<div style="color:#f5f5f5;font-size:18px;font-weight:600;margin-bottom:6px;">Dashboard locked</div>'
-    + '<div style="color:#9a9aa5;font-size:13px;margin-bottom:16px;">Enter the dashboard password.</div>'
-    + '<input id="dash-pw" type="password" placeholder="Password" style="width:100%;box-sizing:border-box;padding:11px 12px;border-radius:9px;border:1px solid #2a2a33;background:#0f0f14;color:#fff;font-size:15px;margin-bottom:10px;">'
+  // A real <form> with username + current-password autocomplete so iOS/macOS offer
+  // to save the password to iCloud Keychain and later autofill it via Face ID / Touch ID.
+  ov.innerHTML = '<form id="dash-login-form" action="#" style="background:#16161c;padding:28px;border-radius:14px;width:90%;max-width:320px;box-shadow:0 10px 40px rgba(0,0,0,.5);">'
+    + '<div style="color:#f5f5f5;font-size:18px;font-weight:600;margin-bottom:6px;">Shine Booking</div>'
+    + '<div style="color:#9a9aa5;font-size:13px;margin-bottom:16px;">Unlock the dashboard.</div>'
+    + '<input id="dash-user" name="username" type="text" autocomplete="username" value="shine" readonly aria-label="Username" style="width:100%;box-sizing:border-box;padding:11px 12px;border-radius:9px;border:1px solid #2a2a33;background:#0f0f14;color:#c9c9d2;font-size:15px;margin-bottom:10px;">'
+    + '<input id="dash-pw" name="password" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password" style="width:100%;box-sizing:border-box;padding:11px 12px;border-radius:9px;border:1px solid #2a2a33;background:#0f0f14;color:#fff;font-size:15px;margin-bottom:10px;">'
     + '<div id="dash-login-msg" style="color:#ff6b6b;font-size:12px;min-height:16px;margin-bottom:8px;"></div>'
-    + '<button id="dash-login-btn" style="width:100%;padding:11px;border:none;border-radius:9px;background:#d4af37;color:#1a1a1a;font-weight:700;font-size:15px;cursor:pointer;">Unlock</button>'
-    + '</div>';
+    + '<button type="submit" id="dash-login-btn" style="width:100%;padding:11px;border:none;border-radius:9px;background:#d4af37;color:#1a1a1a;font-weight:700;font-size:15px;cursor:pointer;">Unlock</button>'
+    + '</form>';
   document.body.appendChild(ov);
   if (msg) document.getElementById('dash-login-msg').textContent = msg;
-  var submit = function () { doLogin(document.getElementById('dash-pw').value); };
-  document.getElementById('dash-login-btn').onclick = submit;
-  document.getElementById('dash-pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
+  document.getElementById('dash-login-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    doLogin(document.getElementById('dash-pw').value);
+  });
   document.getElementById('dash-pw').focus();
 }
 function doLogin(pw) {
@@ -1382,6 +1386,10 @@ function doLogin(pw) {
       if (!res.ok || !res.d.token) { msgEl.style.color = '#ff6b6b'; msgEl.textContent = res.d.error || 'Login failed'; return; }
       DASH_TOKEN = res.d.token;
       sessionStorage.setItem('dashToken', DASH_TOKEN);
+      // Nudge the browser to save the password (Chromium); Safari/iOS uses the form heuristics.
+      if (window.PasswordCredential) {
+        try { navigator.credentials.store(new window.PasswordCredential({ id: 'shine', name: 'Shine Booking', password: pw })); } catch (e) {}
+      }
       var ov = document.getElementById('dash-login'); if (ov) ov.remove();
       bootDashboard();
     })
