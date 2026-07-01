@@ -36,14 +36,19 @@ export default async function handler(req, res) {
       const msgs = await msgsR.json();
       const clients = await clientsR.json();
       const clientById = {};
-      (clients || []).forEach((c) => { clientById[c.id] = c; });
-
+      const clientByPhone = {};
       const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const last10 = (s) => String(s || '').replace(/\D/g, '').slice(-10);
+      (clients || []).forEach((c) => { clientById[c.id] = c; const k = last10(c.phone); if (k) clientByPhone[k] = c; });
 
-      // Latest message per client (msgs are desc by created_at)
+      // Messages grouped per client (already desc by created_at)
+      const msgsByClient = {};
+      (msgs || []).forEach((m) => { (msgsByClient[m.client_id] = msgsByClient[m.client_id] || []).push(m); });
+
+      // Latest message per client -> those ending on an inbound are awaiting a reply
       const latestByClient = {};
       for (const m of (msgs || [])) { if (!latestByClient[m.client_id]) latestByClient[m.client_id] = m; }
-      const awaitingReply = Object.values(latestByClient)
+      const awaitingReplyDb = Object.values(latestByClient)
         .filter((m) => m.direction === 'inbound')
         .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
         .map((m) => ({
@@ -51,10 +56,10 @@ export default async function handler(req, res) {
           status: (clientById[m.client_id] || {}).status,
           channel: m.channel,
           when: m.created_at,
-          body: String(m.body || '').slice(0, 240),
+          content: String(m.content || '').slice(0, 240),
         }));
 
-      // Twilio inbound (recent) vs DB inbound SMS -> anything Twilio has that DB is missing
+      // Twilio inbound (source of truth for SMS), grouped by sender
       let twilioInbound = [];
       let twilioError = null;
       try {
@@ -66,18 +71,32 @@ export default async function handler(req, res) {
           .map((x) => ({ from: x.from, body: x.body, date: x.date_sent }));
       } catch (e) { twilioError = e.message; }
 
-      const dbSmsInbound = new Set((msgs || []).filter((m) => m.channel === 'sms' && m.direction === 'inbound').map((m) => norm(m.body)));
-      const twilioNotInDb = twilioInbound.filter((t) => t.body && !dbSmsInbound.has(norm(t.body)))
-        .map((t) => ({ from: t.from, when: t.date, body: String(t.body).slice(0, 240) }));
+      const byFrom = {};
+      twilioInbound.forEach((t) => { const k = last10(t.from); (byFrom[k] = byFrom[k] || []).push(t); });
+      const smsThreads = Object.keys(byFrom).map((k) => {
+        const arr = byFrom[k].sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+        const lastIn = arr[arr.length - 1];
+        const client = clientByPhone[k];
+        const cmsgs = client ? (msgsByClient[client.id] || []) : [];
+        const lastInMs = Date.parse(lastIn.date);
+        const answered = cmsgs.some((m) => m.direction === 'outbound' && Date.parse(m.created_at) > lastInMs);
+        const inDb = cmsgs.some((m) => m.direction === 'inbound' && norm(m.content) === norm(lastIn.body));
+        return {
+          phone: '+1' + k,
+          client: client ? client.name : '(no client record)',
+          status: client ? client.status : null,
+          inboundCount: arr.length,
+          lastInbound: { when: lastIn.date, body: String(lastIn.body).slice(0, 260) },
+          repliedAfterLastInbound: answered,
+          lastInboundSavedToDb: inDb,
+        };
+      }).sort((a, b) => (a.repliedAfterLastInbound === b.repliedAfterLastInbound ? 0 : a.repliedAfterLastInbound ? 1 : -1));
 
       res.status(200).json({
         counts: { messagesScanned: (msgs || []).length, clients: (clients || []).length, twilioInboundFetched: twilioInbound.length },
-        awaitingReply,
-        twilioInboundNotInDb: twilioNotInDb,
+        smsThreads,
+        awaitingReplyDb,
         twilioError,
-        recentInbound: (msgs || []).filter((m) => m.direction === 'inbound').slice(0, 20).map((m) => ({
-          client: (clientById[m.client_id] || {}).name, channel: m.channel, when: m.created_at, status: m.status, body: String(m.body || '').slice(0, 180),
-        })),
       });
     } catch (e) { res.status(500).json({ error: e.message }); }
     return;
