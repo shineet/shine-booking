@@ -22,16 +22,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  // TEMP: look up a contact's email by name (remove after use)
-  if (req.method === 'GET' && req.query.contactlk === '022389909828f973ecd865b8') {
-    try {
-      const h = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const rows = await (await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?select=name,email,phone,event_type,status&name=ilike.*${encodeURIComponent(req.query.q || 'sherry')}*`, { headers: h })).json();
-      res.status(200).json({ rows });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-    return;
-  }
-
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;
