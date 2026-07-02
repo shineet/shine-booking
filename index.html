@@ -1161,7 +1161,7 @@
         <div class="modal-actions">
             <button class="modal-cancel" onclick="closeModal()">Cancel</button>
             <button class="modal-cancel" id="modal-imessage-btn" onclick="openPricingInMessages()" disabled>Open in Messages (my phone)</button>
-            <button class="modal-cancel" id="modal-manual-btn" onclick="getPricingLinkManually()" disabled>Get link (send manually)</button>
+            <button class="modal-cancel" id="modal-manual-btn" onclick="getPricingLinkManually()" disabled>🔗 Copy link (no email)</button>
             <button class="modal-send" id="modal-send-btn" onclick="sendPricing()" disabled>Send pricing</button>
         </div>
     </div>
@@ -1211,7 +1211,7 @@
             <button class="modal-cancel" onclick="closeContractModal()">Cancel</button>
             <button class="modal-cancel" id="contract-preview-btn" onclick="previewContract()">👁 Preview</button>
             <button class="modal-cancel" id="contract-dl-invoice-btn" style="display:none" onclick="downloadContractInvoice()">⬇️ Invoice PDF</button>
-            <button class="modal-cancel" id="contract-link-btn" onclick="getContractLinkManually()">Get link (send manually)</button>
+            <button class="modal-cancel" id="contract-link-btn" onclick="getContractLinkManually()">🔗 Copy link (no email)</button>
             <button class="modal-send" id="contract-send-btn" onclick="sendContract()">Send contract</button>
         </div>
     </div>
@@ -2123,7 +2123,7 @@ function getPricingLinkManually() {
         openCopyLinkModal(link, clientNameForDisplay);
     })
     .catch(function(e) { alert('Could not save: ' + e.message); })
-    .finally(function() { btn.disabled = false; btn.textContent = 'Get link (send manually)'; });
+    .finally(function() { btn.disabled = false; btn.textContent = '🔗 Copy link (no email)'; });
 }
 
 function openCopyLinkModal(link, clientName) {
@@ -2233,7 +2233,7 @@ function getContractLinkManually() {
     btn.disabled = true; btn.textContent = 'Generating...';
     fetch('/api/send-contract', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee) })
+        body: JSON.stringify({ clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee), sendEmail: false })
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
@@ -2243,7 +2243,7 @@ function getContractLinkManually() {
         openCopyLinkModal(d.contractLink, contractClient.name);
     })
     .catch(function(e) { alert('Error: ' + e.message); })
-    .finally(function() { btn.disabled = false; btn.textContent = 'Get link (send manually)'; });
+    .finally(function() { btn.disabled = false; btn.textContent = '🔗 Copy link (no email)'; });
 }
 
 function sendContract() {

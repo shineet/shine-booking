@@ -31,14 +31,17 @@ module.exports = async function handler(req, res) {
     duration,
     fee,
     invoiceData,     // optional — attach invoice PDF if present
+    sendEmail,       // false = just create the booking + return the link (for manual SMS), don't email
   } = req.body;
 
   // Coerce empty strings to null so Supabase UUID columns don't reject them
   const safeClientId  = clientId  && String(clientId).trim()  ? clientId  : null;
   const safeBookingId = bookingId && String(bookingId).trim() ? bookingId : null;
 
-  if (!clientEmail || !clientName) {
-    return res.status(400).json({ error: 'Missing clientEmail or clientName' });
+  // Email address only required when we're actually emailing; a manual-link
+  // request (sendEmail:false) works for SMS-only clients with no email on file.
+  if (!clientName || (sendEmail !== false && !clientEmail)) {
+    return res.status(400).json({ error: sendEmail === false ? 'Missing clientName' : 'Missing clientEmail or clientName' });
   }
 
   try {
@@ -119,7 +122,10 @@ module.exports = async function handler(req, res) {
     const invoiceNote   = hasInvoice ? `\n\nI've also attached your invoice. A ${dep}% deposit is required to secure the date — payment details are on page 2.` : '';
     const htmlInvNote   = hasInvoice ? `<p>I've also attached your invoice. A <strong>${dep}% deposit</strong> is required to secure the date — payment details are on page 2.</p>` : '';
 
-    // ── 4. Send email ────────────────────────────────────────────────────────
+    // ── 4. Send email (skip when caller only wants the link for a manual send) ──
+    if (sendEmail === false) {
+      return res.status(200).json({ success: true, contractLink, bookingId: resolvedBookingId, emailed: false });
+    }
     const firstName = (clientName || 'there').split(' ')[0];
     await resend.emails.send({
       from:    'Shine, The Mentalist <shine@texasmentalist.com>',
