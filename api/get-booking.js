@@ -22,28 +22,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  // TEMP: check/repair Paget's client status (remove after use)
-  if (req.method === 'GET' && req.query.pagetlk === '22f91a6fcc0fec229b337672') {
-    try {
-      const h = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}`, 'Content-Type': 'application/json' };
-      const rows = await (await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?select=id,name,status,event_date,contact_type,lead_source,booking_id&name=ilike.*paget*`, { headers: h })).json();
-      let gigRows = null;
-      if (Array.isArray(rows) && rows[0]) {
-        gigRows = await (await fetch(`${process.env.SUPABASE_URL}/rest/v1/gigs?select=id,client,fee,tip,date,type,client_id&client_id=eq.${rows[0].id}`, { headers: h })).json();
-      }
-      let fixed = null;
-      if (req.query.setcompleted === '1' && Array.isArray(rows) && rows[0]) {
-        const pr = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${rows[0].id}`, {
-          method: 'PATCH', headers: { ...h, Prefer: 'return=representation' },
-          body: JSON.stringify({ status: 'completed' })
-        });
-        fixed = { patchStatus: pr.status, body: (await pr.text()).slice(0, 200) };
-      }
-      res.status(200).json({ rows, gigRows, fixed });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-    return;
-  }
-
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;
