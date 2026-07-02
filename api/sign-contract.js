@@ -128,7 +128,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   try {
-    const { bookingId, printedName, signatureData } = req.body;
+    const { bookingId, printedName, signatureData, depositPercent } = req.body;
+    const dep = (Number(depositPercent) > 0 && Number(depositPercent) <= 100) ? Math.round(Number(depositPercent)) : 50;
     if (!bookingId || !printedName || !signatureData) {
       res.status(400).json({ error: 'Missing required fields' });
       return;
@@ -206,7 +207,7 @@ export default async function handler(req, res) {
 
     drawHeading('2. COMPENSATION');
     drawParagraph(`The total performance fee shall be $${booking.fee}.`);
-    drawParagraph('A non-refundable deposit of 50% is required to secure the event date. The remaining balance shall be paid no later than the day of the performance prior to the start time.');
+    drawParagraph(`A non-refundable deposit of ${dep}% is required to secure the event date. The remaining balance shall be paid no later than the day of the performance prior to the start time.`);
     drawParagraph('Payment may be made via cash, Zelle (2020shine@gmail.com), Venmo (@Shine-Thankappan), PayPal (shine_e_thankappan@yahoo.com), check payable to Shine Thankappan, or other mutually agreed method.');
 
     drawHeading('3. EVENT DETAILS');

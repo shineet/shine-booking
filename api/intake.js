@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   if (action === 'send') {
     // ── formerly send-intake.js ───────────────────────────────────────────────
     try {
-      const { clientId, clientName, clientEmail, clientPhone, eventType, fee } = req.body;
+      let { clientId, clientName, clientEmail, clientPhone, eventType, fee, channel } = req.body;
       if (!clientName || (!clientEmail && !clientPhone)) {
         return res.status(400).json({ error: 'Missing client name and contact info' });
       }
@@ -75,8 +75,11 @@ export default async function handler(req, res) {
       const firstName = clientName.split(' ')[0];
       const intakeMessage = `Hi ${firstName}! So excited to be part of your event! Please fill out this short questionnaire so I can personalize your show: ${intakeLink} — Shine, The Mentalist`;
 
-      // Send via SMS if phone available, otherwise email
-      if (clientPhone) {
+      // channel: 'sms' | 'email' | 'link' (grab link, send nothing) | undefined (send to all on file)
+      const wantSms   = channel === 'sms'   || (!channel && clientPhone);
+      const wantEmail = channel === 'email' || (!channel && clientEmail);
+
+      if (wantSms && clientPhone) {
         const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
         await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
           method: 'POST',
@@ -85,8 +88,7 @@ export default async function handler(req, res) {
         });
       }
 
-      // Always send email too if we have it
-      if (clientEmail) {
+      if (wantEmail && clientEmail) {
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },

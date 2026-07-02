@@ -32,7 +32,13 @@ module.exports = async function handler(req, res) {
     fee,
     invoiceData,     // optional — attach invoice PDF if present
     sendEmail,       // false = just create the booking + return the link (for manual SMS), don't email
+    channel,         // 'email' (default) or 'sms' — how to send the link through the app
+    clientPhone,     // required when channel === 'sms'
+    depositPercent,  // 25 / 50 / etc. — deposit shown on the contract (default 50)
   } = req.body;
+
+  const dep = (Number(depositPercent) > 0 && Number(depositPercent) <= 100) ? Math.round(Number(depositPercent)) : 50;
+  const normPhone = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length === 10 ? '+1' + d : (d.length === 11 && d[0] === '1' ? '+' + d : (String(p || '').startsWith('+') ? p : '+' + d)); };
 
   // Coerce empty strings to null so Supabase UUID columns don't reject them
   const safeClientId  = clientId  && String(clientId).trim()  ? clientId  : null;
@@ -106,8 +112,31 @@ module.exports = async function handler(req, res) {
     }
 
     // ── 2. Build contract signing URL ────────────────────────────────────────
-    const contractUrl  = `https://shine-booking.vercel.app/contract.html?bid=${resolvedBookingId}`;
+    const contractUrl  = `https://shine-booking.vercel.app/contract.html?bid=${resolvedBookingId}&dep=${dep}`;
     const contractLink = contractUrl; // alias returned to caller
+
+    // Link-only request (grab the link, no send)
+    if (sendEmail === false) {
+      return res.status(200).json({ success: true, contractLink, bookingId: resolvedBookingId, emailed: false });
+    }
+
+    // Send the link by SMS through the app (Twilio)
+    if (channel === 'sms') {
+      if (!clientPhone) return res.status(400).json({ error: 'No phone number on file for SMS.' });
+      const firstName = (clientName || 'there').split(' ')[0];
+      const smsBody = `Hi ${firstName}, here's your performance agreement to review and sign: ${contractUrl} — takes a minute and locks in your date. – Shine`;
+      const twRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
+        method: 'POST',
+        headers: { Authorization: 'Basic ' + Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: normPhone(clientPhone), Body: smsBody }).toString(),
+      });
+      if (!twRes.ok) return res.status(500).json({ error: 'SMS failed: ' + (await twRes.text()).slice(0, 200) });
+      if (safeClientId) {
+        await fetch(`${SB_URL}/rest/v1/messages`, { method: 'POST', headers: SB_HDR, body: JSON.stringify({ client_id: safeClientId, channel: 'sms', direction: 'outbound', content: smsBody, status: 'sent', to_address: normPhone(clientPhone) }) });
+        await fetch(`${SB_URL}/rest/v1/clients?id=eq.${safeClientId}`, { method: 'PATCH', headers: SB_HDR, body: JSON.stringify({ status: 'contract_sent', last_activity: new Date().toISOString() }) });
+      }
+      return res.status(200).json({ success: true, contractLink, bookingId: resolvedBookingId, channel: 'sms' });
+    }
 
     // ── 3. Optional invoice attachment ───────────────────────────────────────
     let attachments = [];
@@ -118,14 +147,10 @@ module.exports = async function handler(req, res) {
     }
 
     const hasInvoice    = attachments.length > 0;
-    const dep           = invoiceData?.depositPercent || 50;
     const invoiceNote   = hasInvoice ? `\n\nI've also attached your invoice. A ${dep}% deposit is required to secure the date — payment details are on page 2.` : '';
     const htmlInvNote   = hasInvoice ? `<p>I've also attached your invoice. A <strong>${dep}% deposit</strong> is required to secure the date — payment details are on page 2.</p>` : '';
 
-    // ── 4. Send email (skip when caller only wants the link for a manual send) ──
-    if (sendEmail === false) {
-      return res.status(200).json({ success: true, contractLink, bookingId: resolvedBookingId, emailed: false });
-    }
+    // ── 4. Send email ────────────────────────────────────────────────────────
     const firstName = (clientName || 'there').split(' ')[0];
     await resend.emails.send({
       from:    'Shine, The Mentalist <shine@texasmentalist.com>',
