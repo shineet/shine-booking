@@ -679,7 +679,7 @@ td { padding: 9px 14px; vertical-align: middle; }
 // ── Config ──────────────────────────────────────────────────────────────────
 const SB_URL = 'https://nkhwttlmtidtippylbzs.supabase.co';
 const SB_KEY = ''; // moved server-side: all Supabase calls now route through /api/get-booking (RLS-protected)
-const TODAY  = new Date().toISOString().split('T')[0];
+const TODAY  = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' }); // Austin local date (YYYY-MM-DD); avoids UTC rolling to tomorrow in the evening
 
 const SB_HEADERS = {
   'apikey': SB_KEY,
@@ -809,10 +809,11 @@ async function loadAll() {
     ]);
 
     allGigs  = Array.isArray(gigs) ? gigs : [];
-    // Upcoming = confirmed clients with future event date, not yet marked completed
+    // Active = confirmed clients not yet marked completed. Past-dated ones stay
+    // here (labelled "MARK DONE") so a finished show can still be archived — it
+    // must not vanish before you hit Mark as Done.
     upcoming = (Array.isArray(clients) ? clients : []).filter(c => {
       if (!c.event_date) return false;
-      if (c.event_date < TODAY) return false;
       if (c.status === 'completed') return false;
       return true;
     });
@@ -876,7 +877,7 @@ function renderUpcoming() {
   grid.innerHTML = sorted.map((c, _cardIdx) => {
     const days  = daysUntil(c.event_date);
     const cls   = urgencyClass(days);
-    const label = days === 0 ? 'TODAY' : days === 1 ? 'TOMORROW' : `IN ${days} DAYS`;
+    const label = days < 0 ? '⚑ MARK DONE' : days === 0 ? 'TODAY' : days === 1 ? 'TOMORROW' : `IN ${days} DAYS`;
     const fee   = c.selected_price ? `$${Number(c.selected_price).toLocaleString()}` : 'Fee TBD';
     const meta  = [fmtDate(c.event_date), c.event_type, c.venue].filter(Boolean).join(' · ');
     const booking = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings;
