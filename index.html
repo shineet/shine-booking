@@ -1209,6 +1209,7 @@
 
         <div class="modal-actions">
             <button class="modal-cancel" onclick="closeContractModal()">Cancel</button>
+            <button class="modal-cancel" id="contract-preview-btn" onclick="previewContract()">👁 Preview</button>
             <button class="modal-cancel" id="contract-dl-invoice-btn" style="display:none" onclick="downloadContractInvoice()">⬇️ Invoice PDF</button>
             <button class="modal-cancel" id="contract-link-btn" onclick="getContractLinkManually()">Get link (send manually)</button>
             <button class="modal-send" id="contract-send-btn" onclick="sendContract()">Send contract</button>
@@ -2208,6 +2209,16 @@ function openContractModal(id, name, email, bookingId, phone) {
 }
 
 function closeContractModal() { document.getElementById('contract-modal').classList.remove('show'); contractClient = {}; }
+
+// Open the actual signing page the client receives, read-only. No email, no status
+// change. Shows the last-saved booking details for this client.
+function previewContract() {
+    if (!contractClient || !contractClient.bookingId) {
+        alert('No contract exists yet for this client. Send it once (or Get link) to generate it, then Preview.');
+        return;
+    }
+    window.open('/contract.html?bid=' + encodeURIComponent(contractClient.bookingId), '_blank');
+}
 
 function getContractLinkManually() {
     var title         = document.getElementById('ct-title').value.trim();

@@ -206,8 +206,8 @@ export default async function handler(req, res) {
 
     drawHeading('2. COMPENSATION');
     drawParagraph(`The total performance fee shall be $${booking.fee}.`);
-    drawParagraph('A non-refundable deposit of 25% is required to secure the event date. The remaining balance shall be paid no later than the day of the performance prior to the start time.');
-    drawParagraph('Payment may be made via cash, Zelle (2020shine@gmail.com), Venmo (@Shine-Thankappan), PayPal (shine_e_thankappan@yahoo.com), or other mutually agreed method.');
+    drawParagraph('A non-refundable deposit of 50% is required to secure the event date. The remaining balance shall be paid no later than the day of the performance prior to the start time.');
+    drawParagraph('Payment may be made via cash, Zelle (2020shine@gmail.com), Venmo (@Shine-Thankappan), PayPal (shine_e_thankappan@yahoo.com), check payable to Shine Thankappan, or other mutually agreed method.');
 
     drawHeading('3. EVENT DETAILS');
     drawParagraph('Client agrees to provide adequate and safe performance space, suitable lighting, access to electrical power if required, reasonable audience control, and a safe environment.');
