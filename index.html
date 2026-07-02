@@ -316,6 +316,7 @@
     .badge-contract_sent  { background: rgba(91,138,245,.15); color: var(--accent2) }
     .badge-contract_signed { background: rgba(76,175,135,.15); color: var(--green) }
     .badge-negotiating    { background: rgba(240,165,0,.2); color: #ffcc44 }
+    .badge-completed      { background: rgba(76,175,135,.18); color: #7fb8a4 }
     .badge-lost           { background: rgba(58,63,88,.4); color: var(--muted) }
 
     .list-empty {
@@ -396,6 +397,17 @@
     .section-divider.confirmed span {
         background: rgba(76,175,135,.2);
         color: #5ec49a
+    }
+
+    .section-divider.completed {
+        background: rgba(90,160,140,.06);
+        color: #7fb8a4;
+        border-left-color: #4e9c81;
+        border-bottom: 1px solid rgba(76,175,135,.12)
+    }
+    .section-divider.completed span {
+        background: rgba(76,175,135,.16);
+        color: #7fb8a4
     }
 
     .section-divider.lost {
@@ -933,6 +945,7 @@
                     <button class="filter-pill" data-filter="pricing_requested,pricing_sent" onclick="setFilter('pricing_requested,pricing_sent')">Pricing</button>
                     <button class="filter-pill" data-filter="package_selected,booked,intake_sent,intake_completed" onclick="setFilter('package_selected,booked,intake_sent,intake_completed')">Booked</button>
                     <button class="filter-pill" data-filter="contract_sent,contract_signed" onclick="setFilter('contract_sent,contract_signed')">Contract</button>
+                    <button class="filter-pill" data-filter="completed" onclick="setFilter('completed')">✓ Done</button>
                     <button class="filter-pill" data-filter="lost" onclick="setFilter('lost')">Lost</button>
                     <button class="filter-pill" data-filter="noreply" onclick="setFilter('noreply')">⏰ No reply</button>
                 </div>
@@ -1420,7 +1433,7 @@ var STATUS_LABELS = {
     package_selected: 'Package selected', booked: 'Booked',
     intake_sent: 'Intake sent', intake_completed: 'Ready for contract',
     contract_sent: 'Contract sent', contract_signed: 'Contract signed',
-    lost: 'Lost'
+    completed: 'Completed', lost: 'Lost'
 };
 
 var CONFIRMED_STATUSES = ['booked','intake_sent','intake_completed','contract_sent','contract_signed'];
@@ -1597,12 +1610,17 @@ function renderList() {
         return (a.event_date||'9999') < (b.event_date||'9999') ? -1 : 1;
     });
 
+    var completed = filtered.filter(function(c) { return c.status === 'completed'; }).sort(function(a,b) {
+        return (a.event_date||'0') < (b.event_date||'0') ? 1 : -1;
+    });
+
     var lost = filtered.filter(function(c) { return c.status === 'lost'; });
 
     var html = '';
     if (needsAttention.length) html += '<div class="section-divider attention">Needs Attention <span>' + needsAttention.length + '</span></div>' + needsAttention.map(makeLeadRow).join('');
     if (active.length)         html += '<div class="section-divider active">Active <span>' + active.length + '</span></div>' + active.map(makeLeadRow).join('');
     if (confirmed.length)      html += '<div class="section-divider confirmed">Confirmed <span>' + confirmed.length + '</span></div>' + confirmed.map(makeLeadRow).join('');
+    if (completed.length)      html += '<div class="section-divider completed">Completed <span>' + completed.length + '</span></div>' + completed.map(makeLeadRow).join('');
     if (lost.length)           html += '<div class="section-divider lost">Lost <span>' + lost.length + '</span></div>' + lost.map(makeLeadRow).join('');
     if (!html) html = '<div class="list-empty">No leads here</div>';
 
