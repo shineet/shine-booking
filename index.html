@@ -981,11 +981,12 @@
                     <option value="TheBash">TheBash</option>
                     <option value="Website">Website</option>
                     <option value="Referral">Referral</option>
+                    <option value="Event Planner">Event planner / DMC</option>
                     <option value="Other">Other</option>
                 </select>
             </div>
             <div class="field" id="other-source-field" style="display:none">
-                <label>Source name</label>
+                <label id="other-source-label">Source name</label>
                 <input type="text" id="other_source_name" placeholder="e.g. Instagram, friend...">
             </div>
         </div>
@@ -1236,14 +1237,19 @@
             <div class="field"><label>Venue</label><input type="text" id="edit-venue"></div>
             <div class="field">
                 <label>Lead source</label>
-                <select id="edit-lead_source">
+                <select id="edit-lead_source" onchange="toggleEditOtherSource()">
                     <option value="Bark">Bark</option>
                     <option value="GigSalad">GigSalad</option>
                     <option value="TheBash">TheBash</option>
                     <option value="Website">Website</option>
                     <option value="Referral">Referral</option>
+                    <option value="Event Planner">Event planner / DMC</option>
                     <option value="Other">Other</option>
                 </select>
+            </div>
+            <div class="field" id="edit-other-source-field" style="display:none">
+                <label id="edit-other-source-label">Planner / agency name</label>
+                <input type="text" id="edit_other_source_name" placeholder="e.g. Fifth Street DMC">
             </div>
             <div class="field">
                 <label>Status</label>
@@ -1763,15 +1769,7 @@ function messageClientFromDetail(id) {
     document.getElementById('phone').value = c.phone || '';
     document.getElementById('email').value = c.email || '';
     if (c.lead_source) {
-        var srcSelect = document.getElementById('lead_source');
-        var matched = Array.prototype.find.call(srcSelect.options, function(o) { return o.value === c.lead_source; });
-        if (matched) {
-            srcSelect.value = c.lead_source;
-        } else {
-            srcSelect.value = 'Other';
-            document.getElementById('other-source-field').style.display = 'block';
-            document.getElementById('other_source_name').value = c.lead_source;
-        }
+        applySourceToControls(c.lead_source, 'lead_source', 'other_source_name', toggleOtherSource);
     }
     if (c.event_type) document.getElementById('event_type').value = c.event_type;
     if (c.event_date) document.getElementById('date').value = c.event_date;
@@ -2262,7 +2260,7 @@ function openEditModal(id) {
         document.getElementById('edit-event_date').value = c.event_date||'';
         document.getElementById('edit-guests').value = c.guests||'';
         document.getElementById('edit-venue').value = c.venue||'';
-        document.getElementById('edit-lead_source').value = c.lead_source||'Bark';
+        applySourceToControls(c.lead_source, 'edit-lead_source', 'edit_other_source_name', toggleEditOtherSource);
         document.getElementById('edit-status').value = c.status||'new';
         document.getElementById('edit-notes').value = c.notes||'';
         document.getElementById('edit-modal-form').style.display = 'block';
@@ -2289,7 +2287,7 @@ function saveEditedClient() {
             event_date: document.getElementById('edit-event_date').value||null,
             guests: document.getElementById('edit-guests').value.trim()||null,
             venue: document.getElementById('edit-venue').value.trim()||null,
-            lead_source: document.getElementById('edit-lead_source').value||null,
+            lead_source: composeSource('edit-lead_source', 'edit_other_source_name'),
             status: document.getElementById('edit-status').value||'new',
             notes: document.getElementById('edit-notes').value.trim()||null,
             last_activity: new Date().toISOString()
@@ -2334,8 +2332,48 @@ function formatDate(d) {
 }
 
 function toggleOtherSource() {
-    document.getElementById('other-source-field').style.display =
-        document.getElementById('lead_source').value === 'Other' ? 'block' : 'none';
+    var v = document.getElementById('lead_source').value;
+    var show = (v === 'Other' || v === 'Event Planner');
+    document.getElementById('other-source-field').style.display = show ? 'block' : 'none';
+    var lbl = document.getElementById('other-source-label');
+    var inp = document.getElementById('other_source_name');
+    if (v === 'Event Planner') { lbl.textContent = 'Planner / agency name'; inp.placeholder = 'e.g. Fifth Street DMC'; }
+    else { lbl.textContent = 'Source name'; inp.placeholder = 'e.g. Instagram, friend...'; }
+}
+function toggleEditOtherSource() {
+    var v = document.getElementById('edit-lead_source').value;
+    var show = (v === 'Other' || v === 'Event Planner');
+    document.getElementById('edit-other-source-field').style.display = show ? 'block' : 'none';
+    var lbl = document.getElementById('edit-other-source-label');
+    var inp = document.getElementById('edit_other_source_name');
+    if (v === 'Event Planner') { lbl.textContent = 'Planner / agency name'; inp.placeholder = 'e.g. Fifth Street DMC'; }
+    else { lbl.textContent = 'Source name'; inp.placeholder = 'e.g. Instagram, friend...'; }
+}
+// Combine a source select + its name box into the stored lead_source value.
+// Planner sources are stored as "<Agency> (Event Planner)" so the source label
+// names the planner and the Gigs-by-Source chart tracks each planner's revenue.
+function composeSource(selectId, nameId) {
+    var v = document.getElementById(selectId).value;
+    if (v === 'Other') { var o = document.getElementById(nameId).value.trim(); return o || 'Other'; }
+    if (v === 'Event Planner') { var p = document.getElementById(nameId).value.trim(); return p ? (p + ' (Event Planner)') : 'Event Planner'; }
+    return v || null;
+}
+// Reverse: set a source select + name box from a stored lead_source string.
+function applySourceToControls(ls, selectId, nameId, toggleFn) {
+    var sel = document.getElementById(selectId);
+    var nameEl = document.getElementById(nameId);
+    var known = ['Bark','GigSalad','TheBash','Website','Referral','Other','Event Planner'];
+    ls = ls || '';
+    if (ls === 'Event Planner' || / \(Event Planner\)$/.test(ls)) {
+        sel.value = 'Event Planner';
+        if (nameEl) nameEl.value = (ls === 'Event Planner') ? '' : ls.replace(/ \(Event Planner\)$/, '');
+    } else if (!ls || known.indexOf(ls) !== -1) {
+        sel.value = ls || 'Bark';
+    } else {
+        sel.value = 'Other';
+        if (nameEl) nameEl.value = ls;
+    }
+    if (toggleFn) toggleFn();
 }
 
 function fileToBase64(file) {
@@ -2391,8 +2429,7 @@ function handleScreenshotUpload(fileList) {
 }
 
 function getFormData() {
-    var src = document.getElementById('lead_source').value;
-    if (src === 'Other') { var o = document.getElementById('other_source_name').value.trim(); if (o) src = o; }
+    var src = composeSource('lead_source', 'other_source_name');
     return {
         name: document.getElementById('name').value.trim(),
         phone: document.getElementById('phone').value.trim(),
