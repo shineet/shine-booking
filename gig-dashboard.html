@@ -905,7 +905,7 @@ function renderUpcoming() {
           <div style="display:flex;align-items:center;gap:8px">
             <div class="card-source">${esc(c.lead_source || '')}</div>
             <button data-invoice-idx="${_cardIdx}" onclick="event.stopPropagation();openInvoiceFromCard(this)" style="background:#B8960C;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">Invoice</button>
-            <button onclick="event.stopPropagation();openRepertoire('${c.id}','${esc(c.event_type||'')}','${c.event_date||''}','${esc(c.name||'')}','${esc(evTitle||'')}')" style="background:#4f46e5;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">🎩 Routine</button>
+            <button onclick="event.stopPropagation();openRepertoire('${jsArg(c.id)}','${jsArg(c.event_type||'')}','${jsArg(c.event_date||'')}','${jsArg(c.name||'')}','${jsArg(evTitle||'')}')" style="background:#4f46e5;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">🎩 Routine</button>
           </div>
         </div>
       </div>`;
@@ -1648,6 +1648,11 @@ function srcClass(s) {
 
 function esc(s) {
   return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+// Safe for a value passed as a JS single-quoted string arg inside a double-quoted onclick="".
+// Escapes for JS first (backslash, quote), then for the HTML attribute (& " <).
+function jsArg(s) {
+  return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 }
 
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
