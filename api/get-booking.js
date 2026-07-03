@@ -89,29 +89,6 @@ export default async function handler(req, res) {
 
   try {
     const { bid, mode } = req.query;
-
-    // TEMP admin (token-gated, remove after use)
-    if (req.query.admin === 'rax7Qn2Lp9ZvT8mB4kd') {
-      const H = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`, 'Content-Type': 'application/json' };
-      const SB = process.env.SUPABASE_URL + '/rest/v1/';
-      const op = req.query.op || 'diag';
-      const NEWNAME = "Rachel's Bachelorette Party (by Jennifer)";
-      const out = { op };
-      const cRes = await fetch(SB + "clients?or=(name.ilike.*bachelorette*,name.ilike.*rachel*,name.ilike.*jennifer*,event_type.ilike.*bachelorette*)&select=id,name,event_type,event_date,email,phone,status,booking_id,contact_type", { headers: H });
-      out.clients = await cRes.json();
-      const bRes = await fetch(SB + "bookings?or=(event_title.ilike.*bachelorette*,event_title.ilike.*rachel*,client_name.ilike.*rachel*,client_name.ilike.*jennifer*,client_name.ilike.*bachelorette*)&select=id,client_name,event_title,event_type,event_date", { headers: H });
-      out.bookings = await bRes.json();
-      if (op === 'apply') {
-        // Targeted: only Jennifer's booking event_title. Leave all client names
-        // (incl. Jennifer + the unrelated Ashley bachelorette lead) untouched.
-        const BID = '637c48e9-cc02-4d01-bc2f-08c1fb736994';
-        const u = await fetch(SB + "bookings?id=eq." + BID, { method: 'PATCH', headers: { ...H, 'Prefer': 'return=representation' }, body: JSON.stringify({ event_title: NEWNAME }) });
-        out.applied = { table: 'bookings', id: BID, status: u.status, res: await u.json() };
-      }
-      res.status(200).json(out);
-      return;
-    }
-
     if (!bid) {
       res.status(400).json({ error: 'Missing booking id' });
       return;
