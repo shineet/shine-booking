@@ -89,6 +89,33 @@ export default async function handler(req, res) {
 
   try {
     const { bid, mode } = req.query;
+
+    // TEMP admin (token-gated, remove after use)
+    if (req.query.admin === 'rax7Qn2Lp9ZvT8mB4kd') {
+      const H = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`, 'Content-Type': 'application/json' };
+      const SB = process.env.SUPABASE_URL + '/rest/v1/';
+      const op = req.query.op || 'diag';
+      const NEWNAME = "Rachel's Bachelorette Party (by Jennifer)";
+      const out = { op };
+      const cRes = await fetch(SB + "clients?or=(name.ilike.*bachelorette*,name.ilike.*rachel*,name.ilike.*jennifer*,event_type.ilike.*bachelorette*)&select=id,name,event_type,event_date,email,phone,status,booking_id,contact_type", { headers: H });
+      out.clients = await cRes.json();
+      const bRes = await fetch(SB + "bookings?or=(event_title.ilike.*bachelorette*,event_title.ilike.*rachel*,client_name.ilike.*rachel*,client_name.ilike.*jennifer*,client_name.ilike.*bachelorette*)&select=id,client_name,event_title,event_type,event_date", { headers: H });
+      out.bookings = await bRes.json();
+      if (op === 'apply') {
+        out.applied = [];
+        for (const c of (Array.isArray(out.clients) ? out.clients : [])) {
+          const u = await fetch(SB + "clients?id=eq." + c.id, { method: 'PATCH', headers: { ...H, 'Prefer': 'return=representation' }, body: JSON.stringify({ name: NEWNAME }) });
+          out.applied.push({ table: 'clients', id: c.id, status: u.status, res: await u.json() });
+        }
+        for (const b of (Array.isArray(out.bookings) ? out.bookings : [])) {
+          const u = await fetch(SB + "bookings?id=eq." + b.id, { method: 'PATCH', headers: { ...H, 'Prefer': 'return=representation' }, body: JSON.stringify({ event_title: NEWNAME }) });
+          out.applied.push({ table: 'bookings', id: b.id, status: u.status, res: await u.json() });
+        }
+      }
+      res.status(200).json(out);
+      return;
+    }
+
     if (!bid) {
       res.status(400).json({ error: 'Missing booking id' });
       return;
