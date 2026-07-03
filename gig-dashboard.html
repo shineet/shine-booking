@@ -887,10 +887,17 @@ function renderUpcoming() {
     const booking = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings;
     const intakeDone = booking && booking.intake_status === 'completed';
     const intakeBadge = !intakeDone ? '<div class="intake-pending-badge">⏳ Awaiting questionnaire</div>' : '';
+    // Display-only: compose "Event (by Client)" from the separate stored fields.
+    // Reads event_title + client name; never overwrites either in the DB.
+    const evTitle   = (booking?.event_title || '').trim();
+    const cliName   = (c.name || '').trim();
+    const cardTitle = evTitle
+      ? (cliName ? `${evTitle} (by ${cliName})` : evTitle)
+      : cliName;
     return `
       <div class="upcoming-card ${cls}" onclick="openDetail('${c.id}')">
         <div class="card-days">${label}</div>
-        <div class="card-client">${esc(booking?.event_title || c.name)}</div>
+        <div class="card-client">${esc(cardTitle)}</div>
         <div class="card-meta">${esc(meta)}</div>
         ${intakeBadge}
         <div class="card-footer">
