@@ -89,17 +89,6 @@ export default async function handler(req, res) {
 
   try {
     const { bid, mode } = req.query;
-
-    // TEMP admin (token-gated, remove after use): fix the event_title typo on ONE booking.
-    if (req.query.admin === 'rax7Qn2Lp9ZvT8mB4kd') {
-      const H = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
-      const SB = process.env.SUPABASE_URL + '/rest/v1/';
-      const BID = '637c48e9-cc02-4d01-bc2f-08c1fb736994';
-      const u = await fetch(SB + "bookings?id=eq." + BID + "&select=id,client_name,event_title", { method: 'PATCH', headers: H, body: JSON.stringify({ event_title: "Rachel's Bachelorette Party" }) });
-      res.status(200).json({ status: u.status, res: await u.json() });
-      return;
-    }
-
     if (!bid) {
       res.status(400).json({ error: 'Missing booking id' });
       return;
