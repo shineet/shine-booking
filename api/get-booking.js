@@ -102,15 +102,11 @@ export default async function handler(req, res) {
       const bRes = await fetch(SB + "bookings?or=(event_title.ilike.*bachelorette*,event_title.ilike.*rachel*,client_name.ilike.*rachel*,client_name.ilike.*jennifer*,client_name.ilike.*bachelorette*)&select=id,client_name,event_title,event_type,event_date", { headers: H });
       out.bookings = await bRes.json();
       if (op === 'apply') {
-        out.applied = [];
-        for (const c of (Array.isArray(out.clients) ? out.clients : [])) {
-          const u = await fetch(SB + "clients?id=eq." + c.id, { method: 'PATCH', headers: { ...H, 'Prefer': 'return=representation' }, body: JSON.stringify({ name: NEWNAME }) });
-          out.applied.push({ table: 'clients', id: c.id, status: u.status, res: await u.json() });
-        }
-        for (const b of (Array.isArray(out.bookings) ? out.bookings : [])) {
-          const u = await fetch(SB + "bookings?id=eq." + b.id, { method: 'PATCH', headers: { ...H, 'Prefer': 'return=representation' }, body: JSON.stringify({ event_title: NEWNAME }) });
-          out.applied.push({ table: 'bookings', id: b.id, status: u.status, res: await u.json() });
-        }
+        // Targeted: only Jennifer's booking event_title. Leave all client names
+        // (incl. Jennifer + the unrelated Ashley bachelorette lead) untouched.
+        const BID = '637c48e9-cc02-4d01-bc2f-08c1fb736994';
+        const u = await fetch(SB + "bookings?id=eq." + BID, { method: 'PATCH', headers: { ...H, 'Prefer': 'return=representation' }, body: JSON.stringify({ event_title: NEWNAME }) });
+        out.applied = { table: 'bookings', id: BID, status: u.status, res: await u.json() };
       }
       res.status(200).json(out);
       return;
