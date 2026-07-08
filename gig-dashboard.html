@@ -833,21 +833,47 @@ async function loadAll() {
   setSyncState('syncing', 'Loading...');
   document.getElementById('refresh-btn').disabled = true;
   try {
-    const confirmedStatuses = 'booked,confirmed,contract_signed,paid';
-    const [gigs, clients] = await Promise.all([
+    const [gigs, bookings, contacts] = await Promise.all([
       sbGet('gigs?select=*&order=date.desc.nullslast'),
-      sbGet(`clients?or=(booking_id.not.is.null,status.in.(${confirmedStatuses}))&select=*,bookings(*)`),
+      sbGet('bookings?select=*'),
+      sbGet('clients?select=*'),
     ]);
 
-    allGigs  = Array.isArray(gigs) ? gigs : [];
-    // Active = confirmed clients not yet marked completed. Past-dated ones stay
-    // here (labelled "MARK DONE") so a finished show can still be archived — it
-    // must not vanish before you hit Mark as Done.
-    upcoming = (Array.isArray(clients) ? clients : []).filter(c => {
-      if (!c.event_date) return false;
-      if (c.status === 'completed') return false;
-      return true;
-    });
+    allGigs = Array.isArray(gigs) ? gigs : [];
+
+    // A GIG is a bookings row, linked to a CONTACT (clients) by client_id.
+    // The Upcoming list is driven by the GIG's own status, never the contact's chat
+    // status — so a completed gig can't resurface just because the contact (e.g. a
+    // planner) messages again. Past-dated active gigs stay here (labelled "MARK DONE").
+    const contactById = {};
+    (Array.isArray(contacts) ? contacts : []).forEach(ct => { contactById[ct.id] = ct; });
+    const DONE_STATUSES = ['completed', 'lost', 'cancelled'];
+    upcoming = (Array.isArray(bookings) ? bookings : [])
+      .filter(b => b.event_date && !DONE_STATUSES.includes(String(b.status || '').toLowerCase()))
+      .map(b => {
+        const ct = contactById[b.client_id] || {};
+        return {
+          id:                  ct.id || b.client_id,      // CONTACT id (detail / routine / conversation)
+          booking_id:          b.id,                       // GIG id
+          name:                ct.name || b.client_name || '',
+          company:             ct.company || null,
+          contact_type:        ct.contact_type || null,
+          phone:               ct.phone || null,
+          email:               ct.email || b.client_email || null,
+          lead_source:         ct.lead_source || null,
+          notes:               ct.notes || null,
+          other_entertainment: ct.other_entertainment || null,
+          selected_category:   ct.selected_category || null,
+          selected_package:    ct.selected_package || null,
+          event_type:          b.event_type || '',
+          event_date:          b.event_date,
+          venue:               b.venue_address || null,
+          guests:              (b.intake_answers && (b.intake_answers.q_guests || b.intake_answers.q_attendees)) || null,
+          selected_price:      b.fee,
+          status:              b.status,
+          bookings:            [b],   // keep the join shape the rest of the UI expects
+        };
+      });
 
     renderUpcoming();
     populateFilters();
@@ -914,17 +940,23 @@ function renderUpcoming() {
     const booking = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings;
     const intakeDone = booking && booking.intake_status === 'completed';
     const intakeBadge = !intakeDone ? '<div class="intake-pending-badge">⏳ Awaiting questionnaire</div>' : '';
-    // Display-only: compose "Event (by Client)" from the separate stored fields.
-    // Reads event_title + client name; never overwrites either in the DB.
+    // Title = the gig (event title); byline = who booked it (company · contact, planner tagged).
+    // When there is no event title, the title falls back to the contact's name and the
+    // byline is omitted to avoid repeating it.
     const evTitle   = (booking?.event_title || '').trim();
     const cliName   = (c.name || '').trim();
-    const cardTitle = evTitle
-      ? (cliName ? `${evTitle} (by ${cliName})` : evTitle)
-      : cliName;
+    const cardTitle = evTitle || cliName;
+    let who = '';
+    if (evTitle) {
+      who = c.company ? `${c.company}${cliName ? ' · ' + cliName : ''}` : cliName;
+      if (c.contact_type === 'planner' && who) who += ' (planner)';
+    }
+    const whoLine = who ? `<div class="card-meta" style="color:var(--accent)">${esc(who)}</div>` : '';
     return `
-      <div class="upcoming-card ${cls}" onclick="openDetail('${c.id}')">
+      <div class="upcoming-card ${cls}" onclick="openDetail('${c.booking_id}')">
         <div class="card-days">${label}</div>
         <div class="card-client">${esc(cardTitle)}</div>
+        ${whoLine}
         <div class="card-meta">${esc(meta)}</div>
         ${intakeBadge}
         <div class="card-footer">
@@ -960,8 +992,9 @@ const INTAKE_LABELS = {
   q_photo_honoree: 'Photo of Honouree',
 };
 
-function openDetail(clientId) {
-  const c = upcoming.find(x => x.id === clientId);
+function openDetail(bookingId) {
+  // Key on the GIG (booking) so a contact with multiple gigs opens the right one.
+  const c = upcoming.find(x => x.booking_id === bookingId) || upcoming.find(x => x.id === bookingId);
   if (!c) return;
   activeClient = c;
 
@@ -1059,7 +1092,7 @@ function openDetail(clientId) {
   `;
 
   openModal('detail-modal');
-  loadConversation(clientId);
+  loadConversation(c.id);
 }
 
 // ── Calendar / Contact downloads (dashboard backup for the auto email on sign) ─
@@ -1239,20 +1272,26 @@ async function confirmDone() {
 
   try {
     setSyncState('syncing', 'Saving...');
-    // Insert into gigs table
-    await sbPost('gigs', {
-      client:    c.name,
-      fee,
-      tip,
-      date:      c.event_date,
-      time:      '',
-      source:    c.lead_source || '',
-      duration:  '',
-      type:      type.trim(),
-      client_id: c.id,
-    });
-    // Mark client as completed
-    await sbPatch('clients', c.id, { status: 'completed' });
+    // Archive to the gigs history table — but only if this gig is not already logged,
+    // so re-completing a gig never creates a duplicate/double-counted history row.
+    const alreadyLogged = Array.isArray(allGigs) &&
+      allGigs.some(g => g.client_id && g.client_id === c.id && g.date === c.event_date);
+    if (!alreadyLogged) {
+      await sbPost('gigs', {
+        client:    c.name,
+        fee,
+        tip,
+        date:      c.event_date,
+        time:      '',
+        source:    c.lead_source || '',
+        duration:  '',
+        type:      type.trim(),
+        client_id: c.id,
+      });
+    }
+    // Mark the GIG (booking) completed. The CONTACT is left untouched, so a planner
+    // stays active for future gigs and inbound replies can never reopen this one.
+    if (c.booking_id) await sbPatch('bookings', c.booking_id, { status: 'completed' });
 
     closeModal('done-modal');
     activeClient = null;
