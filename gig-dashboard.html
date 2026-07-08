@@ -445,6 +445,7 @@ td { padding: 9px 14px; vertical-align: middle; }
       <span id="sync-label">Connecting...</span>
     </div>
     <a class="topbar-link" href="https://shine-booking.vercel.app/index.html" target="_blank" rel="noopener">Booking App &#8599;</a>
+    <button class="secondary" onclick="openPlanners()">Planners</button>
     <button class="secondary" onclick="openAISettings()">AI Settings</button>
     <button class="secondary" id="refresh-btn" onclick="loadAll()">Refresh</button>
     <button class="secondary" onclick="exportCSV()">Export CSV</button>
@@ -588,6 +589,38 @@ td { padding: 9px 14px; vertical-align: middle; }
     <div class="modal-actions">
       <button class="secondary" onclick="closeModal('ai-settings-modal')">Cancel</button>
       <button class="success" id="ai-save-btn" onclick="saveAISettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Planners Modal -->
+<div class="modal-overlay" id="planners-modal">
+  <div class="modal wide" style="max-width:720px;width:100%">
+    <h2>Planners &amp; Companies</h2>
+    <p style="margin:0 0 14px;font-size:13px;color:var(--muted);line-height:1.5">
+      Every planner contact and the gigs booked through them. A planner stays here across all their events. Use <b>+ New gig</b> to attach a fresh event to an existing planner.
+    </p>
+    <div id="planners-list" style="display:flex;flex-direction:column;gap:14px;max-height:60vh;overflow:auto"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('planners-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Gig (for an existing planner) Modal -->
+<div class="modal-overlay" id="new-gig-modal">
+  <div class="modal" style="max-width:460px;width:100%">
+    <h2>New Gig</h2>
+    <div id="new-gig-planner" style="font-size:13px;color:var(--accent);margin-bottom:12px"></div>
+    <div class="form-group"><label>Gig / event title *</label><input id="ng-title" placeholder="e.g. Acme Holiday Party"></div>
+    <div class="form-group"><label>Event type</label><input id="ng-type" placeholder="e.g. Corporate event"></div>
+    <div class="form-group"><label>Date</label><input id="ng-date" type="date"></div>
+    <div class="form-group"><label>Fee ($)</label><input id="ng-fee" type="number" placeholder="3500"></div>
+    <div class="form-group"><label>Venue</label><input id="ng-venue" placeholder="Venue / address"></div>
+    <div id="ng-msg" style="font-size:12px;min-height:16px;color:var(--muted)"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('new-gig-modal')">Cancel</button>
+      <button class="success" id="ng-save" onclick="saveNewGig()">Create Gig</button>
     </div>
   </div>
 </div>
@@ -794,6 +827,8 @@ function bootDashboard() { loadAll(); }
 
 // ── State ────────────────────────────────────────────────────────────────────
 let allGigs     = [];   // from gigs table
+let allContacts = [];   // from clients table (people/planners)
+let allBookings = [];   // from bookings table (gigs/events)
 let upcoming    = [];   // confirmed clients with future date
 let filtered    = [];
 let sortKey     = 'date';
@@ -839,7 +874,9 @@ async function loadAll() {
       sbGet('clients?select=*'),
     ]);
 
-    allGigs = Array.isArray(gigs) ? gigs : [];
+    allGigs     = Array.isArray(gigs) ? gigs : [];
+    allContacts = Array.isArray(contacts) ? contacts : [];
+    allBookings = Array.isArray(bookings) ? bookings : [];
 
     // A GIG is a bookings row, linked to a CONTACT (clients) by client_id.
     // The Upcoming list is driven by the GIG's own status, never the contact's chat
@@ -1723,6 +1760,106 @@ function jsArg(s) {
 
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── Planners view ─────────────────────────────────────────────────────────────
+function openPlanners() {
+  const wrap = document.getElementById('planners-list');
+  const planners = (allContacts || []).filter(c => c.contact_type === 'planner');
+  const gigsByContact = {};
+  (allBookings || []).forEach(b => { if (b.client_id) (gigsByContact[b.client_id] = gigsByContact[b.client_id] || []).push(b); });
+  planners.sort((a, b) => (gigsByContact[b.id]?.length || 0) - (gigsByContact[a.id]?.length || 0) || (a.name || '').localeCompare(b.name || ''));
+
+  if (!planners.length) {
+    wrap.innerHTML = '<div style="color:var(--muted);font-size:13px">No planners yet. Contacts tagged as planners appear here.</div>';
+    openModal('planners-modal');
+    return;
+  }
+
+  wrap.innerHTML = planners.map(p => {
+    const gigs  = (gigsByContact[p.id] || []).slice().sort((a, b) => (a.event_date || '').localeCompare(b.event_date || ''));
+    const total = gigs.reduce((s, g) => s + (Number(g.fee) || 0), 0);
+    const contactLine = [p.email, p.phone].filter(Boolean).join(' · ');
+    const gigRows = gigs.length
+      ? gigs.map(g => {
+          const title   = g.event_title || g.client_name || g.event_type || 'Untitled gig';
+          const st      = g.status || 'booked';
+          const stColor = st === 'completed' ? 'var(--muted)' : 'var(--accent)';
+          const fee     = g.fee ? '$' + Number(g.fee).toLocaleString() : '';
+          return `<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid rgba(255,255,255,.06);font-size:13px">
+                    <span>${esc(title)}</span>
+                    <span style="white-space:nowrap;color:var(--muted)">${esc(fmtDate(g.event_date) || '')} · <span style="color:${stColor}">${esc(st)}</span>${fee ? ' · ' + fee : ''}</span>
+                  </div>`;
+        }).join('')
+      : '<div style="color:var(--muted);font-size:12px;padding:6px 0">No gigs booked yet (active lead).</div>';
+    return `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--text)">${esc(p.company || p.name || 'Unknown')}</div>
+            ${p.company && p.name ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(p.name)}</div>` : ''}
+            ${contactLine ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(contactLine)}</div>` : ''}
+          </div>
+          <div style="text-align:right;white-space:nowrap">
+            <div style="font-size:12px;color:var(--muted)">${gigs.length} gig${gigs.length === 1 ? '' : 's'}${total ? ' · $' + total.toLocaleString() : ''}</div>
+            <button onclick="openNewGig('${jsArg(p.id)}')" style="margin-top:6px;background:var(--accent);color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">+ New gig</button>
+          </div>
+        </div>
+        <div style="margin-top:8px">${gigRows}</div>
+      </div>`;
+  }).join('');
+  openModal('planners-modal');
+}
+
+// Attach a brand-new gig (booking) to an existing planner contact.
+let newGigPlanner = null;
+function openNewGig(plannerId) {
+  const p = (allContacts || []).find(c => c.id === plannerId);
+  if (!p) return;
+  newGigPlanner = p;
+  document.getElementById('new-gig-planner').textContent =
+    'For: ' + (p.company ? p.company + ' · ' : '') + (p.name || '') + (p.contact_type === 'planner' ? ' (planner)' : '');
+  document.getElementById('ng-title').value = '';
+  document.getElementById('ng-type').value  = 'Corporate event';
+  document.getElementById('ng-date').value  = '';
+  document.getElementById('ng-fee').value   = '';
+  document.getElementById('ng-venue').value = '';
+  document.getElementById('ng-msg').textContent = '';
+  closeModal('planners-modal');
+  openModal('new-gig-modal');
+}
+
+async function saveNewGig() {
+  if (!newGigPlanner) return;
+  const msg   = document.getElementById('ng-msg');
+  const title = document.getElementById('ng-title').value.trim();
+  if (!title) { msg.style.color = 'var(--amber)'; msg.textContent = 'Gig title is required.'; return; }
+  const btn = document.getElementById('ng-save'); const oldLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Creating...'; msg.style.color = 'var(--muted)'; msg.textContent = '';
+  const body = {
+    client_id:       newGigPlanner.id,
+    client_name:     newGigPlanner.name || null,
+    client_email:    newGigPlanner.email || null,
+    event_title:     title,
+    event_type:      document.getElementById('ng-type').value.trim() || null,
+    event_date:      document.getElementById('ng-date').value || null,
+    fee:             Number(document.getElementById('ng-fee').value) || null,
+    venue_address:   document.getElementById('ng-venue').value.trim() || null,
+    contract_status: 'not_sent',
+    intake_status:   'not_sent',
+    status:          'booked',
+  };
+  try {
+    await sbPost('bookings', body);
+    msg.style.color = '#3fb950';
+    msg.textContent = body.event_date ? 'Gig created. It will show in Upcoming.' : 'Gig created (add a date for it to show in Upcoming).';
+    setTimeout(async () => { closeModal('new-gig-modal'); await loadAll(); }, 900);
+  } catch (e) {
+    msg.style.color = 'var(--amber)';
+    msg.textContent = 'Could not create: ' + (e.message || 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = oldLabel;
+  }
+}
 
 // ── AI Response Settings ──────────────────────────────────────────────────────
 async function openAISettings() {
