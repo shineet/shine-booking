@@ -266,7 +266,7 @@ function buildInvoicePDF(data) {
     doc.font('Helvetica').fontSize(9).fillColor(DARK)
        .text('texasmentalist.com',  col3,88)
        .text('2020shine@gmail.com', col3,104)
-       .text('+1 (612) 865-7681',   col3,120);
+       .text('+1 (737) 271-5308',   col3,120);
 
     doc.font('Helvetica').fontSize(10).fillColor(GRAY)
        .text('Thank you for choosing Shine, The Mentalist. Looking forward to an unforgettable evening!',

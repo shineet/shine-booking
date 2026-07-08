@@ -157,7 +157,7 @@ About me:
 - I perform 45-60 minute interactive shows in Texas
 - I also do strolling/walk-around magic — up-close magic that moves through a crowd (great for cocktail hours at weddings and corporate events), either on its own or paired with a short stage finale
 - Website: www.texasmentalist.com
-- Phone: +1 (612) 865-7681
+- Phone: +1 (737) 271-5308
 
 How I describe what I do, depending on what they ask for:
 - If they specifically say "mentalist," "mentalism," or "mind reading" — lead entirely with that. Talk about reading minds, psychological connection, predicting thoughts. Don't dilute it by bringing up visual magic unless they ask
@@ -182,6 +182,19 @@ Rules:
 - If client says "yes lets book", "I want to book", "send the contract" — thank them for booking (in a way I haven't already phrased earlier in this thread) and mention I'll send a quick questionnaire to get everything set up, then add [BOOKING_INTENT] at the very end
 - Never make up availability`;
 
+    // Owner's custom response guidance (editable from the dashboard "AI Settings" panel).
+    // A single free-text field in app_settings, layered on top of the base voice above.
+    let ownerGuidance = '';
+    try {
+      const gRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1&select=ai_guidance&limit=1`, { headers: supaHeaders });
+      const gRows = await gRes.json();
+      if (Array.isArray(gRows) && gRows[0] && gRows[0].ai_guidance) ownerGuidance = String(gRows[0].ai_guidance).trim();
+    } catch(e) { console.error('AI guidance fetch failed:', e.message); }
+
+    const finalSystemPrompt = ownerGuidance
+      ? `${SYSTEM_PROMPT}\n\nSHINE'S CUSTOM INSTRUCTIONS (highest priority. Follow these; if they conflict with anything above, these win, but never exceed the SMS length limit and never invent availability):\n${ownerGuidance}`
+      : SYSTEM_PROMPT;
+
     if (!conversations[From]) conversations[From] = [];
     conversations[From].push({ role: 'user', content: Body });
     if (conversations[From].length > 10) conversations[From] = conversations[From].slice(-10);
@@ -189,7 +202,7 @@ Rules:
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 200, system: SYSTEM_PROMPT, messages: conversations[From] })
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 200, system: finalSystemPrompt, messages: conversations[From] })
     });
 
     const claudeData = await claudeRes.json();
@@ -305,7 +318,7 @@ Rules:
                   from: 'Shine, The Mentalist <shine@texasmentalist.com>',
                   to: client.email,
                   subject: 'Thank you for booking! Quick questionnaire inside',
-                  text: `Hi ${client.name ? client.name.split(' ')[0] : 'there'},\n\nThank you so much for booking — I'm really looking forward to your event!\n\nTo get everything set up, including your performance agreement, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`
+                  text: `Hi ${client.name ? client.name.split(' ')[0] : 'there'},\n\nThank you so much for booking — I'm really looking forward to your event!\n\nTo get everything set up, including your performance agreement, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`
                 })
               });
 

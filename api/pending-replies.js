@@ -14,6 +14,19 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   try {
+    // Owner's custom response guidance (editable from the dashboard "AI Settings" panel).
+    // Returns a ready-to-append suffix, or '' if none set.
+    const guidanceSuffix = async () => {
+      try {
+        const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1&select=ai_guidance&limit=1`, {
+          headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` }
+        });
+        const rows = await r.json();
+        const g = (Array.isArray(rows) && rows[0] && rows[0].ai_guidance) ? String(rows[0].ai_guidance).trim() : '';
+        return g ? `\n\nSHINE'S CUSTOM INSTRUCTIONS (highest priority. Follow these; if they conflict with anything above, these win, but never invent availability):\n${g}` : '';
+      } catch(e) { console.error('AI guidance fetch failed:', e.message); return ''; }
+    };
+
     // GET ?action=settings -> read the global review-mode toggle
     if (req.method === 'GET' && req.query.action === 'settings') {
       const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1&limit=1`, {
@@ -87,7 +100,7 @@ RULES:
 - This is NOT a first contact. Do NOT introduce yourself or describe your show.
 - Write only what is appropriate for the stage described below.
 - Warm, brief, natural. Under 80 words total.
-- Sign off as: Shine, The Mentalist | +1 (612) 865-7681
+- Sign off as: Shine, The Mentalist | +1 (737) 271-5308
 - Return ONLY the email body. No subject line. No commentary.
 
 STAGE: ${followUpContext}`;
@@ -109,7 +122,7 @@ Hours since last contact: ${hoursAgo}`;
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 300,
-          system: systemPrompt,
+          system: systemPrompt + (await guidanceSuffix()),
           messages: [{ role: 'user', content: userPrompt }],
         }),
       });
@@ -162,7 +175,7 @@ RULES:
 - This is a reply to a client who has already been in contact, NOT a first introduction
 - Warm, direct, natural tone — not salesy
 - Keep it concise — readable in one glance on a phone screen
-- Sign off as: - Shine | +1 (612) 865-7681
+- Sign off as: - Shine | +1 (737) 271-5308
 - Return ONLY the message text, no commentary
 
 PRICING:
@@ -194,7 +207,7 @@ PRICING:
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 300,
-          system: systemPrompt,
+          system: systemPrompt + (await guidanceSuffix()),
           messages: [{ role: 'user', content: userPrompt }],
         }),
       });

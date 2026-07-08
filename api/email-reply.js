@@ -304,7 +304,7 @@ About me:
 - I also do strolling/walk-around magic — up-close magic that moves through a crowd (great for cocktail hours at weddings and corporate events), either on its own or paired with a short stage finale
 - Payment: Cash, Zelle (2020shine@gmail.com), Venmo (@Shine-Thankappan), PayPal (shine_e_thankappan@yahoo.com)
 - Website: www.texasmentalist.com
-- Phone: +1 (612) 865-7681
+- Phone: +1 (737) 271-5308
 
 How I describe what I do, depending on what they ask for:
 - If they specifically say "mentalist," "mentalism," or "mind reading" — lead entirely with that. Talk about reading minds, psychological connection, predicting thoughts. Don't dilute it by bringing up visual magic unless they ask
@@ -339,7 +339,7 @@ Rules:
 
 Signature:
 Shine, The Mentalist
-+1 (612) 865-7681
++1 (737) 271-5308
 www.texasmentalist.com`;
 
     const EXTRACTION_INSTRUCTION = `
@@ -357,7 +357,21 @@ If the email reads like someone planning THEIR OWN event (birthday, wedding, off
 
 Only include this block once. Do not mention this block or its contents in the visible reply text — it's purely structured data for internal use.`;
 
-    const systemPrompt = client ? SYSTEM_PROMPT : SYSTEM_PROMPT + EXTRACTION_INSTRUCTION;
+    // Owner's custom response guidance (editable from the dashboard "AI Settings" panel).
+    // Layered on top of the base voice; the lead-extraction instruction stays last in the prompt.
+    let ownerGuidance = '';
+    try {
+      const gRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1&select=ai_guidance&limit=1`, {
+        headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` }
+      });
+      const gRows = await gRes.json();
+      if (Array.isArray(gRows) && gRows[0] && gRows[0].ai_guidance) ownerGuidance = String(gRows[0].ai_guidance).trim();
+    } catch(e) { console.error('AI guidance fetch failed:', e.message); }
+    const guidanceBlock = ownerGuidance
+      ? `\n\nSHINE'S CUSTOM INSTRUCTIONS (highest priority. Follow these; if they conflict with anything above, these win, but never invent availability):\n${ownerGuidance}`
+      : '';
+
+    const systemPrompt = SYSTEM_PROMPT + guidanceBlock + (client ? '' : EXTRACTION_INSTRUCTION);
 
     // Build the full message list, then defensively collapse any consecutive
     // same-role messages (e.g. if a prior reply failed to save) since the API
@@ -577,7 +591,7 @@ Only include this block once. Do not mention this block or its contents in the v
                   from: 'Shine, The Mentalist <shine@texasmentalist.com>',
                   to: fromEmail,
                   subject: 'Thank you for booking! Quick questionnaire inside',
-                  text: `Hi ${client.name ? client.name.split(' ')[0] : 'there'},\n\nThank you so much for booking — I'm really looking forward to your event!\n\nTo get everything set up, including your performance agreement, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`
+                  text: `Hi ${client.name ? client.name.split(' ')[0] : 'there'},\n\nThank you so much for booking — I'm really looking forward to your event!\n\nTo get everything set up, including your performance agreement, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`
                 })
               });
 

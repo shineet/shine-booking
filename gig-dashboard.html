@@ -445,6 +445,7 @@ td { padding: 9px 14px; vertical-align: middle; }
       <span id="sync-label">Connecting...</span>
     </div>
     <a class="topbar-link" href="https://shine-booking.vercel.app/index.html" target="_blank" rel="noopener">Booking App &#8599;</a>
+    <button class="secondary" onclick="openAISettings()">AI Settings</button>
     <button class="secondary" id="refresh-btn" onclick="loadAll()">Refresh</button>
     <button class="secondary" onclick="exportCSV()">Export CSV</button>
     <button onclick="openAdd()">+ Add Gig</button>
@@ -564,6 +565,32 @@ td { padding: 9px 14px; vertical-align: middle; }
   </div>
 </div>
 
+
+<!-- AI Settings Modal -->
+<div class="modal-overlay" id="ai-settings-modal">
+  <div class="modal" style="max-width:560px;width:100%">
+    <h2>AI Response Settings</h2>
+    <p style="margin:0 0 14px;font-size:13px;color:var(--muted);line-height:1.5">
+      Tell the assistant how you want it to reply to clients. These instructions are layered on top of your usual voice and apply to every AI-drafted SMS and email, including the follow-up and compose drafts.
+    </p>
+    <div class="form-group">
+      <label>Your instructions to the AI</label>
+      <textarea id="ai-guidance" rows="7"
+        style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;color:var(--text);font-size:13px;font-family:inherit;width:100%;box-sizing:border-box;line-height:1.5"
+        placeholder="Examples:&#10;- Keep replies to 2 short sentences.&#10;- Always ask for the event date if we don't have it.&#10;- Mention December books up fast.&#10;- Be a bit warmer and less businesslike.&#10;- Never quote a price under $350."></textarea>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">Leave blank to use your default voice with no extra instructions.</div>
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px">
+      <input type="checkbox" id="ai-review-mode" style="width:16px;height:16px;margin-top:2px">
+      <label for="ai-review-mode" style="margin:0;cursor:pointer;font-size:13px;color:var(--text)">Review mode: hold AI replies for my approval before sending (off = replies send automatically)</label>
+    </div>
+    <div id="ai-settings-msg" style="font-size:12px;min-height:16px;margin-top:10px;color:var(--muted)"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('ai-settings-modal')">Cancel</button>
+      <button class="success" id="ai-save-btn" onclick="saveAISettings()">Save</button>
+    </div>
+  </div>
+</div>
 
 <!-- Invoice Modal -->
 <div class="modal-overlay" id="invoice-modal">
@@ -1657,6 +1684,47 @@ function jsArg(s) {
 
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── AI Response Settings ──────────────────────────────────────────────────────
+async function openAISettings() {
+  const msg = document.getElementById('ai-settings-msg');
+  msg.textContent = ''; msg.style.color = 'var(--muted)';
+  document.getElementById('ai-guidance').value = '';
+  document.getElementById('ai-review-mode').checked = false;
+  openModal('ai-settings-modal');
+  try {
+    const rows = await sbGet('app_settings?id=eq.1&select=*&limit=1');
+    const s = Array.isArray(rows) ? rows[0] : null;
+    if (s) {
+      document.getElementById('ai-guidance').value = s.ai_guidance || '';
+      document.getElementById('ai-review-mode').checked = !!s.review_mode;
+    }
+  } catch(e) {
+    msg.style.color = 'var(--amber)';
+    msg.textContent = 'Could not load current settings.';
+  }
+}
+
+async function saveAISettings() {
+  const btn = document.getElementById('ai-save-btn');
+  const msg = document.getElementById('ai-settings-msg');
+  const guidance   = document.getElementById('ai-guidance').value.trim();
+  const reviewMode = document.getElementById('ai-review-mode').checked;
+  const oldLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Saving...';
+  msg.style.color = 'var(--muted)'; msg.textContent = '';
+  try {
+    await sbPatch('app_settings', 1, { ai_guidance: guidance, review_mode: reviewMode, updated_at: new Date().toISOString() });
+    msg.style.color = '#3fb950';
+    msg.textContent = 'Saved. New replies will follow these instructions.';
+    setTimeout(() => closeModal('ai-settings-modal'), 900);
+  } catch(e) {
+    msg.style.color = 'var(--amber)';
+    msg.textContent = 'Save failed: ' + (e.message || 'unknown error');
+  } finally {
+    btn.disabled = false; btn.textContent = oldLabel;
+  }
+}
 
 // ── Conversation thread ───────────────────────────────────────────────────────
 async function loadConversation(clientId) {

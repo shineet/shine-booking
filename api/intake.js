@@ -96,7 +96,7 @@ export default async function handler(req, res) {
             from: 'Shine, The Mentalist <shine@texasmentalist.com>',
             to:   clientEmail,
             subject: 'Quick questionnaire for your upcoming show',
-            text: `Hi ${firstName},\n\nSo excited to be part of your event! To get everything set up — including your performance agreement — could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`
+            text: `Hi ${firstName},\n\nSo excited to be part of your event! To get everything set up — including your performance agreement — could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`
           })
         });
       }

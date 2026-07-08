@@ -62,7 +62,7 @@ export default async function handler(req, res) {
     try {
       const { clientId, clientName, phone, email, lastChannel, pricingLink } = req.body;
       const message = `Hi! Here are my show packages and pricing: ${pricingLink} — Shine, The Mentalist`;
-      const emailText = `Hi ${clientName},\n\nHere's a link to my packages and pricing — you can view all three options and what's included:\n\n${pricingLink}\n\nFeel free to reach out if you have any questions!\n\nShine, The Mentalist\n+1 (612) 865-7681\nwww.texasmentalist.com`;
+      const emailText = `Hi ${clientName},\n\nHere's a link to my packages and pricing — you can view all three options and what's included:\n\n${pricingLink}\n\nFeel free to reach out if you have any questions!\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`;
       let sent = false;
       const channel = lastChannel || (phone ? 'sms' : 'email');
       // Send via SMS if that's the channel they used
@@ -160,7 +160,7 @@ Rules:
 - Do NOT ask about date, number of guests, or pricing
 - Signature must be exactly:
   Shine, The Mentalist
-  +1 (612) 865-7681
+  +1 (737) 271-5308
   www.texasmentalist.com
 - First line must be: Subject: [subject line]
 - Then blank line
