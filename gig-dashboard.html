@@ -653,7 +653,7 @@ td { padding: 9px 14px; vertical-align: middle; }
       <div class="form-group"><label>Duration</label><input type="text" id="inv-duration" placeholder="3 hours"></div>
       <div class="form-group"><label>Venue</label><input type="text" id="inv-venue" placeholder="Juniper Lakehouse, Austin, TX"></div>
       <div class="form-group"><label>Guests</label><input type="text" id="inv-guests" placeholder="Approximately 45"></div>
-      <div class="form-group"><label>Deposit %</label><input type="number" id="inv-deposit" value="50" min="0" max="100"></div>
+      <div class="form-group"><label>Deposit %</label><select id="inv-deposit"><option value="50">50%</option><option value="25">25%</option></select></div>
     </div>
 
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -672,6 +672,22 @@ td { padding: 9px 14px; vertical-align: middle; }
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="form-group"><label>Client Email</label><input type="email" id="inv-to-email" placeholder="client@company.com"></div>
         <div class="form-group"><label>Custom Message (optional)</label><textarea id="inv-custom-msg" rows="2" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:13px;font-family:inherit;width:100%;box-sizing:border-box" placeholder="Leave blank for default message..."></textarea></div>
+      </div>
+    </div>
+
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px">
+      <p style="margin:0 0 10px;font-size:12px;font-weight:600;color:var(--muted)">💳 Online payment link (Stripe)</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="secondary" onclick="generatePaymentLink('deposit')">Deposit link</button>
+        <button class="secondary" onclick="generatePaymentLink('full')">Full-amount link</button>
+        <span id="pay-link-status" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="pay-link-result" style="display:none;margin-top:12px">
+        <input type="text" id="pay-link-url" readonly onclick="this.select()" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:8px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="secondary" onclick="copyPaymentLink()">Copy link</button>
+          <button class="secondary" onclick="emailPaymentLink()">Email to client</button>
+        </div>
       </div>
     </div>
 
@@ -2019,6 +2035,8 @@ function openInvoiceFromCard(btn) {
   // Use name as contact, leave company blank for manual entry if it's a person's name
   var isPersonName = c.name && /^[A-Z][a-z]+ [A-Z]/.test(c.name); // "First Last" pattern
   openInvoiceModal({
+    bookingId: booking ? (booking.id || '') : '',
+    clientId:  c.id || '',
     company:   c.name          || '',
     contact:   isPersonName ? c.name : '',
     city:      cityGuess,
@@ -2040,9 +2058,13 @@ function openInvoiceFromCard(btn) {
 
 // ── Invoice Modal JS ──────────────────────────────────────────────────────────
 let invoiceLineItems = [];
+let invoicePayCtx = {};
 
 function openInvoiceModal(prefill) {
   prefill = prefill || {};
+  invoicePayCtx = { bookingId: prefill.bookingId || '', clientId: prefill.clientId || '' };
+  var payResult = document.getElementById('pay-link-result');
+  if (payResult) payResult.style.display = 'none';
   document.getElementById('inv-company').value = prefill.company || '';
   document.getElementById('inv-contact').value = prefill.contact || '';
   document.getElementById('inv-city').value    = prefill.city    || '';
@@ -2130,6 +2152,54 @@ function buildInvoicePayload() {
     lineItems:      invoiceLineItems.filter(i => i.description || i.amount),
     total:          invoiceLineItems.reduce((s,i) => s+(parseFloat(i.amount)||0), 0),
   };
+}
+
+async function generatePaymentLink(type) {
+  var total = invoiceLineItems.reduce(function(s,i){ return s + (parseFloat(i.amount)||0); }, 0);
+  var dep   = parseInt(document.getElementById('inv-deposit').value, 10) || 50;
+  var amount = type === 'full' ? total : Math.round(total * dep / 100 * 100) / 100;
+  var status = document.getElementById('pay-link-status');
+  var result = document.getElementById('pay-link-result');
+  if (!total || amount <= 0) { status.textContent = 'Add a line-item amount first.'; return; }
+  var eventName = document.getElementById('inv-event-name').value || 'your event';
+  var label = (type === 'full' ? 'Performance fee — ' : 'Deposit (' + dep + '%) — ') + eventName;
+  status.textContent = 'Creating link…';
+  result.style.display = 'none';
+  try {
+    var res = await fetch('/api/stripe', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create', type: type, amountDollars: amount, label: label,
+        description: 'Shine, The Mentalist — ' + eventName,
+        clientEmail: document.getElementById('inv-to-email').value.trim() || undefined,
+        bookingId: invoicePayCtx.bookingId || '', clientId: invoicePayCtx.clientId || ''
+      })
+    });
+    var data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || ('HTTP ' + res.status));
+    document.getElementById('pay-link-url').value = data.url;
+    result.style.display = 'block';
+    status.textContent = (type === 'full' ? 'Full amount' : dep + '% deposit') + ': $' + amount.toLocaleString();
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+  }
+}
+
+function copyPaymentLink() {
+  var el = document.getElementById('pay-link-url');
+  el.select();
+  navigator.clipboard.writeText(el.value).then(function(){
+    document.getElementById('pay-link-status').textContent = 'Link copied!';
+  }, function(){ /* fallback: it's already selected for manual copy */ });
+}
+
+function emailPaymentLink() {
+  var url = document.getElementById('pay-link-url').value;
+  var to  = document.getElementById('inv-to-email').value.trim();
+  var eventName = document.getElementById('inv-event-name').value || 'your event';
+  var subject = 'Payment link — ' + eventName;
+  var body = 'Hi,\n\nHere is a secure link to pay for ' + eventName + ':\n' + url + '\n\nThank you!\nShine, The Mentalist\n(737) 271-5308';
+  window.location.href = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
 }
 
 async function downloadInvoice() {

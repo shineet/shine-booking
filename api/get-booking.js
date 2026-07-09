@@ -70,6 +70,31 @@ export default async function handler(req, res) {
       return;
     }
 
+    // Delete a client + its messages/bookings (was api/delete-client.js; merged here
+    // and now token-protected). FK order: messages -> bookings -> client.
+    if (body.action === 'delete-client') {
+      if (!tokenValid(body.token)) { res.status(401).json({ error: 'Unauthorized' }); return; }
+      const clientId = body.clientId;
+      if (!clientId) { res.status(400).json({ error: 'clientId required' }); return; }
+      const h = {
+        'apikey': process.env.SUPABASE_SECRET_KEY,
+        'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+      };
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${clientId}`, { method: 'DELETE', headers: h });
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?client_id=eq.${clientId}`, { method: 'DELETE', headers: h });
+      const delRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
+        method: 'DELETE', headers: { ...h, 'Prefer': 'return=representation' }
+      });
+      if (!delRes.ok) {
+        const t = await delRes.text();
+        console.error('Client delete failed:', t);
+        res.status(500).json({ error: 'Failed to delete client: ' + t });
+        return;
+      }
+      res.status(200).json({ deleted: true });
+      return;
+    }
+
     res.status(400).json({ error: 'Unknown action' });
     return;
   }

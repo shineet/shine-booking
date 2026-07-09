@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payment — Shine, The Mentalist</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#141210;color:#f4efe6;font-family:"Montserrat","Avenir Next","Segoe UI",Helvetica,Arial,sans-serif;
+    min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
+  .card{max-width:460px;width:100%;background:#1c1a17;border:1px solid rgba(201,162,74,.28);border-radius:14px;padding:44px 32px}
+  .mark{width:66px;height:66px;border-radius:50%;margin:0 auto 22px;display:flex;align-items:center;justify-content:center;font-size:32px}
+  .ok{background:rgba(88,171,116,.15);color:#7fce9c;border:1px solid rgba(88,171,116,.4)}
+  .no{background:rgba(201,162,74,.12);color:#e3c77e;border:1px solid rgba(201,162,74,.35)}
+  h1{font-family:"Playfair Display",Georgia,serif;font-size:26px;margin-bottom:12px;color:#fff}
+  p{color:#d8d0c2;line-height:1.6;font-size:15px}
+  a.btn{display:inline-block;margin-top:26px;background:#c9a24a;color:#1a1510;font-weight:700;letter-spacing:.05em;
+    text-transform:uppercase;font-size:13px;padding:14px 30px;border-radius:6px;text-decoration:none}
+  .sub{margin-top:18px;font-size:13px;color:#a99f8e}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div id="mark" class="mark ok">✓</div>
+    <h1 id="title">Payment received</h1>
+    <p id="msg">Thank you — your payment is confirmed and your date is secured. You'll get a receipt from Stripe by email, and I'll be in touch shortly. Looking forward to your event!</p>
+    <a class="btn" href="https://www.texasmentalist.com">Back to texasmentalist.com</a>
+    <div class="sub">Shine, The Mentalist · (737) 271-5308</div>
+  </div>
+<script>
+  // Stripe sends the client back here; ?canceled=1 means they backed out before paying.
+  if (new URLSearchParams(location.search).get('canceled')) {
+    document.getElementById('mark').className = 'mark no';
+    document.getElementById('mark').textContent = '↩';
+    document.getElementById('title').textContent = 'Payment canceled';
+    document.getElementById('msg').textContent = "No worries — nothing was charged. If you'd still like to secure your date, just reopen the payment link or reach out and I'll resend it.";
+  }
+</script>
+</body>
+</html>

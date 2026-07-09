@@ -2047,9 +2047,9 @@ function regeneratePendingReply(id) {
 /* ── Delete ── */
 function deleteClient(id, name) {
     if (!confirm('Delete ' + name + '? This cannot be undone.')) return;
-    fetch('/api/delete-client', {
+    fetch('/api/get-booking', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: id })
+        body: JSON.stringify({ action: 'delete-client', token: DASH_TOKEN, clientId: id })
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
