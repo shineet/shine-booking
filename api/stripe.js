@@ -16,6 +16,14 @@ function sbHeaders() {
   };
 }
 
+function normalizePhone(phone) {
+  if (!phone) return phone;
+  const d = String(phone).replace(/[^0-9]/g, '');
+  if (d.length === 10) return '+1' + d;
+  if (d.length === 11 && d[0] === '1') return '+' + d;
+  return String(phone).trim().startsWith('+') ? '+' + d : phone;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -88,6 +96,66 @@ export default async function handler(req, res) {
     let body = req.body;
     if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }
     body = body || {};
+
+    // Send an already-generated payment link to the client by email or SMS (branded + logged).
+    if (body.action === 'send-link') {
+      const url = body.url;
+      const channel = body.send === 'sms' ? 'sms' : 'email';
+      if (!url) { res.status(400).json({ error: 'Missing url' }); return; }
+
+      let email = body.clientEmail || '', phone = body.clientPhone || '', name = body.clientName || '';
+      if (body.clientId) {
+        try {
+          const cr = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${body.clientId}&select=email,phone,name&limit=1`, { headers: sbHeaders() });
+          const rows = await cr.json();
+          if (Array.isArray(rows) && rows[0]) {
+            email = email || rows[0].email || '';
+            phone = phone || rows[0].phone || '';
+            name  = name  || rows[0].name  || '';
+          }
+        } catch (e) { console.error('client lookup for send-link failed:', e.message); }
+      }
+      const eventName = body.eventName || 'your event';
+      const firstName = (name || 'there').split(' ')[0];
+
+      if (channel === 'email') {
+        if (!email) { res.status(400).json({ error: 'No email on file for this client.' }); return; }
+        const r = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+          body: JSON.stringify({
+            from: 'Shine, The Mentalist <shine@texasmentalist.com>',
+            to: email,
+            subject: `Payment link — ${eventName}`,
+            text: `Hi ${firstName},\n\nHere's a secure link to pay for ${eventName}:\n${url}\n\nThank you!\nShine, The Mentalist\n(737) 271-5308`,
+            html: `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;color:#1a1a2e"><p>Hi ${firstName},</p><p>Here's a secure link to pay for <strong>${eventName}</strong>:</p><div style="text-align:center;margin:24px 0"><a href="${url}" style="background:#1a7f5a;color:#fff;padding:13px 30px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:bold;display:inline-block">💳 Pay online</a></div><p style="font-size:12px;color:#6b7280">Or open: <a href="${url}">${url}</a></p><p>Thank you!<br>Shine, The Mentalist<br>(737) 271-5308</p></div>`
+          })
+        });
+        if (!r.ok) { const t = await r.text(); res.status(500).json({ error: 'Email failed: ' + t.slice(0, 150) }); return; }
+      } else {
+        if (!phone) { res.status(400).json({ error: 'No phone number on file for this client.' }); return; }
+        const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+        const smsBody = `Hi ${firstName}, here's a secure link to pay for ${eventName} and lock in your date: ${url} — Shine, The Mentalist`;
+        const tw = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: normalizePhone(phone), Body: smsBody }).toString()
+        });
+        if (!tw.ok) { const t = await tw.text(); res.status(500).json({ error: 'SMS failed: ' + t.slice(0, 150) }); return; }
+      }
+
+      if (body.clientId) {
+        try {
+          await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+            method: 'POST', headers: { ...sbHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ client_id: body.clientId, channel, direction: 'outbound', content: 'Payment link sent: ' + url, status: 'sent', to_address: channel === 'email' ? email : normalizePhone(phone) })
+          });
+        } catch (e) { console.error('log payment-link message failed:', e.message); }
+      }
+      res.status(200).json({ success: true, sent: channel });
+      return;
+    }
+
     if (body.action !== 'create') { res.status(400).json({ error: 'Unknown action' }); return; }
 
     const amountDollars = Number(body.amountDollars);

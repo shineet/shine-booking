@@ -686,7 +686,8 @@ td { padding: 9px 14px; vertical-align: middle; }
         <input type="text" id="pay-link-url" readonly onclick="this.select()" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:8px">
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="secondary" onclick="copyPaymentLink()">Copy link</button>
-          <button class="secondary" onclick="emailPaymentLink()">Email to client</button>
+          <button class="secondary" onclick="sendPaymentLink('email')">📧 Email to client</button>
+          <button class="secondary" onclick="sendPaymentLink('sms')">💬 Text to client</button>
         </div>
       </div>
     </div>
@@ -2194,13 +2195,23 @@ function copyPaymentLink() {
   }, function(){ /* fallback: it's already selected for manual copy */ });
 }
 
-function emailPaymentLink() {
+function sendPaymentLink(channel) {
   var url = document.getElementById('pay-link-url').value;
-  var to  = document.getElementById('inv-to-email').value.trim();
+  if (!url) return;
+  var status = document.getElementById('pay-link-status');
   var eventName = document.getElementById('inv-event-name').value || 'your event';
-  var subject = 'Payment link — ' + eventName;
-  var body = 'Hi,\n\nHere is a secure link to pay for ' + eventName + ':\n' + url + '\n\nThank you!\nShine, The Mentalist\n(737) 271-5308';
-  window.location.href = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+  status.textContent = channel === 'sms' ? 'Texting client…' : 'Emailing client…';
+  fetch('/api/stripe', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'send-link', send: channel, url: url, eventName: eventName,
+      clientId: invoicePayCtx.clientId || '',
+      clientEmail: document.getElementById('inv-to-email').value.trim() || undefined
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) { if (d.error) throw new Error(d.error); status.textContent = channel === 'sms' ? 'Texted to client ✓' : 'Emailed to client ✓'; })
+  .catch(function(e) { status.textContent = 'Error: ' + e.message; });
 }
 
 async function downloadInvoice() {
