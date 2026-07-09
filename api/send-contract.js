@@ -15,6 +15,37 @@ const SB_URL   = process.env.SUPABASE_URL;
 const SB_KEY   = process.env.SUPABASE_SECRET_KEY;
 const SB_HDR   = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
 
+// Create a Stripe Checkout deposit link. Returns URL or null (caller tolerates null).
+async function createStripeDepositLink(amountDollars, label, email, bookingId) {
+  if (!process.env.STRIPE_SECRET_KEY || !(amountDollars > 0)) return null;
+  const cents = Math.round(amountDollars * 100);
+  if (cents < 50) return null;
+  const base = 'https://shine-booking.vercel.app';
+  const p = new URLSearchParams();
+  p.append('mode', 'payment');
+  p.append('success_url', base + '/payment-success.html');
+  p.append('cancel_url', base + '/payment-success.html?canceled=1');
+  if (email) p.append('customer_email', email);
+  p.append('line_items[0][quantity]', '1');
+  p.append('line_items[0][price_data][currency]', 'usd');
+  p.append('line_items[0][price_data][unit_amount]', String(cents));
+  p.append('line_items[0][price_data][product_data][name]', label || 'Event deposit');
+  if (bookingId) {
+    p.append('metadata[bookingId]', bookingId);
+    p.append('metadata[type]', 'deposit');
+    p.append('payment_intent_data[metadata][bookingId]', bookingId);
+    p.append('payment_intent_data[metadata][type]', 'deposit');
+  }
+  const r = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + process.env.STRIPE_SECRET_KEY, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: p.toString()
+  });
+  const d = await r.json();
+  if (!r.ok || d.error) { console.error('Stripe deposit link failed:', d.error && d.error.message); return null; }
+  return d.url;
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -150,13 +181,26 @@ module.exports = async function handler(req, res) {
     const invoiceNote   = hasInvoice ? `\n\nI've also attached your invoice. A ${dep}% deposit is required to secure the date — payment details are on page 2.` : '';
     const htmlInvNote   = hasInvoice ? `<p>I've also attached your invoice. A <strong>${dep}% deposit</strong> is required to secure the date — payment details are on page 2.</p>` : '';
 
+    // Optional Stripe "Pay deposit online" button — fully guarded; any failure just
+    // omits it and the contract email sends normally.
+    let payBtnHtml = '', payLineText = '';
+    try {
+      const payTotal   = (invoiceData && invoiceData.total) ? invoiceData.total : Number(fee || 0);
+      const depDollars = Math.round(payTotal * dep / 100);
+      const payUrl     = await createStripeDepositLink(depDollars, `Deposit (${dep}%) — ${eventTitle || 'event'}`, clientEmail, resolvedBookingId);
+      if (payUrl) {
+        payBtnHtml  = `<div style="text-align:center;margin:24px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:13px 30px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:bold;display:inline-block">💳 Pay ${dep}% Deposit Online ($${depDollars.toLocaleString()})</a></div>`;
+        payLineText = `\n\nPrefer to pay the deposit by card? ${payUrl}`;
+      }
+    } catch (e) { console.error('contract pay-link embed skipped:', e.message); }
+
     // ── 4. Send email ────────────────────────────────────────────────────────
     const firstName = (clientName || 'there').split(' ')[0];
     await resend.emails.send({
       from:    'Shine, The Mentalist <shine@texasmentalist.com>',
       to:      [clientEmail],
       subject: `Performance Agreement – ${eventTitle || 'Your Event'} | Shine, The Mentalist`,
-      text: `Hi ${firstName},\n\nI'm excited to be performing at ${eventTitle || 'your event'}${eventDate ? ` on ${eventDate}` : ''}!\n\nPlease review and sign the performance agreement:\n${contractUrl}\n\nThis takes just a minute and locks in your date.${invoiceNote}\n\nLooking forward to an unforgettable performance!\n\n– Shine\ntexasmentalist.com`,
+      text: `Hi ${firstName},\n\nI'm excited to be performing at ${eventTitle || 'your event'}${eventDate ? ` on ${eventDate}` : ''}!\n\nPlease review and sign the performance agreement:\n${contractUrl}\n\nThis takes just a minute and locks in your date.${invoiceNote}${payLineText}\n\nLooking forward to an unforgettable performance!\n\n– Shine\ntexasmentalist.com`,
       html: `
         <div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;color:#1a1a2e">
           <div style="border-bottom:3px solid #B8960C;padding-bottom:16px;margin-bottom:24px">
@@ -172,6 +216,7 @@ module.exports = async function handler(req, res) {
             </a>
           </div>
           ${htmlInvNote}
+          ${payBtnHtml}
           <p>Looking forward to an unforgettable performance!</p>
           <p>– Shine</p>
           <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">

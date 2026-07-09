@@ -2134,6 +2134,7 @@ function updateInvTotal() {
 
 function buildInvoicePayload() {
   return {
+    bookingId:      invoicePayCtx.bookingId || '',
     clientCompany:  document.getElementById('inv-company').value,
     contactName:    document.getElementById('inv-contact').value,
     clientCity:     document.getElementById('inv-city').value,

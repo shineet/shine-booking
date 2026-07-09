@@ -36,11 +36,23 @@ module.exports = async function handler(req, res) {
       const body       = customMessage ||
         `Please find your invoice attached for the ${invoiceData.eventName || 'upcoming event'}.\n\nA ${dep}% deposit ($${depAmt}) is required to secure your date. Payment details are on page 2 of the invoice.\n\nLooking forward to an unforgettable performance!`;
 
+      // Optional Stripe "Pay online" button — fully guarded: no key or any error just
+      // omits the button, the invoice email always sends normally.
+      let payBtnHtml = '', payLineText = '';
+      try {
+        const depDollars = Math.round((invoiceData.total || 0) * dep / 100);
+        const payUrl = await createStripeDepositLink(depDollars, `Deposit (${dep}%) — ${invoiceData.eventName || 'event'}`, toEmail, invoiceData.bookingId);
+        if (payUrl) {
+          payBtnHtml = `<div style="text-align:center;margin:28px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:bold;display:inline-block">💳 Pay ${dep}% Deposit Online ($${depDollars.toLocaleString()})</a></div>`;
+          payLineText = `\n\nPrefer to pay by card? Pay your ${dep}% deposit online ($${depDollars.toLocaleString()}): ${payUrl}`;
+        }
+      } catch (e) { console.error('invoice pay-link embed skipped:', e.message); }
+
       await resend.emails.send({
         from:    'Shine, The Mentalist <shine@texasmentalist.com>',
         to:      [toEmail],
         subject: `Invoice – ${invoiceData.eventName || 'Your Event'} | Shine, The Mentalist`,
-        text:    `Hi ${toName || 'there'},\n\n${body}\n\n– Shine\ntexasmentalist.com`,
+        text:    `Hi ${toName || 'there'},\n\n${body}${payLineText}\n\n– Shine\ntexasmentalist.com`,
         html:    `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;color:#1a1a2e">
           <div style="border-bottom:3px solid #B8960C;padding-bottom:16px;margin-bottom:24px">
             <h2 style="margin:0;font-size:22px">Shine, The Mentalist</h2>
@@ -48,6 +60,7 @@ module.exports = async function handler(req, res) {
           </div>
           <p>Hi ${toName || 'there'},</p>
           ${body.split('\n').map(l => l ? `<p style="margin:6px 0">${l}</p>` : '<br>').join('')}
+          ${payBtnHtml}
           <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
             Shine, The Mentalist &nbsp;|&nbsp; texasmentalist.com &nbsp;|&nbsp; 2020shine@gmail.com
           </div></div>`,
@@ -67,6 +80,38 @@ module.exports = async function handler(req, res) {
 function safeFilename(data) {
   return 'Invoice_ShineTheMentalist_' +
     (data.clientCompany || data.clientName || 'Client').replace(/\s+/g, '_') + '.pdf';
+}
+
+// Create a Stripe Checkout deposit link. Returns the URL, or null if Stripe isn't
+// configured, the amount is invalid, or anything goes wrong (caller must tolerate null).
+async function createStripeDepositLink(amountDollars, label, email, bookingId) {
+  if (!process.env.STRIPE_SECRET_KEY || !(amountDollars > 0)) return null;
+  const cents = Math.round(amountDollars * 100);
+  if (cents < 50) return null; // Stripe minimum
+  const base = 'https://shine-booking.vercel.app';
+  const p = new URLSearchParams();
+  p.append('mode', 'payment');
+  p.append('success_url', base + '/payment-success.html');
+  p.append('cancel_url', base + '/payment-success.html?canceled=1');
+  if (email) p.append('customer_email', email);
+  p.append('line_items[0][quantity]', '1');
+  p.append('line_items[0][price_data][currency]', 'usd');
+  p.append('line_items[0][price_data][unit_amount]', String(cents));
+  p.append('line_items[0][price_data][product_data][name]', label || 'Event deposit');
+  if (bookingId) {
+    p.append('metadata[bookingId]', bookingId);
+    p.append('metadata[type]', 'deposit');
+    p.append('payment_intent_data[metadata][bookingId]', bookingId);
+    p.append('payment_intent_data[metadata][type]', 'deposit');
+  }
+  const r = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + process.env.STRIPE_SECRET_KEY, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: p.toString()
+  });
+  const d = await r.json();
+  if (!r.ok || d.error) { console.error('Stripe deposit link failed:', d.error && d.error.message); return null; }
+  return d.url;
 }
 
 function formatGuests(g) {
