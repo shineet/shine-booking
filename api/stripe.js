@@ -45,10 +45,38 @@ export default async function handler(req, res) {
 
         if (session && session.payment_status === 'paid') {
           const md        = session.metadata || {};
-          const bookingId = md.bookingId || '';
+          let   bookingId = md.bookingId || '';
           const type      = md.type || 'payment';
           const amount    = (session.amount_total || 0) / 100;
           const payerEmail = (session.customer_details && session.customer_details.email) || session.customer_email || 'unknown';
+
+          // Pricing-page "Pay deposit & book": the payment gates the booking. Reuse
+          // select-package (marks booked, creates the booking, sends the intake), then
+          // read the booking it linked to the client so we can mark the deposit below.
+          if (md.bookOnPay === '1' && md.clientId) {
+            try {
+              await fetch(`${APP_BASE}/api/select-package`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  clientId: md.clientId,
+                  name: md.name || undefined,
+                  contact: md.contact || undefined,
+                  category: md.category || undefined,
+                  tier: md.tier || undefined,
+                  label: md.label || undefined,
+                  price: md.price ? Number(md.price) : undefined,
+                  format: md.format || undefined,
+                  strollingDurationMinutes: md.dur ? Number(md.dur) : undefined,
+                  readyToBook: true
+                })
+              });
+            } catch (e) { console.error('bookOnPay select-package call failed:', e.message); }
+            try {
+              const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${md.clientId}&select=booking_id&limit=1`, { headers: sbHeaders() });
+              const cRows = await cRes.json();
+              if (Array.isArray(cRows) && cRows[0] && cRows[0].booking_id) bookingId = cRows[0].booking_id;
+            } catch (e) { console.error('bookOnPay booking lookup failed:', e.message); }
+          }
 
           if (bookingId) {
             const patch = {
@@ -172,8 +200,9 @@ export default async function handler(req, res) {
       bookingId: body.bookingId || '',
       clientId: body.clientId || '',
       type,
-      successUrl: `${APP_BASE}/payment-success.html`,
-      cancelUrl: `${APP_BASE}/payment-success.html?canceled=1`
+      extraMetadata: (body.extraMetadata && typeof body.extraMetadata === 'object') ? body.extraMetadata : undefined,
+      successUrl: body.successUrl || `${APP_BASE}/payment-success.html`,
+      cancelUrl: body.cancelUrl || `${APP_BASE}/payment-success.html?canceled=1`
     });
 
     res.status(200).json({ success: true, url: session.url, id: session.id });

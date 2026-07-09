@@ -687,6 +687,7 @@
             only: (p.get('only') || '').toLowerCase(),
             priceOverride: parseInt(p.get('price')) || null,
             dur: parseInt(p.get('dur')) || null,
+            depPct: parseInt(p.get('dep')) || null,
             clientId: p.get('cid') || '',
             d1: parseInt(p.get('d1')) || null,
             d2: parseInt(p.get('d2')) || null,
@@ -974,6 +975,15 @@
         document.getElementById('main-page').style.display = 'none';
         document.getElementById('decision-summary').innerHTML =
         `<strong>${pickedCategory === 'corporate' ? 'Corporate' : 'Private'} — ${pickedLabel}</strong>$${pickedPrice.toLocaleString()} per show`;
+        // Deposit-to-book: relabel the two choices to "pay & book" vs "reserve, pay later"
+        const depPct = getParams().depPct;
+        if (depPct && pickedPrice) {
+            const depAmt = Math.round(pickedPrice * depPct / 100);
+            document.getElementById('book-shine-btn').innerHTML =
+                `Pay Deposit &amp; Book<span class="sub">Pay $${depAmt.toLocaleString()} now to lock in your date</span>`;
+            document.getElementById('need-time-btn').innerHTML =
+                `Reserve now — pay later<span class="sub">Hold my date; I'll pay the deposit by invoice</span>`;
+        }
         document.getElementById('decision-page').style.display = 'block';
     }
 
@@ -985,6 +995,8 @@
     function onBookShineClick() {
         const btn = document.getElementById('book-shine-btn');
         setDecisionButtonsDisabled(true);
+        // Deposit-to-book: pay first; the payment gates the booking (server-side webhook books them).
+        if (getParams().depPct) { btn.innerHTML = 'Opening secure checkout...'; payDepositAndBook(); return; }
         btn.innerHTML = 'Confirming...';
         submitFinalSelection(true);
     }
@@ -993,7 +1005,44 @@
         const btn = document.getElementById('need-time-btn');
         setDecisionButtonsDisabled(true);
         btn.innerHTML = 'One moment...';
-        submitFinalSelection(false);
+        // With deposit-to-book, the "reserve, pay later" fallback still books them (no card).
+        submitFinalSelection(getParams().depPct ? true : false);
+    }
+
+    function payDepositAndBook() {
+        const params = getParams();
+        const isStrolling = pickedTier === 'strolling-only' || pickedTier === 'strolling-finale';
+        const depAmt = Math.round(pickedPrice * params.depPct / 100);
+        const isEmail = (capturedContact || '').includes('@');
+        fetch('/api/stripe', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'create', type: 'deposit', amountDollars: depAmt,
+                label: `Deposit (${params.depPct}%) — ${pickedLabel}`,
+                description: 'Shine, The Mentalist',
+                clientId: params.clientId || '',
+                clientEmail: isEmail ? capturedContact : undefined,
+                successUrl: 'https://shine-booking.vercel.app/payment-success.html',
+                cancelUrl: window.location.href,
+                extraMetadata: {
+                    bookOnPay: '1',
+                    category: pickedCategory, tier: pickedTier, label: pickedLabel,
+                    price: String(pickedPrice), format: isStrolling ? 'strolling' : 'stage',
+                    dur: isStrolling && strollingDuration ? String(strollingDuration) : '',
+                    name: capturedName || '', contact: capturedContact || ''
+                }
+            })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.error || !d.url) throw new Error(d.error || 'No checkout URL');
+            window.location.href = d.url;
+        })
+        .catch(e => {
+            alert('Could not open checkout — please try again, or text me and I\'ll send a link. ' + e.message);
+            setDecisionButtonsDisabled(false);
+            showDecisionPage();
+        });
     }
 
     function submitFinalSelection(readyToBook) {
@@ -1063,7 +1112,9 @@
         document.getElementById('confirm-modal').classList.remove('show');
         if (directBook) {
             document.getElementById('main-page').style.display = 'none';
-            submitFinalSelection(true);
+            // If a deposit-to-book option was configured, let them choose: pay & book, or reserve.
+            if (getParams().depPct) { showDecisionPage(); }
+            else { submitFinalSelection(true); }
         } else {
             showDecisionPage();
         }

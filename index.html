@@ -1155,6 +1155,10 @@
                     <div class="price-field"><label>Duration</label><select id="ag-dur"><option value="45">45 min</option><option value="60" selected>60 min</option></select></div>
                 </div>
                 <div class="price-field" style="margin-top:8px"><label>Agreed $</label><input type="number" id="ag-price" placeholder="2500"></div>
+                <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer">
+                    <input type="checkbox" id="ag-deposit-on" style="width:auto" onchange="document.getElementById('ag-dep-wrap').style.display=this.checked?'block':'none'"> Let them pay a deposit online to book
+                </label>
+                <div class="price-field" id="ag-dep-wrap" style="margin-top:6px;display:none"><label>Deposit to book</label><select id="ag-dep"><option value="50">50%</option><option value="25">25%</option></select></div>
             </div>
             <div class="pricing-option" onclick="selectPricingOption('private-standard')" id="opt-private-standard">
                 <div class="pricing-option-icon">&#127874;</div>
@@ -2160,7 +2164,10 @@ function buildPricingLink() {
         var agType = document.getElementById('ag-type').value;
         var agPrice = document.getElementById('ag-price').value;
         var agDur = document.getElementById('ag-dur').value;
-        return base + '?type=' + agType + '&only=' + agTier + '&dur=' + agDur + (agPrice ? '&price=' + agPrice : '') + '&cid=' + currentClientId + extra;
+        var agDepOn = document.getElementById('ag-deposit-on').checked;
+        var agDep = document.getElementById('ag-dep').value;
+        var depParam = (agDepOn && agPrice) ? ('&dep=' + agDep) : '';
+        return base + '?type=' + agType + '&only=' + agTier + '&dur=' + agDur + (agPrice ? '&price=' + agPrice : '') + depParam + '&cid=' + currentClientId + extra;
     }
     if (selectedPricingOption === 'private-standard')           return base + '?type=private&cid=' + currentClientId + extra;
     if (selectedPricingOption === 'corporate-standard')         return base + '?type=corporate&cid=' + currentClientId + extra;
