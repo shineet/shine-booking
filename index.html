@@ -1150,14 +1150,18 @@
             </div>
             <div class="custom-price-inputs" id="agreed-inputs">
                 <div class="three-col">
-                    <div class="price-field"><label>Type</label><select id="ag-type"><option value="private">Private</option><option value="corporate">Corporate</option></select></div>
+                    <div class="price-field"><label>Type</label><select id="ag-type" onchange="agTypeChanged()"><option value="private">Private</option><option value="corporate">Corporate</option></select></div>
                     <div class="price-field"><label>Package</label><select id="ag-tier"><option value="deluxe">Deluxe</option><option value="signature">Signature</option><option value="premium">Premium</option></select></div>
                     <div class="price-field"><label>Duration</label><select id="ag-dur"><option value="45">45 min</option><option value="60" selected>60 min</option></select></div>
                 </div>
                 <div class="price-field" style="margin-top:8px"><label>Agreed $</label><input type="number" id="ag-price" placeholder="2500"></div>
-                <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;cursor:pointer">
-                    <input type="checkbox" id="ag-deposit-on" style="width:auto" onchange="document.getElementById('ag-dep-wrap').style.display=this.checked?'block':'none'"> Let them pay a deposit online to book
-                </label>
+                <div class="price-field" style="margin-top:10px"><label>Deposit payment method</label>
+                    <select id="ag-pay" onchange="agPayChanged()">
+                        <option value="invoice">Invoice only — no card (corporate)</option>
+                        <option value="card">Card — I absorb the fee (private)</option>
+                        <option value="card_surcharge">Card + 3% surcharge (retail)</option>
+                    </select>
+                </div>
                 <div class="price-field" id="ag-dep-wrap" style="margin-top:6px;display:none"><label>Deposit to book</label><select id="ag-dep"><option value="50">50%</option><option value="25">25%</option></select></div>
             </div>
             <div class="pricing-option" onclick="selectPricingOption('private-standard')" id="opt-private-standard">
@@ -2151,9 +2155,21 @@ function selectPricingOption(option) {
     document.querySelectorAll('.custom-price-inputs').forEach(function(el) { el.classList.remove('show'); });
     var map = { 'agreed': 'agreed-inputs', 'private-custom': 'private-custom-inputs', 'corporate-custom': 'corporate-custom-inputs', 'strolling-private-custom': 'strolling-private-custom-inputs', 'strolling-corporate-custom': 'strolling-corporate-custom-inputs' };
     if (map[option]) document.getElementById(map[option]).classList.add('show');
+    if (option === 'agreed') agTypeChanged();
     document.getElementById('modal-send-btn').disabled = false;
     document.getElementById('modal-manual-btn').disabled = false;
     document.getElementById('modal-imessage-btn').disabled = false;
+}
+
+function agPayChanged() {
+    var pay = document.getElementById('ag-pay').value;
+    document.getElementById('ag-dep-wrap').style.display = (pay === 'invoice') ? 'none' : 'block';
+}
+function agTypeChanged() {
+    // Sensible default: corporate -> invoice only; private -> card (owner can override).
+    var type = document.getElementById('ag-type').value;
+    document.getElementById('ag-pay').value = (type === 'corporate') ? 'invoice' : 'card';
+    agPayChanged();
 }
 
 function buildPricingLink() {
@@ -2164,9 +2180,11 @@ function buildPricingLink() {
         var agType = document.getElementById('ag-type').value;
         var agPrice = document.getElementById('ag-price').value;
         var agDur = document.getElementById('ag-dur').value;
-        var agDepOn = document.getElementById('ag-deposit-on').checked;
+        var agPay = document.getElementById('ag-pay').value;
         var agDep = document.getElementById('ag-dep').value;
-        var depParam = (agDepOn && agPrice) ? ('&dep=' + agDep) : '';
+        var depParam = '';
+        if (agPrice && agPay === 'card') depParam = '&dep=' + agDep;
+        else if (agPrice && agPay === 'card_surcharge') depParam = '&dep=' + agDep + '&sc=3';
         return base + '?type=' + agType + '&only=' + agTier + '&dur=' + agDur + (agPrice ? '&price=' + agPrice : '') + depParam + '&cid=' + currentClientId + extra;
     }
     if (selectedPricingOption === 'private-standard')           return base + '?type=private&cid=' + currentClientId + extra;
