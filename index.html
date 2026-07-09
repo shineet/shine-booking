@@ -655,6 +655,65 @@
     }
 
     .pending-draft:focus { outline: none; border-color: var(--accent) }
+
+    .pending-label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        color: var(--muted);
+        margin: 4px 0 6px
+    }
+
+    .pending-incoming {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent2, #4a90d9);
+        border-radius: 7px;
+        padding: 10px 12px;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--text);
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 220px;
+        overflow-y: auto;
+        margin-bottom: 12px
+    }
+
+    .pending-instruction { display: flex; gap: 6px; margin-bottom: 10px }
+
+    .pending-instr-input {
+        flex: 1;
+        min-width: 0;
+        padding: 8px 10px;
+        font-size: 13px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-family: inherit;
+        background: var(--surface2);
+        color: var(--text);
+        box-sizing: border-box
+    }
+
+    .pending-instr-input:focus { outline: none; border-color: var(--accent) }
+
+    .pending-regen {
+        flex-shrink: 0;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        border: 1px solid var(--border);
+        background: var(--surface2);
+        color: var(--accent);
+        cursor: pointer;
+        font-family: inherit;
+        white-space: nowrap
+    }
+
+    .pending-regen:disabled { opacity: .6; cursor: default }
+
     .pending-actions { display: flex; gap: 6px }
 
     .pending-actions button {
@@ -1891,10 +1950,21 @@ function loadPendingReplies() {
         banner.style.display = 'block';
         list.innerHTML = pending.map(function(p) {
             var ch = p.channel === 'sms' ? 'SMS' : 'Email';
+            var incomingBlock = p.incoming
+                ? '<div class="pending-label">&#128172; They wrote' + (p.subject ? ' &middot; ' + escHtml(p.subject) : '') + '</div>' +
+                  '<div class="pending-incoming">' + escHtml(p.incoming) + '</div>'
+                : '';
+            var enterHandler = 'if(event.key===\'Enter\'){event.preventDefault();regeneratePendingReply(\'' + p.id + '\');}';
             return '<div class="pending-card" id="pending-' + p.id + '">' +
                 '<div class="pending-header"><div class="pending-client">' + escHtml(p.clientName) + '</div>' +
                 '<div class="pending-channel">' + ch + ' · ' + getTimeAgo(p.createdAt) + '</div></div>' +
+                incomingBlock +
+                '<div class="pending-label">&#10024; Your draft reply</div>' +
                 '<textarea class="pending-draft autogrow" id="pending-draft-' + p.id + '">' + escHtml(p.draft) + '</textarea>' +
+                '<div class="pending-instruction">' +
+                '<input type="text" class="pending-instr-input" id="pending-instr-' + p.id + '" placeholder="Tell the AI what to change, then Regenerate (e.g. say I&#39;m free that date, keep it shorter)" onkeydown="' + enterHandler + '">' +
+                '<button class="pending-regen" id="pending-regen-' + p.id + '" onclick="regeneratePendingReply(\'' + p.id + '\')">&#10024; Regenerate</button>' +
+                '</div>' +
                 '<div class="pending-actions">' +
                 '<button class="pending-discard" onclick="discardPendingReply(\'' + p.id + '\')">Discard</button>' +
                 (p.channel === 'sms' && p.toAddress ? '<button class="pending-send" style="background:var(--surface2);color:var(--accent2);border:1px solid var(--border)" onclick="openPendingInMessages(\'' + p.id + '\')">Open in Messages</button>' : '') +
@@ -1947,6 +2017,31 @@ function discardPendingReply(id) {
     .then(function(r) { return r.json(); })
     .then(function(d) { if (d.error) throw new Error(d.error); loadPendingReplies(); })
     .catch(function(e) { alert('Error: ' + e.message); card.querySelectorAll('button').forEach(function(b) { b.disabled = false; }); });
+}
+
+function regeneratePendingReply(id) {
+    var instr = document.getElementById('pending-instr-' + id);
+    var draft = document.getElementById('pending-draft-' + id);
+    var btn   = document.getElementById('pending-regen-' + id);
+    var instruction = instr ? instr.value.trim() : '';
+    var prevLabel = btn ? btn.innerHTML : '';
+    if (btn)   { btn.disabled = true; btn.innerHTML = '⏳ Regenerating…'; }
+    if (draft) { draft.disabled = true; draft.style.opacity = '0.5'; }
+    fetch('/api/pending-replies', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'regenerate', messageId: id, instruction: instruction })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.error) throw new Error(d.error);
+        if (draft && d.draft) { draft.value = d.draft; autoGrow(draft); }
+        if (instr) { instr.value = ''; }
+    })
+    .catch(function(e) { alert('Regenerate failed: ' + e.message); })
+    .finally(function() {
+        if (btn)   { btn.disabled = false; btn.innerHTML = prevLabel || '&#10024; Regenerate'; }
+        if (draft) { draft.disabled = false; draft.style.opacity = '1'; }
+    });
 }
 
 /* ── Delete ── */
