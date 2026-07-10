@@ -254,18 +254,38 @@ export default async function handler(req, res) {
         } catch (e) { console.error('Wix lead lookup failed:', e.message); }
 
         if (!client) {
-          const createRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
+          const eDate = (eventDate && /^\d{4}-\d{2}-\d{2}$/.test(eventDate)) ? eventDate : null;
+          let createRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
             method: 'POST', headers: { ...supaHdrs, 'Prefer': 'return=representation' },
             body: JSON.stringify([{
               name: leadName, email: clientEmail, phone: phone || null,
               company: company || null, event_type: eventType || null, guests: guests || null,
-              event_date: (eventDate && /^\d{4}-\d{2}-\d{2}$/.test(eventDate)) ? eventDate : null,
+              event_date: eDate,
               status: 'new', lead_source: 'Website form', last_channel: 'email',
               last_activity: new Date().toISOString(), notes: noteLine
             }])
           });
-          const rows = await createRes.json();
+          let rows = await createRes.json();
           client = Array.isArray(rows) ? (rows[0] || null) : null;
+          // Never drop a lead: if the enriched insert is rejected (e.g. a column the
+          // PostgREST schema cache doesn't know yet), log it and retry with only the
+          // core columns, folding the extras into notes so nothing is lost.
+          if (!client) {
+            console.error('Wix lead insert failed:', createRes.status, JSON.stringify(rows).slice(0, 300));
+            const extras = [company && `Company: ${company}`, eventType && `Event type: ${eventType}`, guests && `Guests: ${guests}`].filter(Boolean).join(' | ');
+            createRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
+              method: 'POST', headers: { ...supaHdrs, 'Prefer': 'return=representation' },
+              body: JSON.stringify([{
+                name: leadName, email: clientEmail, phone: phone || null, event_date: eDate,
+                status: 'new', lead_source: 'Website form', last_channel: 'email',
+                last_activity: new Date().toISOString(),
+                notes: [noteLine, extras].filter(Boolean).join('\n\n')
+              }])
+            });
+            rows = await createRes.json();
+            client = Array.isArray(rows) ? (rows[0] || null) : null;
+            if (!client) console.error('Wix lead core insert ALSO failed:', createRes.status, JSON.stringify(rows).slice(0, 300));
+          }
         } else {
           await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
             method: 'PATCH', headers: supaHdrs,
