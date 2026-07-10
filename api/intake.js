@@ -225,7 +225,7 @@ export default async function handler(req, res) {
       const leadName  = (b.name || [firstName, lastName].filter(Boolean).join(' ') || clientEmail.split('@')[0]).trim();
       const phone     = (b.phone || '').trim() || null;
       const company   = (b.company || '').trim() || null;
-      const eventType = (b.eventType || '').trim() || null;
+      const eventType = normalizeEventType(b.eventType); // map to the dashboard's canonical values
       const guests    = (b.guests || '').toString().trim() || null;
       const messageVal = (b.message || '').trim();
       const rawDate   = (b.eventDate || '').trim();
@@ -284,19 +284,15 @@ export default async function handler(req, res) {
         });
       }
 
-      // Log the submission as an inbound message so it shows in the conversation
+      // Log the submission as an inbound message so it shows in the conversation.
+      // Only the visitor's actual message — the structured fields (company, event
+      // type, guests, phone, date) already live in their own columns, so don't
+      // duplicate them here.
       if (client) {
-        const logLines = [
-          messageVal,
-          company && `Company: ${company}`,
-          eventType && `Event type: ${eventType}`,
-          eDate && `Event date: ${eDate}`,
-          guests && `Guests: ${guests}`,
-          phone && `Phone: ${phone}`
-        ].filter(Boolean).join('\n');
+        const convo = messageVal || `Website contact form submission from ${leadName}.`;
         await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
           method: 'POST', headers: supaHdrs,
-          body: JSON.stringify([{ client_id: client.id, channel: 'web', direction: 'inbound', content: (logLines || noteLine).slice(0, 4000), status: 'received', to_address: null, email_subject: 'Website contact form' }])
+          body: JSON.stringify([{ client_id: client.id, channel: 'web', direction: 'inbound', content: convo.slice(0, 4000), status: 'received', to_address: null, email_subject: 'Website contact form' }])
         });
       }
 
@@ -320,6 +316,18 @@ export default async function handler(req, res) {
   } else {
     return res.status(400).json({ error: 'Invalid action. Use "send", "submit", or "webform".' });
   }
+}
+
+// Map a free-form event type (e.g. the Wix form's "Corporate Event") to the
+// dashboard's canonical option values so the Edit dropdown matches and displays
+// it. Case-insensitive; unknown values pass through unchanged so nothing is lost.
+function normalizeEventType(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const CANONICAL = ['Birthday party', 'Bachelorette party', 'Bachelor party', 'Wedding', 'Corporate event', 'Graduation', 'Baby Shower', 'Private celebration', 'Anniversary', 'Other'];
+  const hit = CANONICAL.find(function (t) { return t.toLowerCase() === s.toLowerCase(); });
+  return hit || s;
 }
 
 function normalizeTime(value) {
