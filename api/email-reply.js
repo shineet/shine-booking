@@ -166,18 +166,6 @@ export default async function handler(req, res) {
       /view submissions/i.test(wixHaystack) ||
       /created with wix/i.test(wixHaystack);
 
-    // TEMP diagnostic: reveals exactly what the Cloudflare worker forwarded, so we can
-    // confirm why a Wix notification did/didn't match. Remove once lead routing is verified.
-    console.log('WIXDIAG ' + JSON.stringify({
-      from: from,
-      to: to,
-      subject: (subject || '').slice(0, 200),
-      bodyLen: (body || '').length,
-      bodySnippet: (body || '').slice(0, 300),
-      rawLen: (rawEmail || '').length,
-      rawSnippet: (rawEmail || '').slice(0, 300),
-      looksLikeWixForm: looksLikeWixForm
-    }));
     if (looksLikeWixForm) {
       const supaHdrs = { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
       try {
@@ -209,14 +197,15 @@ export default async function handler(req, res) {
 
         const field = (labels) => {
           for (const L of labels) {
-            const m = summary.match(new RegExp(L + '\\s*:?\\s*\\n?\\s*([^\\n]{1,120})', 'i'));
-            if (m) { const v = m[1].replace(/ /g, ' ').trim().replace(/\s{2,}/g, ' '); if (v && !/[:]$/.test(v)) return v; }
+            const m = summary.match(new RegExp('(?:^|\\n)\\s*' + L + '\\s*:\\s*([^\\n]{1,160})', 'i'));
+            if (m) { const v = m[1].replace(/\u00A0/g, ' ').trim().replace(/\s{2,}/g, ' '); if (v && !/^:?$/.test(v)) return v; }
           }
           return '';
         };
-        if (!clientEmail) clientEmail = field(['Email', 'E-mail']);
-        // Only accept a real-looking address; a loose field match (e.g. the word
-        // "email" in prose) must not create a junk lead.
+        // Prefer the address typed in the form's Email field; fall back to Reply-To
+        // (Wix sometimes puts the account address there, not the one they entered).
+        const formEmail = field(['Email', 'E-mail']);
+        if (formEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formEmail)) clientEmail = formEmail;
         if (clientEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail)) clientEmail = '';
 
         if (!clientEmail) {
@@ -229,14 +218,34 @@ export default async function handler(req, res) {
           return;
         }
 
-        const eventDate = field(['Event Date', 'Date of Event', 'Date']);
-        const phone     = field(['Phone 2', 'Phone Number', 'Phone', 'Mobile']);
-        const company   = field(['Company Name', 'Company', 'Organization', 'Organisation']);
-        const nameField = field(['Name', 'Full Name', 'First Name']);
-        const leadName  = nameField || clientEmail.split('@')[0];
-        const noteLine  = `Lead from website contact form (Contacts 8)${company ? ` — ${company}` : ''}`;
+        // Strip Wix's boilerplate footer (spam notice, tracking links, base64 token)
+        // so only the real submission is kept for the conversation + notes.
+        let footerIdx = -1;
+        for (const re of [/If you think this submission/i, /Click on the link below/i, /This email was sent as a notification/i, /report it as spam/i]) {
+          const fp = summary.search(re);
+          if (fp > -1 && (footerIdx === -1 || fp < footerIdx)) footerIdx = fp;
+        }
+        const cleanForm = (footerIdx > -1 ? summary.slice(0, footerIdx) : summary).trim();
 
-        // Find or create the client keyed on the real submitter email
+        // Map the form's fields to lead columns. The two unlabeled dropdowns arrive as
+        // "Choose an option" (event type) and "Choose an option 2" (guest count).
+        const firstName = field(['First Name']);
+        const lastName  = field(['Last Name']);
+        const fullName  = [firstName, lastName].filter(Boolean).join(' ');
+        const eventDate = field(['Event Date', 'Date of Event', 'Date']);
+        const phone     = field(['Phone 2', 'Phone Number', 'Phone', 'Mobile', 'Cell']);
+        const company   = field(['Company Name', 'Company', 'Organization', 'Organisation']);
+        const eventType = field(['Event Type', 'Type of Event', 'Choose an option(?! 2)']);
+        const guests    = field(['Number of Guests', 'Guest Count', '# of Guests', 'Guests', 'Choose an option 2']);
+        const leadName  = fullName || field(['Name', 'Full Name']) || clientEmail.split('@')[0];
+
+        // The visitor's actual message -> lead notes (fall back to a short source line).
+        let messageVal = '';
+        const mMsg = cleanForm.match(/(?:^|\n)\s*Message\s*:\s*([\s\S]+)$/i);
+        if (mMsg) messageVal = mMsg[1].replace(/\u00A0/g, ' ').replace(/\n{2,}/g, '\n').trim();
+        const noteLine = messageVal || `Lead from website contact form${company ? ` — ${company}` : ''}`;
+
+        // Find or create the client keyed on the submitter email
         let client = null;
         try {
           const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?email=eq.${encodeURIComponent(clientEmail)}&order=created_at.desc&limit=1`, { headers: supaHdrs });
@@ -249,6 +258,7 @@ export default async function handler(req, res) {
             method: 'POST', headers: { ...supaHdrs, 'Prefer': 'return=representation' },
             body: JSON.stringify([{
               name: leadName, email: clientEmail, phone: phone || null,
+              company: company || null, event_type: eventType || null, guests: guests || null,
               event_date: (eventDate && /^\d{4}-\d{2}-\d{2}$/.test(eventDate)) ? eventDate : null,
               status: 'new', lead_source: 'Website form', last_channel: 'email',
               last_activity: new Date().toISOString(), notes: noteLine
@@ -267,7 +277,7 @@ export default async function handler(req, res) {
         if (client) {
           await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
             method: 'POST', headers: supaHdrs,
-            body: JSON.stringify([{ client_id: client.id, channel: 'email', direction: 'inbound', content: summary.slice(0, 4000) || noteLine, status: 'received', to_address: null, email_subject: subject || null }])
+            body: JSON.stringify([{ client_id: client.id, channel: 'email', direction: 'inbound', content: cleanForm.slice(0, 4000) || noteLine, status: 'received', to_address: null, email_subject: subject || null }])
           });
         }
 
@@ -278,7 +288,7 @@ export default async function handler(req, res) {
             from: 'Shine Booking Assistant <shine@texasmentalist.com>',
             to: 'shinethementalist@gmail.com',
             subject: `✨ New website lead: ${leadName}`,
-            text: `A new lead came in from your website contact form and is now on your dashboard.\n\nName: ${leadName}\nEmail: ${clientEmail}\n${company ? 'Company: ' + company + '\n' : ''}${eventDate ? 'Event date: ' + eventDate + '\n' : ''}${phone ? 'Phone: ' + phone + '\n' : ''}\nReply from the dashboard:\nshine-booking.vercel.app`
+            text: `A new lead came in from your website contact form and is now on your dashboard.\n\nName: ${leadName}\nEmail: ${clientEmail}\n${company ? 'Company: ' + company + '\n' : ''}${eventType ? 'Event type: ' + eventType + '\n' : ''}${eventDate ? 'Event date: ' + eventDate + '\n' : ''}${guests ? 'Guests: ' + guests + '\n' : ''}${phone ? 'Phone: ' + phone + '\n' : ''}${messageVal ? '\nMessage: ' + messageVal + '\n' : ''}\nReply from the dashboard:\nshine-booking.vercel.app`
           })
         });
 
