@@ -274,7 +274,7 @@ Hours since last contact: ${hoursAgo}`;
 
     // POST action=generate-reply -> draft a contextual reply for the compose modal
     if (req.method === 'POST' && req.body.action === 'generate-reply') {
-      const { clientName, eventType, eventDate, venue, guests, status, notes } = req.body;
+      const { clientName, eventType, eventDate, venue, guests, status, notes, instruction, channel } = req.body;
 
       const systemPrompt = `You are writing a reply SMS on behalf of Shine, The Mentalist — a professional mentalism and magic performer in Texas.
 
@@ -304,6 +304,15 @@ PRICING:
         notes ? `Notes: ${notes}` : ''
       ].filter(Boolean).join('\n');
 
+      // If composing an email, relax the SMS length/signoff rule.
+      const channelBlock = channel === 'email'
+        ? '\n\nFORMAT OVERRIDE: This is an EMAIL, not an SMS. Use one or two short paragraphs; sign off as "Shine, The Mentalist" with the phone and website. Ignore the SMS "one glance" length rule above.'
+        : '';
+      // Per-draft steering the owner typed for THIS message.
+      const instrBlock = (instruction && String(instruction).trim())
+        ? `\n\nSHINE'S INSTRUCTION FOR THIS DRAFT (highest priority — follow this; never invent availability):\n${String(instruction).trim()}`
+        : '';
+
       const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -313,8 +322,8 @@ PRICING:
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 300,
-          system: systemPrompt + (await guidanceSuffix()),
+          max_tokens: 400,
+          system: systemPrompt + (await guidanceSuffix()) + channelBlock + instrBlock,
           messages: [{ role: 'user', content: userPrompt }],
         }),
       });

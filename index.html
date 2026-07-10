@@ -1410,6 +1410,10 @@
             <input type="text" id="compose-subject" placeholder="e.g. Following up on your event">
         </div>
         <div class="field">
+            <label>Guidance for AI draft <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+            <input type="text" id="compose-ai-instruction" placeholder="e.g. say I'm free that date, mention the stage show, keep it short">
+        </div>
+        <div class="field">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
                 <label style="margin:0">Message</label>
                 <button class="generate-btn" id="compose-ai-btn" onclick="generateComposeReply()" style="font-size:12px;padding:4px 10px;">✨ AI Draft</button>
@@ -2848,6 +2852,7 @@ function openComposeModal(id, name, email, phone) {
     document.getElementById('compose-client-name').textContent = 'To: ' + name;
     document.getElementById('compose-body').value = '';
     document.getElementById('compose-subject').value = '';
+    document.getElementById('compose-ai-instruction').value = '';
     document.getElementById('compose-char-count').textContent = '';
     document.getElementById('compose-ai-status').style.display = 'none';
     var channel = phone ? 'sms' : 'email';
@@ -2876,7 +2881,9 @@ function generateComposeReply() {
             venue: c.venue || '',
             guests: c.guests || '',
             status: c.status || '',
-            notes: c.notes || ''
+            notes: c.notes || '',
+            channel: document.getElementById('compose-channel').value,
+            instruction: (document.getElementById('compose-ai-instruction').value || '').trim()
         })
     })
     .then(function(r) { return r.json(); })
