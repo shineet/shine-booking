@@ -185,6 +185,9 @@ export default async function handler(req, res) {
           return '';
         };
         if (!clientEmail) clientEmail = field(['Email', 'E-mail']);
+        // Only accept a real-looking address; a loose field match (e.g. the word
+        // "email" in prose) must not create a junk lead.
+        if (clientEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail)) clientEmail = '';
 
         if (!clientEmail) {
           // Couldn't identify the submitter — notify so nothing is silently lost.
