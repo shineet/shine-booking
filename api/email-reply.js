@@ -152,6 +152,112 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ── Wix contact-form submission notification ───────────────────────────────
+    // These arrive FROM Wix (not the client), with the real submitter in the
+    // Reply-To header and the details in the body. Detect them, pull the client +
+    // fields, and create a clean lead. Fully guarded: only runs on Wix form emails,
+    // and a parse failure still captures the lead rather than dropping or misfiring.
+    const looksLikeWixForm =
+      /got a new submission/i.test(subject || '') ||
+      /submitted your form/i.test(body || '') ||
+      /submitted your form/i.test(rawEmail || '');
+    if (looksLikeWixForm) {
+      const supaHdrs = { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+      try {
+        // Real client email: prefer the Reply-To header (Wix puts the submitter there)
+        let clientEmail = '';
+        const rtLine = (rawEmail || '').match(/^reply-to:\s*(.+)$/im);
+        if (rtLine) {
+          const m = rtLine[1].match(/<([^>]+)>/) || rtLine[1].match(/[^\s<>@]+@[^\s<>]+/);
+          clientEmail = m ? (m[1] || m[0]) : '';
+        }
+        // Submission text (for field extraction + a saved copy)
+        let summary = normalizeBody(body || '');
+        if (!summary.trim()) summary = extractPlainText(rawEmail);
+        if (!summary && rawEmail) { const he = rawEmail.search(/\r?\n\r?\n/); if (he > -1) summary = rawEmail.slice(he); }
+        summary = (summary || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+
+        const field = (labels) => {
+          for (const L of labels) {
+            const m = summary.match(new RegExp(L + '\\s*:?\\s*\\n?\\s*([^\\n]{1,120})', 'i'));
+            if (m) { const v = m[1].trim(); if (v && !/[:]$/.test(v)) return v; }
+          }
+          return '';
+        };
+        if (!clientEmail) clientEmail = field(['Email', 'E-mail']);
+
+        if (!clientEmail) {
+          // Couldn't identify the submitter — notify so nothing is silently lost.
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+            body: JSON.stringify({ from: 'Shine Booking Assistant <shine@texasmentalist.com>', to: 'shinethementalist@gmail.com', subject: '📝 Website form submission (couldn\'t auto-add)', text: `A website form came in but I couldn't read the submitter's email to create a lead. Details:\n\n${summary.slice(0, 1500)}` })
+          });
+          res.status(200).json({ received: true, wixForm: true, leadCreated: false, reason: 'no client email' });
+          return;
+        }
+
+        const eventDate = field(['Event Date', 'Date of Event', 'Date']);
+        const phone     = field(['Phone 2', 'Phone Number', 'Phone', 'Mobile']);
+        const company   = field(['Company Name', 'Company', 'Organization', 'Organisation']);
+        const nameField = field(['Name', 'Full Name', 'First Name']);
+        const leadName  = nameField || clientEmail.split('@')[0];
+        const noteLine  = `Lead from website contact form (Contacts 8)${company ? ` — ${company}` : ''}`;
+
+        // Find or create the client keyed on the real submitter email
+        let client = null;
+        try {
+          const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?email=eq.${encodeURIComponent(clientEmail)}&order=created_at.desc&limit=1`, { headers: supaHdrs });
+          const cRows = await cRes.json();
+          client = Array.isArray(cRows) ? (cRows[0] || null) : null;
+        } catch (e) { console.error('Wix lead lookup failed:', e.message); }
+
+        if (!client) {
+          const createRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
+            method: 'POST', headers: { ...supaHdrs, 'Prefer': 'return=representation' },
+            body: JSON.stringify([{
+              name: leadName, email: clientEmail, phone: phone || null,
+              event_date: (eventDate && /^\d{4}-\d{2}-\d{2}$/.test(eventDate)) ? eventDate : null,
+              status: 'new', lead_source: 'Website form', last_channel: 'email',
+              last_activity: new Date().toISOString(), notes: noteLine
+            }])
+          });
+          const rows = await createRes.json();
+          client = Array.isArray(rows) ? (rows[0] || null) : null;
+        } else {
+          await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
+            method: 'PATCH', headers: supaHdrs,
+            body: JSON.stringify({ last_activity: new Date().toISOString(), last_channel: 'email' })
+          });
+        }
+
+        // Save the submission as an inbound message so it shows in the conversation
+        if (client) {
+          await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+            method: 'POST', headers: supaHdrs,
+            body: JSON.stringify([{ client_id: client.id, channel: 'email', direction: 'inbound', content: summary.slice(0, 4000) || noteLine, status: 'received', to_address: null, email_subject: subject || null }])
+          });
+        }
+
+        // Notify Shine
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+          body: JSON.stringify({
+            from: 'Shine Booking Assistant <shine@texasmentalist.com>',
+            to: 'shinethementalist@gmail.com',
+            subject: `✨ New website lead: ${leadName}`,
+            text: `A new lead came in from your website contact form and is now on your dashboard.\n\nName: ${leadName}\nEmail: ${clientEmail}\n${company ? 'Company: ' + company + '\n' : ''}${eventDate ? 'Event date: ' + eventDate + '\n' : ''}${phone ? 'Phone: ' + phone + '\n' : ''}\nReply from the dashboard:\nshine-booking.vercel.app`
+          })
+        });
+
+        res.status(200).json({ received: true, wixForm: true, leadCreated: !!client });
+        return;
+      } catch (e) {
+        console.error('Wix form handling failed:', e.message);
+        res.status(200).json({ received: true, wixForm: true, error: e.message });
+        return;
+      }
+    }
+
     const isOwnSystem = from.includes('resend.com') || from.includes('noreply');
     const isShineManual = !isOwnSystem && (
       from.includes('texasmentalist.com') ||
