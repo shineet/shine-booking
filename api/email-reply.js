@@ -157,10 +157,27 @@ export default async function handler(req, res) {
     // Reply-To header and the details in the body. Detect them, pull the client +
     // fields, and create a clean lead. Fully guarded: only runs on Wix form emails,
     // and a parse failure still captures the lead rather than dropping or misfiring.
+    const wixHaystack = `${subject || ''}\n${body || ''}\n${rawEmail || ''}`;
     const looksLikeWixForm =
-      /got a new submission/i.test(subject || '') ||
-      /submitted your form/i.test(body || '') ||
-      /submitted your form/i.test(rawEmail || '');
+      /got a new submission/i.test(wixHaystack) ||
+      /submitted your form/i.test(wixHaystack) ||
+      /a new inquiry for a show/i.test(wixHaystack) ||   // our custom Wix notification subject
+      /a site visitor just submitted/i.test(wixHaystack) ||
+      /view submissions/i.test(wixHaystack) ||
+      /created with wix/i.test(wixHaystack);
+
+    // TEMP diagnostic: reveals exactly what the Cloudflare worker forwarded, so we can
+    // confirm why a Wix notification did/didn't match. Remove once lead routing is verified.
+    console.log('WIXDIAG ' + JSON.stringify({
+      from: from,
+      to: to,
+      subject: (subject || '').slice(0, 200),
+      bodyLen: (body || '').length,
+      bodySnippet: (body || '').slice(0, 300),
+      rawLen: (rawEmail || '').length,
+      rawSnippet: (rawEmail || '').slice(0, 300),
+      looksLikeWixForm: looksLikeWixForm
+    }));
     if (looksLikeWixForm) {
       const supaHdrs = { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
       try {
@@ -171,16 +188,29 @@ export default async function handler(req, res) {
           const m = rtLine[1].match(/<([^>]+)>/) || rtLine[1].match(/[^\s<>@]+@[^\s<>]+/);
           clientEmail = m ? (m[1] || m[0]) : '';
         }
-        // Submission text (for field extraction + a saved copy)
-        let summary = normalizeBody(body || '');
+        // Submission text (for field extraction + a saved copy).
+        let summary = body || '';
         if (!summary.trim()) summary = extractPlainText(rawEmail);
         if (!summary && rawEmail) { const he = rawEmail.search(/\r?\n\r?\n/); if (he > -1) summary = rawEmail.slice(he); }
-        summary = (summary || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+        // Wix notifications arrive quoted-printable-encoded; force-decode when QP markers
+        // are present so =C2=A0 (nbsp) / =0D=0A (CRLF) don't corrupt values or bleed
+        // fields together (this is the reliable signal that the generic decoder missed).
+        if (/=[0-9A-Fa-f]{2}/.test(summary) || /=\r?\n/.test(summary)) summary = decodeQuotedPrintable(summary);
+        summary = (summary || '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/gi, ' ')
+          .replace(/&amp;/gi, '&')
+          .replace(/ /g, ' ')   // real non-breaking space -> normal space
+          .replace(/\r\n?/g, '\n')     // normalize line endings so field() stops at line breaks
+          .replace(/[ \t]+/g, ' ')
+          .replace(/ *\n */g, '\n')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
 
         const field = (labels) => {
           for (const L of labels) {
             const m = summary.match(new RegExp(L + '\\s*:?\\s*\\n?\\s*([^\\n]{1,120})', 'i'));
-            if (m) { const v = m[1].trim(); if (v && !/[:]$/.test(v)) return v; }
+            if (m) { const v = m[1].replace(/ /g, ' ').trim().replace(/\s{2,}/g, ' '); if (v && !/[:]$/.test(v)) return v; }
           }
           return '';
         };
