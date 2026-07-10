@@ -202,8 +202,123 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: e.message });
     }
 
+  } else if (action === 'webform') {
+    // ── direct website contact-form -> lead ───────────────────────────────────
+    // Primary path: the Wix contact form POSTs its fields here as clean JSON, so
+    // a lead lands on the dashboard instantly without waiting on the email parser.
+    // The email-to-parser pipeline (api/email-reply.js) stays on as a fallback and
+    // dedupes against leads this branch just created (10-min window, by email).
+    try {
+      // Optional shared-secret gate. Enforced only once WEBFORM_SECRET is set in
+      // Vercel; until then the endpoint works openly so it can be wired + tested.
+      const secret = process.env.WEBFORM_SECRET;
+      if (secret && req.headers['x-webform-secret'] !== secret) {
+        return res.status(401).json({ error: 'unauthorized' });
+      }
+
+      const b = req.body || {};
+      const clientEmail = (b.email || '').trim();
+      if (!clientEmail) return res.status(400).json({ error: 'Missing email' });
+
+      const firstName = (b.firstName || '').trim();
+      const lastName  = (b.lastName || '').trim();
+      const leadName  = (b.name || [firstName, lastName].filter(Boolean).join(' ') || clientEmail.split('@')[0]).trim();
+      const phone     = (b.phone || '').trim() || null;
+      const company   = (b.company || '').trim() || null;
+      const eventType = (b.eventType || '').trim() || null;
+      const guests    = (b.guests || '').toString().trim() || null;
+      const messageVal = (b.message || '').trim();
+      const rawDate   = (b.eventDate || '').trim();
+      const eDate     = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
+      const noteLine  = messageVal || `Lead from website contact form${company ? ` — ${company}` : ''}`;
+
+      const supaHdrs = {
+        'Content-Type': 'application/json',
+        'apikey': process.env.SUPABASE_SECRET_KEY,
+        'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+      };
+
+      // Find or create the client keyed on the submitter email
+      let client = null;
+      try {
+        const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?email=eq.${encodeURIComponent(clientEmail)}&order=created_at.desc&limit=1`, { headers: supaHdrs });
+        const cRows = await cRes.json();
+        client = Array.isArray(cRows) ? (cRows[0] || null) : null;
+      } catch (e) { console.error('webform lead lookup failed:', e.message); }
+
+      if (!client) {
+        let createRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
+          method: 'POST', headers: { ...supaHdrs, 'Prefer': 'return=representation' },
+          body: JSON.stringify([{
+            name: leadName, email: clientEmail, phone: phone,
+            company: company, event_type: eventType, guests: guests,
+            event_date: eDate,
+            status: 'new', lead_source: 'Website form', last_channel: 'web',
+            last_activity: new Date().toISOString(), notes: noteLine
+          }])
+        });
+        let rows = await createRes.json();
+        client = Array.isArray(rows) ? (rows[0] || null) : null;
+        // Never drop a lead: if the enriched insert is rejected, retry with only the
+        // core columns and fold the extras into notes so nothing is lost.
+        if (!client) {
+          console.error('webform lead insert failed:', createRes.status, JSON.stringify(rows).slice(0, 300));
+          const extras = [company && `Company: ${company}`, eventType && `Event type: ${eventType}`, guests && `Guests: ${guests}`].filter(Boolean).join(' | ');
+          createRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
+            method: 'POST', headers: { ...supaHdrs, 'Prefer': 'return=representation' },
+            body: JSON.stringify([{
+              name: leadName, email: clientEmail, phone: phone, event_date: eDate,
+              status: 'new', lead_source: 'Website form', last_channel: 'web',
+              last_activity: new Date().toISOString(),
+              notes: [noteLine, extras].filter(Boolean).join('\n\n')
+            }])
+          });
+          rows = await createRes.json();
+          client = Array.isArray(rows) ? (rows[0] || null) : null;
+          if (!client) console.error('webform lead core insert ALSO failed:', createRes.status, JSON.stringify(rows).slice(0, 300));
+        }
+      } else {
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
+          method: 'PATCH', headers: supaHdrs,
+          body: JSON.stringify({ last_activity: new Date().toISOString(), last_channel: 'web' })
+        });
+      }
+
+      // Log the submission as an inbound message so it shows in the conversation
+      if (client) {
+        const logLines = [
+          messageVal,
+          company && `Company: ${company}`,
+          eventType && `Event type: ${eventType}`,
+          eDate && `Event date: ${eDate}`,
+          guests && `Guests: ${guests}`,
+          phone && `Phone: ${phone}`
+        ].filter(Boolean).join('\n');
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+          method: 'POST', headers: supaHdrs,
+          body: JSON.stringify([{ client_id: client.id, channel: 'web', direction: 'inbound', content: (logLines || noteLine).slice(0, 4000), status: 'received', to_address: null, email_subject: 'Website contact form' }])
+        });
+      }
+
+      // Notify Shine
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+        body: JSON.stringify({
+          from: 'Shine Booking Assistant <shine@texasmentalist.com>',
+          to: 'shinethementalist@gmail.com',
+          subject: `✨ New website lead: ${leadName}`,
+          text: `A new lead came in from your website contact form and is now on your dashboard.\n\nName: ${leadName}\nEmail: ${clientEmail}\n${company ? 'Company: ' + company + '\n' : ''}${eventType ? 'Event type: ' + eventType + '\n' : ''}${eDate ? 'Event date: ' + eDate + '\n' : ''}${guests ? 'Guests: ' + guests + '\n' : ''}${phone ? 'Phone: ' + phone + '\n' : ''}${messageVal ? '\nMessage: ' + messageVal + '\n' : ''}\nReply from the dashboard:\nshine-booking.vercel.app`
+        })
+      });
+
+      return res.status(200).json({ success: true, leadCreated: !!client, clientId: client?.id || null });
+    } catch (e) {
+      console.error('webform lead handling failed:', e.message);
+      return res.status(500).json({ error: e.message });
+    }
+
   } else {
-    return res.status(400).json({ error: 'Invalid action. Use "send" or "submit".' });
+    return res.status(400).json({ error: 'Invalid action. Use "send", "submit", or "webform".' });
   }
 }
 

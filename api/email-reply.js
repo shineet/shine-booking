@@ -253,6 +253,22 @@ export default async function handler(req, res) {
           client = Array.isArray(cRows) ? (cRows[0] || null) : null;
         } catch (e) { console.error('Wix lead lookup failed:', e.message); }
 
+        // Dedup vs the direct webform path (api/intake.js action=webform). If that
+        // call already created this lead in the last 10 min, it has done the insert,
+        // the message log, and the alert -- so here we stay silent (just touch
+        // activity) to avoid a duplicate lead entry and a duplicate alert email.
+        if (client && String(client.lead_source || '').startsWith('Website form') && client.created_at) {
+          const ageMs = Date.now() - new Date(client.created_at).getTime();
+          if (ageMs >= 0 && ageMs < 10 * 60 * 1000) {
+            await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
+              method: 'PATCH', headers: supaHdrs,
+              body: JSON.stringify({ last_activity: new Date().toISOString() })
+            });
+            res.status(200).json({ received: true, wixForm: true, leadCreated: true, dedup: 'direct-webform' });
+            return;
+          }
+        }
+
         if (!client) {
           const eDate = (eventDate && /^\d{4}-\d{2}-\d{2}$/.test(eventDate)) ? eventDate : null;
           let createRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
