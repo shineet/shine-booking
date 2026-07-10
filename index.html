@@ -608,6 +608,25 @@
 
     .pending-banner.has-items { display: block }
 
+    /* New-lead alert banner */
+    .newlead-banner {
+        display: none; align-items: center; gap: 12px;
+        background: linear-gradient(90deg, rgba(76,175,135,.20), rgba(76,175,135,.05));
+        border-bottom: 1px solid var(--border);
+        border-left: 3px solid var(--green);
+        padding: 11px 16px; width: 100%; box-sizing: border-box;
+        flex-shrink: 0; font-size: 13px;
+    }
+    .newlead-banner.show { display: flex }
+    .newlead-banner .nlb-text { flex: 1; color: var(--text) }
+    .newlead-banner .nlb-text b { color: var(--green) }
+    .newlead-banner button {
+        border: none; border-radius: 6px; padding: 7px 14px;
+        font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    }
+    .newlead-banner .nlb-view { background: var(--green); color: #08130d }
+    .newlead-banner .nlb-dismiss { background: transparent; color: var(--muted) }
+
     .pending-banner-title {
         font-size: 11px;
         font-weight: 700;
@@ -981,6 +1000,13 @@
 
 <!-- Shell -->
 <div class="shell" style="flex-direction:column">
+
+    <!-- New lead alert banner -->
+    <div id="newlead-banner" class="newlead-banner">
+        <div class="nlb-text" id="newlead-text"></div>
+        <button class="nlb-view" onclick="viewNewLeads()">View</button>
+        <button class="nlb-dismiss" onclick="dismissNewLeads()">Dismiss</button>
+    </div>
 
     <!-- Pending replies banner -->
     <div id="pending-banner" class="pending-banner" style="display:none;width:100%;flex-shrink:0">
@@ -1642,6 +1668,7 @@ function loadLeads() {
     .then(function(clients) {
         allClients = clients;
         renderList();
+        checkNewLeads();
         if (activeClientId) {
             var c = clients.find(function(x) { return x.id === activeClientId; });
             if (c) renderDetail(c);
@@ -1650,6 +1677,48 @@ function loadLeads() {
     .catch(function(e) {
         document.getElementById('lead-list').innerHTML = '<div class="list-empty" style="color:var(--red)">Error: ' + e.message + '</div>';
     });
+}
+
+// ── New-lead alert ──────────────────────────────────────────────────────────
+// Flags leads that arrived on their own (website form, inbound email, SMS, etc.)
+// so they aren't buried in the list. "Seen" is tracked by a timestamp in this
+// browser; leads created after it (from an external source) raise the banner.
+var newLeadIds = [];
+function isExternalLead(c) {
+    var s = (c.lead_source || '').toLowerCase();
+    return /website|inbound|form|sms|text|referral|bark|gigsalad|the bash/.test(s);
+}
+function checkNewLeads() {
+    var banner = document.getElementById('newlead-banner');
+    var seenAt = localStorage.getItem('leadsSeenAt');
+    if (!seenAt) { localStorage.setItem('leadsSeenAt', new Date().toISOString()); return; } // baseline: don't alert on first ever load
+    var fresh = (allClients || []).filter(function(c) {
+        return c.created_at && c.created_at > seenAt && isExternalLead(c) && c.status !== 'lost' && c.status !== 'completed';
+    }).sort(function(a, b) { return a.created_at < b.created_at ? 1 : -1; }); // newest first
+    newLeadIds = fresh.map(function(c) { return c.id; });
+    if (!banner) return;
+    if (!fresh.length) { banner.classList.remove('show'); return; }
+    var names = fresh.slice(0, 3).map(function(c) { return escHtml(c.name || 'New lead'); }).join(', ');
+    var more = fresh.length > 3 ? ' +' + (fresh.length - 3) + ' more' : '';
+    var label = fresh.length === 1 ? '1 new lead came in' : fresh.length + ' new leads came in';
+    document.getElementById('newlead-text').innerHTML = '&#127881; <b>' + label + '</b> from your website/inbox: ' + names + more;
+    banner.classList.add('show');
+}
+function viewNewLeads() {
+    if (newLeadIds.length) {
+        setFilter('all');
+        selectLead(newLeadIds[0]); // jump straight to the newest one
+        var row = document.querySelector('.lead-row[onclick*="\'' + newLeadIds[0] + '\'"]');
+        if (row && row.scrollIntoView) row.scrollIntoView({ block: 'center' });
+    }
+    markLeadsSeen();
+}
+function dismissNewLeads() { markLeadsSeen(); }
+function markLeadsSeen() {
+    localStorage.setItem('leadsSeenAt', new Date().toISOString());
+    newLeadIds = [];
+    var banner = document.getElementById('newlead-banner');
+    if (banner) banner.classList.remove('show');
 }
 
 function makeLeadRow(c) {
@@ -2669,7 +2738,10 @@ function saveLeadOnly() {
 
     request
     .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
-    .then(function() { messagingExistingClientId = null; showView('pipeline'); })
+    .then(function() {
+        localStorage.setItem('leadsSeenAt', new Date().toISOString()); // a lead I added myself shouldn't trigger the "new lead" alert
+        messagingExistingClientId = null; showView('pipeline');
+    })
     .catch(function(e) { alert('Could not save: ' + e.message); })
     .finally(function() { btn.disabled = false; btn.textContent = 'Save lead (no message yet)'; });
 }
