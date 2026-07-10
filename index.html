@@ -627,6 +627,33 @@
     .newlead-banner .nlb-view { background: var(--green); color: #08130d }
     .newlead-banner .nlb-dismiss { background: transparent; color: var(--muted) }
 
+    /* New-lead center popup */
+    .nl-pop-overlay {
+        position: fixed; inset: 0; z-index: 9999;
+        display: none; align-items: center; justify-content: center;
+        background: rgba(0,0,0,.55);
+    }
+    .nl-pop-overlay.show { display: flex }
+    .nl-pop {
+        background: var(--surface, #16161c); border: 1px solid var(--green);
+        border-radius: 16px; padding: 26px 30px; width: 90%; max-width: 340px;
+        text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.55);
+        animation: nlPopIn .28s cubic-bezier(.2,.9,.3,1.2);
+    }
+    @keyframes nlPopIn { from { transform: scale(.85); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+    .nl-pop .nl-emoji { font-size: 40px; line-height: 1 }
+    .nl-pop h3 { color: var(--green); font-size: 18px; margin: 8px 0 16px }
+    .nl-pop .nl-name { font-size: 20px; font-weight: 700; color: var(--text) }
+    .nl-pop .nl-meta { font-size: 13px; color: var(--muted); margin-top: 4px }
+    .nl-pop .nl-count { font-size: 12px; color: var(--muted); margin-top: 6px }
+    .nl-pop .nl-actions { display: flex; gap: 10px; margin-top: 22px }
+    .nl-pop button {
+        flex: 1; border: none; border-radius: 8px; padding: 11px;
+        font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .nl-pop .nl-view { background: var(--green); color: #08130d }
+    .nl-pop .nl-close { background: var(--surface2, #22222c); color: var(--muted) }
+
     .pending-banner-title {
         font-size: 11px;
         font-weight: 700;
@@ -1006,6 +1033,21 @@
         <div class="nlb-text" id="newlead-text"></div>
         <button class="nlb-view" onclick="viewNewLeads()">View</button>
         <button class="nlb-dismiss" onclick="dismissNewLeads()">Dismiss</button>
+    </div>
+
+    <!-- New lead center popup -->
+    <div id="nl-pop-overlay" class="nl-pop-overlay">
+        <div class="nl-pop">
+            <div class="nl-emoji">&#127881;</div>
+            <h3>New lead!</h3>
+            <div class="nl-name" id="nl-pop-name">&mdash;</div>
+            <div class="nl-meta" id="nl-pop-meta"></div>
+            <div class="nl-count" id="nl-pop-count"></div>
+            <div class="nl-actions">
+                <button class="nl-close" onclick="closeLeadPopup()">Dismiss</button>
+                <button class="nl-view" onclick="viewNewLeads()">View lead</button>
+            </div>
+        </div>
     </div>
 
     <!-- Pending replies banner -->
@@ -1684,6 +1726,7 @@ function loadLeads() {
 // so they aren't buried in the list. "Seen" is tracked by a timestamp in this
 // browser; leads created after it (from an external source) raise the banner.
 var newLeadIds = [];
+var poppedLeadIds = {}; // leads we've already popped this session, so refresh doesn't re-pop
 function isExternalLead(c) {
     var s = (c.lead_source || '').toLowerCase();
     return /website|inbound|form|sms|text|referral|bark|gigsalad|the bash/.test(s);
@@ -1696,13 +1739,55 @@ function checkNewLeads() {
         return c.created_at && c.created_at > seenAt && isExternalLead(c) && c.status !== 'lost' && c.status !== 'completed';
     }).sort(function(a, b) { return a.created_at < b.created_at ? 1 : -1; }); // newest first
     newLeadIds = fresh.map(function(c) { return c.id; });
-    if (!banner) return;
-    if (!fresh.length) { banner.classList.remove('show'); return; }
-    var names = fresh.slice(0, 3).map(function(c) { return escHtml(c.name || 'New lead'); }).join(', ');
-    var more = fresh.length > 3 ? ' +' + (fresh.length - 3) + ' more' : '';
-    var label = fresh.length === 1 ? '1 new lead came in' : fresh.length + ' new leads came in';
-    document.getElementById('newlead-text').innerHTML = '&#127881; <b>' + label + '</b> from your website/inbox: ' + names + more;
-    banner.classList.add('show');
+    if (!fresh.length) { if (banner) banner.classList.remove('show'); closeLeadPopup(); return; }
+    if (banner) {
+        var names = fresh.slice(0, 3).map(function(c) { return escHtml(c.name || 'New lead'); }).join(', ');
+        var more = fresh.length > 3 ? ' +' + (fresh.length - 3) + ' more' : '';
+        var label = fresh.length === 1 ? '1 new lead came in' : fresh.length + ' new leads came in';
+        document.getElementById('newlead-text').innerHTML = '&#127881; <b>' + label + '</b> from your website/inbox: ' + names + more;
+        banner.classList.add('show');
+    }
+    // Pop the center modal + chime once per new batch (not on every refresh)
+    if (fresh.some(function(c) { return !poppedLeadIds[c.id]; })) {
+        fresh.forEach(function(c) { poppedLeadIds[c.id] = true; });
+        showLeadPopup(fresh);
+    }
+}
+function showLeadPopup(fresh) {
+    var ov = document.getElementById('nl-pop-overlay');
+    if (!ov || !fresh.length) return;
+    var newest = fresh[0];
+    document.getElementById('nl-pop-name').textContent = newest.name || 'New lead';
+    var meta = [];
+    if (newest.event_type) meta.push(newest.event_type);
+    if (newest.event_date) meta.push(fmtDate(newest.event_date));
+    document.getElementById('nl-pop-meta').textContent = meta.join(' · ');
+    document.getElementById('nl-pop-count').textContent = fresh.length > 1 ? ('+ ' + (fresh.length - 1) + ' more new') : '';
+    ov.classList.add('show');
+    playChime();
+}
+function closeLeadPopup() {
+    var ov = document.getElementById('nl-pop-overlay');
+    if (ov) ov.classList.remove('show');
+}
+function playChime() {
+    try {
+        var Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        var ctx = new Ctx();
+        var now = ctx.currentTime;
+        [880, 1174.66].forEach(function(freq, i) { // A5 -> D6, a soft two-note ping
+            var o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = 'sine'; o.frequency.value = freq;
+            var t = now + i * 0.14;
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(0.22, t + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+            o.connect(g); g.connect(ctx.destination);
+            o.start(t); o.stop(t + 0.55);
+        });
+        setTimeout(function() { try { ctx.close(); } catch (e) {} }, 1300);
+    } catch (e) {}
 }
 function viewNewLeads() {
     if (newLeadIds.length) {
@@ -1719,6 +1804,7 @@ function markLeadsSeen() {
     newLeadIds = [];
     var banner = document.getElementById('newlead-banner');
     if (banner) banner.classList.remove('show');
+    closeLeadPopup();
 }
 
 function makeLeadRow(c) {
