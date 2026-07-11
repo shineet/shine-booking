@@ -582,7 +582,11 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
         if (jsonStr) parsed = JSON.parse(jsonStr);
       } catch(e) { console.error('Research parse failed:', e.message); }
 
-      if (!parsed) { res.status(200).json({ success: true, research: null, raw: finalText }); return; }
+      // Web search embeds <cite> citation tags in the text; strip them for clean display.
+      const stripCite = (s) => typeof s === 'string' ? s.replace(/<\/?cite[^>]*>/gi, '').replace(/[ \t]+\n/g, '\n').trim() : s;
+      if (parsed) Object.keys(parsed).forEach(k => { parsed[k] = stripCite(parsed[k]); });
+
+      if (!parsed) { res.status(200).json({ success: true, research: null, raw: stripCite(finalText) }); return; }
       res.status(200).json({ success: true, research: parsed });
       return;
     }
