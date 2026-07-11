@@ -87,6 +87,9 @@ Rules:
 - Never make up availability
 - Return ONLY the message text, no commentary, no internal tags.`;
 
+// Give the research action (Claude + web search) room to finish server-side.
+export const config = { maxDuration: 60 };
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -539,35 +542,43 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
       ].filter(Boolean).join('\n');
 
       // Server-side web search: Claude runs the searches itself. Loop on pause_turn
-      // (the server-tool loop caps at 10 iterations and pauses; re-send to resume).
-      let messages = [{ role: 'user', content: userPrompt }];
-      let finalText = '';
-      let refused = false;
-      try {
-        for (let i = 0; i < 6; i++) {
-          const resp = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-            body: JSON.stringify({
-              model: 'claude-opus-4-8',
-              max_tokens: 3500,
-              system: RESEARCH_SYSTEM,
-              tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 6 }],
-              messages
-            })
-          });
-          const data = await resp.json();
-          if (!resp.ok || data.error) { console.error('Research model error:', data && data.error && data.error.message); break; }
-          if (data.stop_reason === 'refusal') { refused = true; break; }
-          if (Array.isArray(data.content)) data.content.forEach(b => { if (b.type === 'text') finalText += b.text; });
-          if (data.stop_reason === 'pause_turn') {
-            messages = [{ role: 'user', content: userPrompt }, { role: 'assistant', content: data.content }];
-            finalText = ''; // the resumed turn re-emits the text; keep only the last pass
-            continue;
+      // (the server-tool loop caps and pauses; re-send to resume). Kept fast + bounded so
+      // the browser reliably gets a response: Sonnet 4.6 first (fast, proven here), Opus 4.8
+      // only if that comes back empty. Fewer searches + tighter output = lower latency.
+      async function runResearch(model) {
+        let messages = [{ role: 'user', content: userPrompt }];
+        let text = '', ref = false;
+        try {
+          for (let i = 0; i < 3; i++) {
+            const resp = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+              body: JSON.stringify({
+                model,
+                max_tokens: 3000,
+                system: RESEARCH_SYSTEM,
+                tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 }],
+                messages
+              })
+            });
+            const data = await resp.json();
+            if (!resp.ok || data.error) { console.error('Research model error:', data && data.error && data.error.message); break; }
+            if (data.stop_reason === 'refusal') { ref = true; break; }
+            text = '';
+            if (Array.isArray(data.content)) data.content.forEach(b => { if (b.type === 'text') text += b.text; });
+            if (data.stop_reason === 'pause_turn') {
+              messages = [{ role: 'user', content: userPrompt }, { role: 'assistant', content: data.content }];
+              continue; // resumed turn re-emits text; keep only the last pass
+            }
+            break;
           }
-          break;
-        }
-      } catch(e) { console.error('Research call failed:', e.message); }
+        } catch(e) { console.error('Research call failed (' + model + '):', e.message); }
+        return { text, ref };
+      }
+
+      let r = await runResearch('claude-sonnet-4-6');
+      if (!r.text) r = await runResearch('claude-opus-4-8');
+      let finalText = r.text; const refused = r.ref;
 
       if (refused) { res.status(200).json({ error: 'The AI declined this one (rare false positive). Try again, or research manually.' }); return; }
       if (!finalText) { res.status(200).json({ error: 'Could not generate research — try again in a moment.' }); return; }
