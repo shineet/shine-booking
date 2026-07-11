@@ -559,7 +559,7 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
                 system: RESEARCH_SYSTEM,
                 // Basic web search (no per-result code-exec filtering) = much faster per search,
                 // which keeps the whole call under Vercel's 60s function ceiling.
-                tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
+                tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 2 }],
                 messages
               })
             });
