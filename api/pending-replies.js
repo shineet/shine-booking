@@ -486,6 +486,107 @@ PRICING:
       return;
     }
 
+    // POST action=research -> deep-research a lead (company + person via live web search),
+    // read affordability, resolve the phone line type, and draft an email + SMS. Display-only:
+    // nothing is sent or saved; the owner reviews and sends the drafts himself.
+    if (req.method === 'POST' && req.body.action === 'research') {
+      const lead = req.body.lead || {};
+      const emailDomain = (lead.email && lead.email.indexOf('@') !== -1) ? lead.email.split('@')[1].trim().toLowerCase() : '';
+
+      const RESEARCH_SYSTEM = `You are the research analyst and outreach writer for Shine Thankappan, a corporate mentalist and magician based in Austin, TX (website texasmentalist.com, phone +1 737-271-5308). Shine performs a 45-60 minute interactive mentalism + visual-magic STAGE SHOW (his strength), and also does strolling/walk-around magic.
+
+Your job: given one inbound lead, use the web_search tool to research the company and the person, judge how much they can afford, resolve their phone line type, and draft outreach for Shine to review and SEND HIMSELF. These are drafts only — you never send anything.
+
+Do the research:
+1. COMPANY: From the email domain and any company name, search the web and identify the organization — what it is, size/prestige signals, industry, location. If the email domain is a free provider (gmail/yahoo/outlook/icloud) or none is given, say the company is unknown and treat it as an individual/private lead.
+2. PERSON: Search for the person's name + company/domain. Surface role/title and any public LinkedIn/company-page/social snippet. Never fabricate a title, contact, or fact — if you can't find it, say so.
+3. AFFORDABILITY: Judge whether this lead can afford a HIGH or LOW price, from concrete signals (company type/prestige, role, event type, guest count, venue). Shine's corporate floor is $2,500 and his real corporate booking anchor is $3,500. Give a specific recommended anchor number and a short internal price range with when to push higher.
+4. PHONE LINE TYPE: The lead's phone is "${lead.phone || '(none given)'}". Reason about whether it is MOBILE or LANDLINE: note the area code's region, and if you find the company's official phone number, compare — a personal number on a different/ mobile-heavy area code than the company's main line is almost certainly a cell. State your confidence. You cannot get carrier data directly, so also recommend confirming at freecarrierlookup.com. Then advise whether Shine should ALSO text the number (yes if it's likely mobile).
+5. FIT + STRATEGY: One tight paragraph on why this is (or isn't) a good fit and how to approach the reply.
+
+Then draft the outreach. Tone by event type — the STAGE SHOW is always the headline:
+- Corporate events / weddings: lead with the stage show; strolling only as an optional add-on.
+- Private parties (birthday, bachelorette, house/home, small private): lead with and emphasize the stage show; do NOT bring up strolling unless the client asked for it.
+- Cocktail parties: mention both strolling and the stage show.
+Write in Shine's real voice — first person, short sentences, real contractions, no stock openers ("Thanks for reaching out"), no corporate filler. If they gave enough detail, put a confident starting number in the email ("my rate starts at $X") rather than making them fill a form — website/Bark leads bail on friction. Ask at most 1-2 light qualifying questions. Never invent availability. The SMS is a short friendly nudge pointing back to the email.
+
+HARD STYLE RULE: absolutely NO em dashes (—) anywhere, in the research OR the drafts. Use commas, periods, or "to".
+
+Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \`\`\`) and nothing else, with exactly these string fields:
+{
+  "company": "what the company is + prestige/size signals, or 'Individual / private lead' if no company",
+  "person": "role/title and any public profile findings, or what you could not find",
+  "affordability": "HIGH or LOW read with the reasoning",
+  "recommendedAnchor": "a dollar figure, e.g. $3,500",
+  "priceRange": "internal range + when to push higher",
+  "phone": "mobile vs landline assessment, confidence, and whether to also text",
+  "fit": "fit + strategy paragraph",
+  "emailSubject": "the email subject line (no em dashes)",
+  "emailBody": "the full email body in Shine's voice, signed 'Shine, The Mentalist / texasmentalist.com / 737-271-5308' (no em dashes)",
+  "sms": "a short SMS nudge (no em dashes)"
+}`;
+
+      const userPrompt = [
+        `Lead name: ${lead.name || '(unknown)'}`,
+        `Email: ${lead.email || '(none)'}${emailDomain ? '  (domain: ' + emailDomain + ')' : ''}`,
+        `Phone: ${lead.phone || '(none)'}`,
+        lead.company ? `Company field: ${lead.company}` : '',
+        `Event type: ${lead.event_type || '(unspecified)'}`,
+        lead.event_date ? `Event date: ${lead.event_date}` : '',
+        lead.guests ? `Guests: ${lead.guests}` : '',
+        lead.lead_source ? `Source: ${lead.lead_source}` : '',
+        lead.notes ? `Notes / their message: ${lead.notes}` : ''
+      ].filter(Boolean).join('\n');
+
+      // Server-side web search: Claude runs the searches itself. Loop on pause_turn
+      // (the server-tool loop caps at 10 iterations and pauses; re-send to resume).
+      let messages = [{ role: 'user', content: userPrompt }];
+      let finalText = '';
+      let refused = false;
+      try {
+        for (let i = 0; i < 6; i++) {
+          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({
+              model: 'claude-opus-4-8',
+              max_tokens: 3500,
+              system: RESEARCH_SYSTEM,
+              tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 6 }],
+              messages
+            })
+          });
+          const data = await resp.json();
+          if (!resp.ok || data.error) { console.error('Research model error:', data && data.error && data.error.message); break; }
+          if (data.stop_reason === 'refusal') { refused = true; break; }
+          if (Array.isArray(data.content)) data.content.forEach(b => { if (b.type === 'text') finalText += b.text; });
+          if (data.stop_reason === 'pause_turn') {
+            messages = [{ role: 'user', content: userPrompt }, { role: 'assistant', content: data.content }];
+            finalText = ''; // the resumed turn re-emits the text; keep only the last pass
+            continue;
+          }
+          break;
+        }
+      } catch(e) { console.error('Research call failed:', e.message); }
+
+      if (refused) { res.status(200).json({ error: 'The AI declined this one (rare false positive). Try again, or research manually.' }); return; }
+      if (!finalText) { res.status(200).json({ error: 'Could not generate research — try again in a moment.' }); return; }
+
+      // Parse the trailing ```json block; fall back to first {...last }.
+      let parsed = null;
+      try {
+        const blocks = finalText.match(/```json\s*([\s\S]*?)```/gi);
+        let jsonStr = null;
+        if (blocks && blocks.length) jsonStr = blocks[blocks.length - 1].replace(/```json\s*/i, '').replace(/```$/, '');
+        else { const s = finalText.indexOf('{'); const e = finalText.lastIndexOf('}'); if (s !== -1 && e > s) jsonStr = finalText.slice(s, e + 1); }
+        if (jsonStr) parsed = JSON.parse(jsonStr);
+      } catch(e) { console.error('Research parse failed:', e.message); }
+
+      if (!parsed) { res.status(200).json({ success: true, research: null, raw: finalText }); return; }
+      res.status(200).json({ success: true, research: parsed });
+      return;
+    }
+
     res.status(400).json({ error: 'Unknown action' });
 
   } catch(e) {
