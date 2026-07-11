@@ -549,15 +549,17 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
         let messages = [{ role: 'user', content: userPrompt }];
         let text = '', ref = false;
         try {
-          for (let i = 0; i < 3; i++) {
+          for (let i = 0; i < 2; i++) {
             const resp = await fetch('https://api.anthropic.com/v1/messages', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
               body: JSON.stringify({
                 model,
-                max_tokens: 3000,
+                max_tokens: 2500,
                 system: RESEARCH_SYSTEM,
-                tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 }],
+                // Basic web search (no per-result code-exec filtering) = much faster per search,
+                // which keeps the whole call under Vercel's 60s function ceiling.
+                tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
                 messages
               })
             });
@@ -576,9 +578,10 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
         return { text, ref };
       }
 
-      let r = await runResearch('claude-sonnet-4-6');
-      if (!r.text) r = await runResearch('claude-opus-4-8');
-      let finalText = r.text; const refused = r.ref;
+      // Single fast pass on Sonnet 4.6. No slow Opus fallback: two web-research passes
+      // back-to-back blow the 60s function limit (that was the 504 / "Load failed").
+      const r = await runResearch('claude-sonnet-4-6');
+      const finalText = r.text; const refused = r.ref;
 
       if (refused) { res.status(200).json({ error: 'The AI declined this one (rare false positive). Try again, or research manually.' }); return; }
       if (!finalText) { res.status(200).json({ error: 'Could not generate research — try again in a moment.' }); return; }
