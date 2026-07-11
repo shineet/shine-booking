@@ -2058,7 +2058,7 @@ function draftMessages(btn, attempt) {
         var res = null; try { res = JSON.parse(o.text); } catch(e) {}
         var z = document.getElementById('research-draft-zone');
         if (!res) { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">That timed out. Try again.</div>' + draftButtonHtml(); return; }
-        if (res.drafts) { entry.drafts = res.drafts; entry.chat = []; entry.instrs = []; saveResearchCache(); _researchDrafts = res.drafts; if (z) z.innerHTML = draftsHtml(res.drafts, entry.chat); }
+        if (res.drafts) { entry.drafts = res.drafts; entry.chat = []; entry.instrs = []; saveResearchCache(); _researchDrafts = res.drafts; try { if (z) z.innerHTML = draftsHtml(res.drafts, entry.chat); } catch(err) { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">Draft loaded but hit a display error: ' + escHtml(err.message) + '</div>' + draftButtonHtml(); } }
         else if (res.raw) { if (z) z.innerHTML = '<div style="white-space:pre-wrap;color:#e8e6ef;">' + escHtml(res.raw) + '</div>'; }
         else { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">' + escHtml(res.error || 'Could not draft.') + '</div>' + draftButtonHtml(); }
     })
@@ -2069,7 +2069,7 @@ function draftMessages(btn, attempt) {
     });
 }
 
-function draftsHtml(d) {
+function draftsHtml(d, chat) {
     var pre = 'white-space:pre-wrap;word-break:break-word;';
     var html = '';
     if (d.emailBody) {
