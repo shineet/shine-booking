@@ -100,7 +100,7 @@ async function fetchLeadConversation(clientId) {
     const rows = await r.json();
     if (!Array.isArray(rows) || !rows.length) return '';
     const lines = rows
-      .map(m => (m.direction === 'inbound' ? 'THEM: ' : 'SHINE: ') + String(m.content || '').replace(/\s+/g, ' ').trim())
+      .map(m => (m.direction === 'inbound' ? 'THEM: ' : 'SHINE: ') + String(m.content || '').replace(/\s+/g, ' ').trim().slice(0, 500))
       .filter(x => x.length > 8);
     return lines.length ? '\n\nWHAT THEY ACTUALLY MESSAGED (read this closely and respond to it):\n' + lines.join('\n') : '';
   } catch(e) { console.error('fetchLeadConversation failed:', e.message); return ''; }
@@ -686,8 +686,12 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
         } catch(e) { console.error('Draft call failed (' + model + '):', e.message); return { text: null, ref: false }; }
       }
 
-      let dr = await callDraft('claude-sonnet-4-6');
-      if (!dr.text && !dr.ref) dr = await callDraft('claude-opus-4-8'); // safe fallback: no web search, so still fast
+      // Opus 4.8 FIRST for the draft: it's less refusal-prone, so it usually succeeds in ONE
+      // call. Going Sonnet-first risked a refusal on payment-heavy corporate leads, which then
+      // fell back to Opus = two stacked calls (~40s+) that the browser dropped ("Network issue"
+      // client-side though the server returned 200). Sonnet is only a last-resort if Opus errors.
+      let dr = await callDraft('claude-opus-4-8');
+      if (!dr.text && !dr.ref) dr = await callDraft('claude-sonnet-4-6');
       if (dr.ref) { res.status(200).json({ error: 'The AI declined this draft (rare). Try again.' }); return; }
       if (!dr.text) { res.status(200).json({ error: 'Could not draft the messages — try again.' }); return; }
 

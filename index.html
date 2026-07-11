@@ -2040,10 +2040,11 @@ function renderDraftZone() {
     }
 }
 
-function draftMessages(btn) {
+function draftMessages(btn, attempt) {
     if (!_researchLead) return;
     var entry = _researchCache[_researchLead.id];
     if (!entry || !entry.research) return;
+    attempt = attempt || 0;
     var c = allClients.find(function(x) { return x.id === _researchLead.id; }) || {};
     if (btn) { btn.disabled = true; btn.textContent = '✍️ Drafting…'; }
     var lead = { clientId: c.id, name: c.name, email: c.email || '', phone: c.phone || '', event_type: c.event_type || '', event_date: c.event_date || '', guests: c.guests || '', notes: c.notes || '' };
@@ -2060,7 +2061,11 @@ function draftMessages(btn) {
         else if (res.raw) { if (z) z.innerHTML = '<div style="white-space:pre-wrap;color:#e8e6ef;">' + escHtml(res.raw) + '</div>'; }
         else { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">' + escHtml(res.error || 'Could not draft.') + '</div>' + draftButtonHtml(); }
     })
-    .catch(function(e) { var z = document.getElementById('research-draft-zone'); if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">Network issue. Try again.</div>' + draftButtonHtml(); });
+    .catch(function(e) {
+        var z = document.getElementById('research-draft-zone');
+        if (attempt < 1) { if (z) z.innerHTML = '<div style="color:#c9b8ff;padding:6px 0;">Hiccup, retrying…</div>'; setTimeout(function() { draftMessages(null, attempt + 1); }, 400); return; }
+        if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">Network issue. Try again.</div>' + draftButtonHtml();
+    });
 }
 
 function draftsHtml(d) {
