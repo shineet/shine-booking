@@ -513,6 +513,8 @@ Then draft the outreach. Tone by event type — the STAGE SHOW is always the hea
 - Cocktail parties: mention both strolling and the stage show.
 Write in Shine's real voice — first person, short sentences, real contractions, no stock openers ("Thanks for reaching out"), no corporate filler. If they gave enough detail, put a confident starting number in the email ("my rate starts at $X") rather than making them fill a form — website/Bark leads bail on friction. Ask at most 1-2 light qualifying questions. Never invent availability. The SMS is a short friendly nudge pointing back to the email.
 
+BE CONCISE (this is time-sensitive): keep each research field to 1-2 short sentences. Keep the email body to about 5-6 short lines. Do not pad. Get to the point.
+
 HARD STYLE RULE: absolutely NO em dashes (—) anywhere, in the research OR the drafts. Use commas, periods, or "to".
 
 Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \`\`\`) and nothing else, with exactly these string fields:
@@ -555,7 +557,7 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
               headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
               body: JSON.stringify({
                 model,
-                max_tokens: 2500,
+                max_tokens: 1800,
                 system: RESEARCH_SYSTEM,
                 // Basic web search (no per-result code-exec filtering) = much faster per search,
                 // which keeps the whole call under Vercel's 60s function ceiling.

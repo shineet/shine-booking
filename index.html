@@ -1891,13 +1891,22 @@ function closeDetail() {
 }
 
 /* ===== Lead research (deep research + drafts) ===== */
-var _researchData = null;
+var _researchData = null;      // research currently shown in the modal
+var _researchLead = null;      // { id, name, email, phone } for the open modal
+var _researchCache = {};       // id -> research object, so closing the modal doesn't lose it
+try { _researchCache = JSON.parse(sessionStorage.getItem('researchCache') || '{}'); } catch(e) { _researchCache = {}; }
+function saveResearchCache() { try { sessionStorage.setItem('researchCache', JSON.stringify(_researchCache)); } catch(e) {} }
 
 function researchLead(id) {
     var c = allClients.find(function(x) { return x.id === id; });
     if (!c) return;
-    _researchData = null;
+    _researchLead = { id: id, name: c.name, email: c.email || '', phone: c.phone || '' };
     showResearchOverlay(c.name);
+    if (_researchCache[id]) { renderResearch(_researchCache[id], true); return; }   // instant, no re-fetch
+    fetchResearch(c);
+}
+
+function fetchResearch(c) {
     var lead = {
         name: c.name, email: c.email || '', phone: c.phone || '', company: c.company || '',
         event_type: c.event_type || '', event_date: c.event_date || '', guests: c.guests || '',
@@ -1907,13 +1916,29 @@ function researchLead(id) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'research', lead: lead })
     })
-    .then(function(r) { return r.json(); })
-    .then(function(res) {
-        if (res && res.research) renderResearch(res.research);
-        else if (res && res.raw) renderResearchRaw(res.raw);
-        else researchError((res && res.error) || 'No result returned.');
+    .then(function(r) { return r.text().then(function(t) { return { ok: r.ok, text: t }; }); })
+    .then(function(o) {
+        var res = null; try { res = JSON.parse(o.text); } catch(e) {}
+        if (!res) { researchError('That timed out (research took too long). Tap 🔁 Re-run to try again.'); return; }
+        if (res.research) { _researchCache[c.id] = res.research; saveResearchCache(); renderResearch(res.research, false); }
+        else if (res.raw) { renderResearchRaw(res.raw); }
+        else researchError((res.error) || 'No result returned.');
     })
-    .catch(function(e) { researchError(e.message || 'Request failed.'); });
+    .catch(function(e) { researchError('Network issue or it took too long. Tap 🔁 Re-run to try again.'); });
+}
+
+function rerunResearch() {
+    if (!_researchLead) return;
+    var c = allClients.find(function(x) { return x.id === _researchLead.id; });
+    if (!c) return;
+    delete _researchCache[_researchLead.id]; saveResearchCache();
+    var b = document.getElementById('research-body');
+    if (b) b.innerHTML = researchLoadingHtml();
+    fetchResearch(c);
+}
+
+function researchLoadingHtml() {
+    return '<div style="text-align:center;padding:34px 0;color:#aaa;">Researching the company, the person, and the phone number, then drafting your email and text.<br><br><span style="color:#c9b8ff;">Working on it… this takes 20-40 seconds.</span></div>';
 }
 
 function showResearchOverlay(name) {
@@ -1924,10 +1949,12 @@ function showResearchOverlay(name) {
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:32px 16px;';
     ov.onclick = function(e) { if (e.target === ov) closeResearch(); };
     ov.innerHTML = '<div style="background:#17161c;border:1px solid var(--border);border-radius:14px;max-width:640px;width:100%;padding:22px 22px 26px;box-shadow:0 20px 60px rgba(0,0,0,.5);">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;">' +
         '<div style="font-size:16px;font-weight:700;">🔎 Research &amp; draft <span style="color:#888;font-weight:400;">— ' + escHtml(name) + '</span></div>' +
-        '<button onclick="closeResearch()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1;">&times;</button></div>' +
-        '<div id="research-body"><div style="text-align:center;padding:34px 0;color:#aaa;">Researching the company, the person, and the phone number, then drafting your email and text.<br><br><span style="color:#c9b8ff;">Working on it… this takes 15-30 seconds.</span></div></div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<button onclick="rerunResearch()" title="Run the research again" style="background:rgba(140,120,255,.14);color:#c9b8ff;border:1px solid rgba(140,120,255,.3);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;">🔁 Re-run</button>' +
+        '<button onclick="closeResearch()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1;">&times;</button></div></div>' +
+        '<div id="research-body">' + researchLoadingHtml() + '</div>' +
         '</div>';
     document.body.appendChild(ov);
 }
@@ -1944,24 +1971,45 @@ function rSection(title, bodyHtml) {
         '<div style="font-size:13.5px;line-height:1.5;color:#e8e6ef;">' + bodyHtml + '</div></div>';
 }
 
-function rCopyBtn(field, label) {
-    return '<button onclick="copyResearch(\'' + field + '\',this)" style="background:rgba(140,120,255,.14);color:#c9b8ff;border:1px solid rgba(140,120,255,.3);border-radius:7px;padding:3px 10px;font-size:11px;cursor:pointer;margin-left:8px;">' + (label || 'Copy') + '</button>';
+function rBtn(onclick, label, accent) {
+    var style = accent
+        ? 'background:rgba(120,200,140,.16);color:#8fe0a5;border:1px solid rgba(120,200,140,.3);'
+        : 'background:rgba(140,120,255,.14);color:#c9b8ff;border:1px solid rgba(140,120,255,.3);';
+    return '<button onclick="' + onclick + '" style="' + style + 'border-radius:7px;padding:3px 10px;font-size:11px;cursor:pointer;margin-left:8px;">' + label + '</button>';
 }
 
 function copyResearch(field, btn) {
     if (!_researchData || !_researchData[field]) return;
-    var txt = _researchData[field];
-    navigator.clipboard.writeText(txt).then(function() {
+    navigator.clipboard.writeText(_researchData[field]).then(function() {
         if (btn) { var o = btn.textContent; btn.textContent = 'Copied ✓'; setTimeout(function() { btn.textContent = o; }, 1400); }
     });
 }
 
-function renderResearch(r) {
+/* Open the drafted email in the native Mail composer, prefilled, ready to send. */
+function openResearchEmail() {
+    if (!_researchData || !_researchLead) return;
+    if (!_researchLead.email) { alert('No email on file for this lead — use Copy body and paste it yourself, or add their email via Edit.'); return; }
+    var url = 'mailto:' + encodeURIComponent(_researchLead.email) +
+        '?subject=' + encodeURIComponent(_researchData.emailSubject || '') +
+        '&body=' + encodeURIComponent(_researchData.emailBody || '');
+    window.location.href = url;
+}
+
+/* Open the drafted text in Messages, prefilled (same sms: scheme the app already uses). */
+function openResearchSms() {
+    if (!_researchData || !_researchLead) return;
+    if (!_researchLead.phone) { alert('No phone on file for this lead — use Copy text and paste it yourself.'); return; }
+    var digits = _researchLead.phone.replace(/[^0-9]/g, '');
+    window.location.href = 'sms:+' + digits + '&body=' + encodeURIComponent(_researchData.sms || '');
+}
+
+function renderResearch(r, fromCache) {
     _researchData = r;
     var b = document.getElementById('research-body');
     if (!b) return;
     var pre = 'white-space:pre-wrap;word-break:break-word;';
     var html = '';
+    if (fromCache) html += '<div style="font-size:11.5px;color:#8fe0a5;margin-bottom:12px;">✓ Saved from an earlier run. Tap 🔁 Re-run to refresh.</div>';
     if (r.company) html += rSection('Company', '<div style="' + pre + '">' + escHtml(r.company) + '</div>');
     if (r.person) html += rSection('Person', '<div style="' + pre + '">' + escHtml(r.person) + '</div>');
     if (r.affordability || r.recommendedAnchor || r.priceRange) {
@@ -1975,20 +2023,24 @@ function renderResearch(r) {
     if (r.fit) html += rSection('Fit &amp; strategy', '<div style="' + pre + '">' + escHtml(r.fit) + '</div>');
 
     if (r.emailBody) {
-        var subj = r.emailSubject ? '<div style="margin-bottom:6px;color:#c9c6d6;"><b>Subject:</b> ' + escHtml(r.emailSubject) + (r.emailSubject ? rCopyBtn('emailSubject', 'Copy subject') : '') + '</div>' : '';
+        var subj = r.emailSubject ? '<div style="margin-bottom:6px;color:#c9c6d6;"><b>Subject:</b> ' + escHtml(r.emailSubject) + '</div>' : '';
         html += '<div style="margin-bottom:14px;border-top:1px solid var(--border);padding-top:14px;">' +
-            '<div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8a86a0;margin-bottom:4px;">Email draft' + rCopyBtn('emailBody', 'Copy body') + '</div>' +
+            '<div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8a86a0;margin-bottom:6px;">Email draft' +
+                rBtn('openResearchEmail()', '✉️ Open in Mail', true) + rCopyBtn('emailBody', 'Copy body') + '</div>' +
             subj +
             '<div style="font-size:13.5px;line-height:1.5;color:#e8e6ef;background:#111015;border:1px solid var(--border);border-radius:8px;padding:10px 12px;' + pre + '">' + escHtml(r.emailBody) + '</div></div>';
     }
     if (r.sms) {
         html += '<div style="margin-bottom:8px;">' +
-            '<div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8a86a0;margin-bottom:4px;">Text draft' + rCopyBtn('sms', 'Copy text') + '</div>' +
+            '<div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8a86a0;margin-bottom:6px;">Text draft' +
+                rBtn('openResearchSms()', '💬 Open in Messages', true) + rCopyBtn('sms', 'Copy text') + '</div>' +
             '<div style="font-size:13.5px;line-height:1.5;color:#e8e6ef;background:#111015;border:1px solid var(--border);border-radius:8px;padding:10px 12px;' + pre + '">' + escHtml(r.sms) + '</div></div>';
     }
-    html += '<div style="margin-top:10px;font-size:11.5px;color:#77748a;">Drafts only. Review, then send from your email/Messages yourself. Send the email first, then the text if the number is mobile.</div>';
+    html += '<div style="margin-top:10px;font-size:11.5px;color:#77748a;">Drafts only — you send. Open in Mail / Messages prefills the draft so you just review and hit send. Send the email first, then the text if the number is mobile.</div>';
     b.innerHTML = html;
 }
+
+function rCopyBtn(field, label) { return rBtn('copyResearch(\'' + field + '\',this)', label || 'Copy', false); }
 
 function renderResearchRaw(raw) {
     var b = document.getElementById('research-body');
