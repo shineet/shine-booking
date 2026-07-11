@@ -630,14 +630,17 @@ Voice: first person, short sentences, real contractions (I'm, that's, you're). N
 
 HARD STYLE RULE: absolutely NO em dashes (—). Use commas, periods, or "to".
 
+If a CURRENT DRAFT and feedback from Shine are shown below, you are REVISING: change the email and SMS to address his feedback while keeping everything that already works, and directly answer any question he asks (e.g. "did you consider the anniversary angle?"). Put your reply to Shine in the "note" field — one or two short sentences, like a collaborator talking back (answer the question, or say what you changed and why). On a first draft with no feedback, leave "note" as an empty string.
+
 Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \`\`\`) and nothing else, with exactly these string fields:
 {
+  "note": "1-2 short sentences replying to Shine's feedback/question, or \\"\\" on a first draft",
   "emailSubject": "the email subject line",
   "emailBody": "the full email body, signed 'Shine, The Mentalist / texasmentalist.com / 737-271-5308'",
   "sms": "a short SMS nudge"
 }`;
 
-      const draftUser = [
+      let draftUser = [
         `Lead name: ${lead.name || '(unknown)'}`,
         `Event type: ${lead.event_type || '(unspecified)'}`,
         lead.event_date ? `Event date: ${lead.event_date}` : '',
@@ -651,8 +654,20 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
         rc.fit ? `Fit/strategy: ${rc.fit}` : ''
       ].filter(Boolean).join('\n') + (await fetchLeadConversation(lead.clientId));
 
+      // Iterative refinement: if Shine sent feedback on a current draft, include the draft
+      // + his earlier feedback so the revision builds on what's already there.
+      const cur = req.body.current || null;
+      const priorInstr = Array.isArray(req.body.priorInstructions) ? req.body.priorInstructions.filter(Boolean) : [];
+      if (cur && (cur.emailBody || cur.sms)) {
+        draftUser += '\n\nCURRENT DRAFT (revise this, keep what works):\n' +
+          (cur.emailSubject ? 'Email subject: ' + cur.emailSubject + '\n' : '') +
+          (cur.emailBody ? 'Email body:\n' + cur.emailBody + '\n' : '') +
+          (cur.sms ? 'SMS: ' + cur.sms : '');
+        if (priorInstr.length) draftUser += '\n\nShine\'s earlier feedback (for context):\n- ' + priorInstr.join('\n- ');
+      }
+
       const instr = (req.body.instruction && String(req.body.instruction).trim())
-        ? `\n\nSHINE'S INSTRUCTION FOR THIS DRAFT (highest priority, never invent availability):\n${String(req.body.instruction).trim()}`
+        ? `\n\nSHINE'S LATEST FEEDBACK / REQUEST (highest priority, act on this; never invent availability):\n${String(req.body.instruction).trim()}`
         : '';
 
       async function callDraft(model) {

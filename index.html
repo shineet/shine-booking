@@ -2024,7 +2024,7 @@ function renderDraftZone() {
     var z = document.getElementById('research-draft-zone');
     if (!z) return;
     var entry = _researchLead && _researchCache[_researchLead.id];
-    if (entry && entry.drafts) { _researchDrafts = entry.drafts; z.innerHTML = draftsHtml(entry.drafts); }
+    if (entry && entry.drafts) { _researchDrafts = entry.drafts; z.innerHTML = draftsHtml(entry.drafts, entry.chat); }
     else { _researchDrafts = null; z.innerHTML = draftButtonHtml(); }
 }
 
@@ -2044,7 +2044,7 @@ function draftMessages(btn) {
         var res = null; try { res = JSON.parse(o.text); } catch(e) {}
         var z = document.getElementById('research-draft-zone');
         if (!res) { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">That timed out. Try again.</div>' + draftButtonHtml(); return; }
-        if (res.drafts) { entry.drafts = res.drafts; saveResearchCache(); _researchDrafts = res.drafts; if (z) z.innerHTML = draftsHtml(res.drafts); }
+        if (res.drafts) { entry.drafts = res.drafts; entry.chat = []; entry.instrs = []; saveResearchCache(); _researchDrafts = res.drafts; if (z) z.innerHTML = draftsHtml(res.drafts, entry.chat); }
         else if (res.raw) { if (z) z.innerHTML = '<div style="white-space:pre-wrap;color:#e8e6ef;">' + escHtml(res.raw) + '</div>'; }
         else { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">' + escHtml(res.error || 'Could not draft.') + '</div>' + draftButtonHtml(); }
     })
@@ -2068,10 +2068,62 @@ function draftsHtml(d) {
                 rBtn('useDraftSms()', '💬 Use in app SMS', true) + rCopyBtn('sms', 'Copy text') + '</div>' +
             '<div style="font-size:13.5px;line-height:1.5;color:#e8e6ef;background:#111015;border:1px solid var(--border);border-radius:8px;padding:10px 12px;' + pre + '">' + escHtml(d.sms) + '</div></div>';
     }
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
-        '<div style="font-size:11.5px;color:#77748a;">"Use in app" opens the message window prefilled — review, then send from the app (email) or Open in Messages (text).</div>' +
-        '<button onclick="draftMessages(this)" style="background:none;border:1px solid var(--border);color:#9a97ab;border-radius:7px;padding:4px 10px;font-size:11px;cursor:pointer;white-space:nowrap;">↻ Re-draft</button></div>';
+    // ---- Iterative chat: ask for changes / ask questions, I revise + reply ----
+    html += '<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:2px;">';
+    html += '<div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8a86a0;margin-bottom:8px;">Refine with me <span style="text-transform:none;letter-spacing:0;color:#77748a;font-weight:400;">— ask for a change or ask a question</span></div>';
+    (chat || []).forEach(function(t) {
+        html += '<div style="margin-bottom:9px;">' +
+            '<div style="font-size:12.5px;color:#c9b8ff;"><b>You:</b> ' + escHtml(t.you) + '</div>' +
+            (t.note ? '<div style="font-size:12.5px;color:#8fe0a5;margin-top:2px;">💬 ' + escHtml(t.note) + '</div>' : '') +
+            '</div>';
+    });
+    html += '<div style="display:flex;gap:8px;margin-top:6px;">' +
+        '<input id="research-refine-input" type="text" placeholder="e.g. make it warmer · did you consider the anniversary angle · shorten it and ask about the venue" onkeydown="if(event.key===\'Enter\'){event.preventDefault();refineDraft();}" style="flex:1;background:#111015;border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:#e8e6ef;font-size:12.5px;">' +
+        '<button id="research-refine-btn" onclick="refineDraft()" style="background:rgba(140,120,255,.16);color:#c9b8ff;border:1px solid rgba(140,120,255,.35);border-radius:8px;padding:8px 14px;font-size:12.5px;cursor:pointer;white-space:nowrap;">Send</button></div>';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;">' +
+        '<div style="font-size:11.5px;color:#77748a;">"Use in app" opens the message window prefilled. Sending a note above revises both drafts and I reply.</div>' +
+        '<button onclick="draftMessages(this)" style="background:none;border:1px solid var(--border);color:#9a97ab;border-radius:7px;padding:4px 10px;font-size:11px;cursor:pointer;white-space:nowrap;">↻ Start over</button></div>';
+    html += '</div>';
     return html;
+}
+
+function refineDraft() {
+    if (!_researchLead) return;
+    var entry = _researchCache[_researchLead.id];
+    if (!entry || !entry.research || !entry.drafts) return;
+    var input = document.getElementById('research-refine-input');
+    var instruction = (input && input.value || '').trim();
+    if (!instruction) return;
+    var c = allClients.find(function(x) { return x.id === _researchLead.id; }) || {};
+    var btn = document.getElementById('research-refine-btn');
+    if (input) input.disabled = true;
+    if (btn) { btn.disabled = true; btn.textContent = 'Thinking…'; }
+    var lead = { clientId: c.id, name: c.name, email: c.email || '', phone: c.phone || '', event_type: c.event_type || '', event_date: c.event_date || '', guests: c.guests || '', notes: c.notes || '' };
+    fetch('/api/pending-replies', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'draft', lead: lead, research: entry.research, current: entry.drafts, instruction: instruction, priorInstructions: entry.instrs || [] })
+    })
+    .then(function(r) { return r.text().then(function(t) { return { ok: r.ok, text: t }; }); })
+    .then(function(o) {
+        var res = null; try { res = JSON.parse(o.text); } catch(e) {}
+        if (res && res.drafts) {
+            entry.instrs = (entry.instrs || []).concat([instruction]);
+            entry.chat = (entry.chat || []).concat([{ you: instruction, note: res.drafts.note || '' }]);
+            entry.drafts = res.drafts;
+            saveResearchCache();
+            _researchDrafts = res.drafts;
+            renderDraftZone();
+        } else {
+            if (input) input.disabled = false;
+            if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+            alert((res && res.error) || 'Could not revise that time — try again.');
+        }
+    })
+    .catch(function(e) {
+        if (input) input.disabled = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+        alert('Network issue — try again.');
+    });
 }
 
 /* ---- Route a draft into the app's own compose modal (not the native apps) ---- */
