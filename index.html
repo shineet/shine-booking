@@ -1896,8 +1896,9 @@ var _researchLead = null;   // { id, name, email, phone } for the open modal
 var _researchDrafts = null; // drafts object currently shown (for Copy / Use-in-app)
 var _researchCache = {};    // id -> { research:{...}, drafts:{...}|null }; survives closing the modal
 var _RCACHE_V = 3;          // bump to invalidate stale cache after a format change
-try { var _rc = JSON.parse(sessionStorage.getItem('researchCache') || '{}'); _researchCache = (_rc && _rc.__v === _RCACHE_V && _rc.data) ? _rc.data : {}; } catch(e) { _researchCache = {}; }
-function saveResearchCache() { try { sessionStorage.setItem('researchCache', JSON.stringify({ __v: _RCACHE_V, data: _researchCache })); } catch(e) {} }
+// localStorage (not sessionStorage) so research + drafts persist across app restarts on this browser.
+try { var _rc = JSON.parse(localStorage.getItem('researchCache') || '{}'); _researchCache = (_rc && _rc.__v === _RCACHE_V && _rc.data) ? _rc.data : {}; } catch(e) { _researchCache = {}; }
+function saveResearchCache() { try { localStorage.setItem('researchCache', JSON.stringify({ __v: _RCACHE_V, data: _researchCache })); } catch(e) {} }
 
 function researchLead(id) {
     var c = allClients.find(function(x) { return x.id === id; });
