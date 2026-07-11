@@ -1895,8 +1895,9 @@ function closeDetail() {
 var _researchLead = null;   // { id, name, email, phone } for the open modal
 var _researchDrafts = null; // drafts object currently shown (for Copy / Use-in-app)
 var _researchCache = {};    // id -> { research:{...}, drafts:{...}|null }; survives closing the modal
-try { _researchCache = JSON.parse(sessionStorage.getItem('researchCache') || '{}'); } catch(e) { _researchCache = {}; }
-function saveResearchCache() { try { sessionStorage.setItem('researchCache', JSON.stringify(_researchCache)); } catch(e) {} }
+var _RCACHE_V = 3;          // bump to invalidate stale cache after a format change
+try { var _rc = JSON.parse(sessionStorage.getItem('researchCache') || '{}'); _researchCache = (_rc && _rc.__v === _RCACHE_V && _rc.data) ? _rc.data : {}; } catch(e) { _researchCache = {}; }
+function saveResearchCache() { try { sessionStorage.setItem('researchCache', JSON.stringify({ __v: _RCACHE_V, data: _researchCache })); } catch(e) {} }
 
 function researchLead(id) {
     var c = allClients.find(function(x) { return x.id === id; });
@@ -2023,9 +2024,20 @@ function draftButtonHtml() {
 function renderDraftZone() {
     var z = document.getElementById('research-draft-zone');
     if (!z) return;
-    var entry = _researchLead && _researchCache[_researchLead.id];
-    if (entry && entry.drafts) { _researchDrafts = entry.drafts; z.innerHTML = draftsHtml(entry.drafts, entry.chat); }
-    else { _researchDrafts = null; z.innerHTML = draftButtonHtml(); }
+    // Bulletproof: on any bad/stale state, fall back to the Draft button (never leave it empty).
+    try {
+        var entry = _researchLead && _researchCache[_researchLead.id];
+        if (entry && entry.drafts && (entry.drafts.emailBody || entry.drafts.sms)) {
+            _researchDrafts = entry.drafts;
+            z.innerHTML = draftsHtml(entry.drafts, entry.chat);
+        } else {
+            _researchDrafts = null;
+            z.innerHTML = draftButtonHtml();
+        }
+    } catch(e) {
+        _researchDrafts = null;
+        z.innerHTML = draftButtonHtml();
+    }
 }
 
 function draftMessages(btn) {
