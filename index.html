@@ -1911,7 +1911,7 @@ function researchLead(id) {
 
 function fetchResearch(c) {
     var lead = {
-        name: c.name, email: c.email || '', phone: c.phone || '', company: c.company || '',
+        clientId: c.id, name: c.name, email: c.email || '', phone: c.phone || '', company: c.company || '',
         event_type: c.event_type || '', event_date: c.event_date || '', guests: c.guests || '',
         lead_source: c.lead_source || '', notes: c.notes || ''
     };
@@ -2034,7 +2034,7 @@ function draftMessages(btn) {
     if (!entry || !entry.research) return;
     var c = allClients.find(function(x) { return x.id === _researchLead.id; }) || {};
     if (btn) { btn.disabled = true; btn.textContent = '✍️ Drafting…'; }
-    var lead = { name: c.name, email: c.email || '', phone: c.phone || '', event_type: c.event_type || '', event_date: c.event_date || '', guests: c.guests || '', notes: c.notes || '' };
+    var lead = { clientId: c.id, name: c.name, email: c.email || '', phone: c.phone || '', event_type: c.event_type || '', event_date: c.event_date || '', guests: c.guests || '', notes: c.notes || '' };
     fetch('/api/pending-replies', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'draft', lead: lead, research: entry.research })

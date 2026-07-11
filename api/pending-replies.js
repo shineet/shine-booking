@@ -90,6 +90,22 @@ Rules:
 // Give the research action (Claude + web search) room to finish server-side.
 export const config = { maxDuration: 60 };
 
+// Pull the lead's actual conversation (what they messaged Shine) so research + drafts
+// factor in their own words, not just the notes field. Inbound + outbound, oldest first.
+async function fetchLeadConversation(clientId) {
+  if (!clientId) return '';
+  try {
+    const sb = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+    const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${clientId}&status=not.in.(discarded)&order=created_at.asc&limit=12`, { headers: sb });
+    const rows = await r.json();
+    if (!Array.isArray(rows) || !rows.length) return '';
+    const lines = rows
+      .map(m => (m.direction === 'inbound' ? 'THEM: ' : 'SHINE: ') + String(m.content || '').replace(/\s+/g, ' ').trim())
+      .filter(x => x.length > 8);
+    return lines.length ? '\n\nWHAT THEY ACTUALLY MESSAGED (read this closely and respond to it):\n' + lines.join('\n') : '';
+  } catch(e) { console.error('fetchLeadConversation failed:', e.message); return ''; }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -529,7 +545,7 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
         lead.guests ? `Guests: ${lead.guests}` : '',
         lead.lead_source ? `Source: ${lead.lead_source}` : '',
         lead.notes ? `Notes / their message: ${lead.notes}` : ''
-      ].filter(Boolean).join('\n');
+      ].filter(Boolean).join('\n') + (await fetchLeadConversation(lead.clientId));
 
       // Server-side web search: Claude runs the searches itself. Loop on pause_turn
       // (the server-tool loop caps and pauses; re-send to resume). Kept fast + bounded so
@@ -633,7 +649,7 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
         rc.affordability ? `Affordability: ${rc.affordability}` : '',
         rc.recommendedAnchor ? `Recommended anchor price: ${rc.recommendedAnchor}` : '',
         rc.fit ? `Fit/strategy: ${rc.fit}` : ''
-      ].filter(Boolean).join('\n');
+      ].filter(Boolean).join('\n') + (await fetchLeadConversation(lead.clientId));
 
       const instr = (req.body.instruction && String(req.body.instruction).trim())
         ? `\n\nSHINE'S INSTRUCTION FOR THIS DRAFT (highest priority, never invent availability):\n${String(req.body.instruction).trim()}`
