@@ -489,33 +489,24 @@ PRICING:
       return;
     }
 
-    // POST action=research -> deep-research a lead (company + person via live web search),
-    // read affordability, resolve the phone line type, and draft an email + SMS. Display-only:
-    // nothing is sent or saved; the owner reviews and sends the drafts himself.
+    // POST action=research -> STEP 1: deep-research a lead (company + person via live web
+    // search), read affordability, resolve the phone line type. Research only — NO drafting
+    // here (that's the separate, fast action=draft step). Split so each call stays well under
+    // Vercel's 60s function ceiling regardless of web-search latency.
     if (req.method === 'POST' && req.body.action === 'research') {
       const lead = req.body.lead || {};
       const emailDomain = (lead.email && lead.email.indexOf('@') !== -1) ? lead.email.split('@')[1].trim().toLowerCase() : '';
 
-      const RESEARCH_SYSTEM = `You are the research analyst and outreach writer for Shine Thankappan, a corporate mentalist and magician based in Austin, TX (website texasmentalist.com, phone +1 737-271-5308). Shine performs a 45-60 minute interactive mentalism + visual-magic STAGE SHOW (his strength), and also does strolling/walk-around magic.
+      const RESEARCH_SYSTEM = `You are the research analyst for Shine Thankappan, a corporate mentalist and magician based in Austin, TX. Given one inbound lead, use the web_search tool to research the company and the person, judge how much they can afford, and resolve their phone line type. You do NOT write any outreach — a separate step drafts the messages.
 
-Your job: given one inbound lead, use the web_search tool to research the company and the person, judge how much they can afford, resolve their phone line type, and draft outreach for Shine to review and SEND HIMSELF. These are drafts only — you never send anything.
+1. COMPANY: From the email domain and any company name, search and identify the organization — what it is, size/prestige signals, industry, location. If the email domain is a free provider (gmail/yahoo/outlook/icloud) or none is given, treat it as an individual / private lead and say so.
+2. PERSON: Search the person's name + company/domain. Surface role/title and any public LinkedIn/company-page/social snippet. Never fabricate a title, contact, or fact — if you can't find it, say so.
+3. AFFORDABILITY: Judge whether this lead can afford a HIGH or LOW price, from concrete signals (company type/prestige, role, event type, guest count, venue). Shine's corporate floor is $2,500; his real corporate booking anchor is $3,500. Give a specific recommended anchor number and a short internal price range with when to push higher.
+4. PHONE LINE TYPE: The lead's phone is "${lead.phone || '(none given)'}". Reason whether it is MOBILE or LANDLINE: note the area code's region, and if you find the company's official phone number, compare (a personal number on a mobile-heavy or different area code than the company's main line is almost certainly a cell). State your confidence. You can't get carrier data directly, so also recommend confirming at freecarrierlookup.com. Advise whether Shine should ALSO text the number (yes if likely mobile).
+5. FIT + STRATEGY: one tight paragraph on why this is (or isn't) a good fit and how to approach the reply.
 
-Do the research:
-1. COMPANY: From the email domain and any company name, search the web and identify the organization — what it is, size/prestige signals, industry, location. If the email domain is a free provider (gmail/yahoo/outlook/icloud) or none is given, say the company is unknown and treat it as an individual/private lead.
-2. PERSON: Search for the person's name + company/domain. Surface role/title and any public LinkedIn/company-page/social snippet. Never fabricate a title, contact, or fact — if you can't find it, say so.
-3. AFFORDABILITY: Judge whether this lead can afford a HIGH or LOW price, from concrete signals (company type/prestige, role, event type, guest count, venue). Shine's corporate floor is $2,500 and his real corporate booking anchor is $3,500. Give a specific recommended anchor number and a short internal price range with when to push higher.
-4. PHONE LINE TYPE: The lead's phone is "${lead.phone || '(none given)'}". Reason about whether it is MOBILE or LANDLINE: note the area code's region, and if you find the company's official phone number, compare — a personal number on a different/ mobile-heavy area code than the company's main line is almost certainly a cell. State your confidence. You cannot get carrier data directly, so also recommend confirming at freecarrierlookup.com. Then advise whether Shine should ALSO text the number (yes if it's likely mobile).
-5. FIT + STRATEGY: One tight paragraph on why this is (or isn't) a good fit and how to approach the reply.
-
-Then draft the outreach. Tone by event type — the STAGE SHOW is always the headline:
-- Corporate events / weddings: lead with the stage show; strolling only as an optional add-on.
-- Private parties (birthday, bachelorette, house/home, small private): lead with and emphasize the stage show; do NOT bring up strolling unless the client asked for it.
-- Cocktail parties: mention both strolling and the stage show.
-Write in Shine's real voice — first person, short sentences, real contractions, no stock openers ("Thanks for reaching out"), no corporate filler. If they gave enough detail, put a confident starting number in the email ("my rate starts at $X") rather than making them fill a form — website/Bark leads bail on friction. Ask at most 1-2 light qualifying questions. Never invent availability. The SMS is a short friendly nudge pointing back to the email.
-
-BE CONCISE (this is time-sensitive): keep each research field to 1-2 short sentences. Keep the email body to about 5-6 short lines. Do not pad. Get to the point.
-
-HARD STYLE RULE: absolutely NO em dashes (—) anywhere, in the research OR the drafts. Use commas, periods, or "to".
+BE CONCISE (time-sensitive): 1-2 short sentences per field. Do not pad.
+HARD STYLE RULE: absolutely NO em dashes (—). Use commas, periods, or "to".
 
 Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \`\`\`) and nothing else, with exactly these string fields:
 {
@@ -525,10 +516,7 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
   "recommendedAnchor": "a dollar figure, e.g. $3,500",
   "priceRange": "internal range + when to push higher",
   "phone": "mobile vs landline assessment, confidence, and whether to also text",
-  "fit": "fit + strategy paragraph",
-  "emailSubject": "the email subject line (no em dashes)",
-  "emailBody": "the full email body in Shine's voice, signed 'Shine, The Mentalist / texasmentalist.com / 737-271-5308' (no em dashes)",
-  "sms": "a short SMS nudge (no em dashes)"
+  "fit": "fit + strategy paragraph"
 }`;
 
       const userPrompt = [
@@ -604,6 +592,85 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
 
       if (!parsed) { res.status(200).json({ success: true, research: null, raw: stripCite(finalText) }); return; }
       res.status(200).json({ success: true, research: parsed });
+      return;
+    }
+
+    // POST action=draft -> STEP 2: draft the email + SMS for a lead, using the research from
+    // step 1 as context. NO web search here, so it's fast (~8-15s) and never risks the timeout.
+    if (req.method === 'POST' && req.body.action === 'draft') {
+      const lead = req.body.lead || {};
+      const rc = req.body.research || {};
+
+      const DRAFT_SYSTEM = `You are Shine Thankappan, a corporate mentalist and magician based in Austin, TX (website texasmentalist.com, phone +1 737-271-5308). You perform a 45-60 minute interactive mentalism + visual-magic STAGE SHOW (your strength) and also do strolling/walk-around magic. Draft outreach for a new lead. These are DRAFTS you will review and send yourself.
+
+Use the research context provided (company, affordability, recommended anchor, event details) to write a confident, specific reply. If a recommended anchor price is given and the lead gave enough detail, put a starting number in the email ("my rate starts at $X") rather than sending them to a form — website leads bail on friction. Ask at most 1-2 light qualifying questions. Never invent availability.
+
+Tone by event type — the STAGE SHOW is always the headline:
+- Corporate events / weddings: lead with the stage show; strolling only as an optional add-on.
+- Private parties (birthday, bachelorette, house/home, small private): lead with and emphasize the stage show; do NOT bring up strolling unless the client asked for it.
+- Cocktail parties: mention both strolling and the stage show.
+
+Voice: first person, short sentences, real contractions (I'm, that's, you're). No stock openers ("Thanks for reaching out", "I hope this finds you well"), no corporate filler ("I appreciate your interest", "don't hesitate to reach out"). One or two short paragraphs. A little genuine warmth, never try-hard. The SMS is a short friendly nudge pointing back to the email (under ~160 chars).
+
+HARD STYLE RULE: absolutely NO em dashes (—). Use commas, periods, or "to".
+
+Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \`\`\`) and nothing else, with exactly these string fields:
+{
+  "emailSubject": "the email subject line",
+  "emailBody": "the full email body, signed 'Shine, The Mentalist / texasmentalist.com / 737-271-5308'",
+  "sms": "a short SMS nudge"
+}`;
+
+      const draftUser = [
+        `Lead name: ${lead.name || '(unknown)'}`,
+        `Event type: ${lead.event_type || '(unspecified)'}`,
+        lead.event_date ? `Event date: ${lead.event_date}` : '',
+        lead.guests ? `Guests: ${lead.guests}` : '',
+        lead.notes ? `Their message / notes: ${lead.notes}` : '',
+        '',
+        'RESEARCH CONTEXT:',
+        rc.company ? `Company: ${rc.company}` : '',
+        rc.affordability ? `Affordability: ${rc.affordability}` : '',
+        rc.recommendedAnchor ? `Recommended anchor price: ${rc.recommendedAnchor}` : '',
+        rc.fit ? `Fit/strategy: ${rc.fit}` : ''
+      ].filter(Boolean).join('\n');
+
+      const instr = (req.body.instruction && String(req.body.instruction).trim())
+        ? `\n\nSHINE'S INSTRUCTION FOR THIS DRAFT (highest priority, never invent availability):\n${String(req.body.instruction).trim()}`
+        : '';
+
+      async function callDraft(model) {
+        try {
+          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({ model, max_tokens: 1200, system: DRAFT_SYSTEM + instr, messages: [{ role: 'user', content: draftUser }] })
+          });
+          const txt = await resp.text();
+          let data; try { data = JSON.parse(txt); } catch(e) { return { text: null, ref: false }; }
+          if (!resp.ok || data.error) { console.error('Draft model error:', data && data.error && data.error.message); return { text: null, ref: false }; }
+          if (data.stop_reason === 'refusal') return { text: null, ref: true };
+          let t = ''; if (Array.isArray(data.content)) data.content.forEach(b => { if (b.type === 'text') t += b.text; });
+          return { text: t, ref: false };
+        } catch(e) { console.error('Draft call failed (' + model + '):', e.message); return { text: null, ref: false }; }
+      }
+
+      let dr = await callDraft('claude-sonnet-4-6');
+      if (!dr.text && !dr.ref) dr = await callDraft('claude-opus-4-8'); // safe fallback: no web search, so still fast
+      if (dr.ref) { res.status(200).json({ error: 'The AI declined this draft (rare). Try again.' }); return; }
+      if (!dr.text) { res.status(200).json({ error: 'Could not draft the messages — try again.' }); return; }
+
+      let drafts = null;
+      try {
+        const blocks = dr.text.match(/```json\s*([\s\S]*?)```/gi);
+        let js = null;
+        if (blocks && blocks.length) js = blocks[blocks.length - 1].replace(/```json\s*/i, '').replace(/```$/, '');
+        else { const s = dr.text.indexOf('{'); const e = dr.text.lastIndexOf('}'); if (s !== -1 && e > s) js = dr.text.slice(s, e + 1); }
+        if (js) drafts = JSON.parse(js);
+      } catch(e) { console.error('Draft parse failed:', e.message); }
+
+      if (!drafts) { res.status(200).json({ success: true, drafts: null, raw: dr.text }); return; }
+      res.status(200).json({ success: true, drafts });
       return;
     }
 

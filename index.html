@@ -1890,10 +1890,11 @@ function closeDetail() {
     document.querySelectorAll('.lead-row').forEach(function(r) { r.classList.remove('selected'); });
 }
 
-/* ===== Lead research (deep research + drafts) ===== */
-var _researchData = null;      // research currently shown in the modal
-var _researchLead = null;      // { id, name, email, phone } for the open modal
-var _researchCache = {};       // id -> research object, so closing the modal doesn't lose it
+/* ===== Lead research — 2 steps: (1) research, (2) draft. Each call is small so it never
+   risks Vercel's 60s timeout. Drafts feed the app's own compose modal, not the native apps. */
+var _researchLead = null;   // { id, name, email, phone } for the open modal
+var _researchDrafts = null; // drafts object currently shown (for Copy / Use-in-app)
+var _researchCache = {};    // id -> { research:{...}, drafts:{...}|null }; survives closing the modal
 try { _researchCache = JSON.parse(sessionStorage.getItem('researchCache') || '{}'); } catch(e) { _researchCache = {}; }
 function saveResearchCache() { try { sessionStorage.setItem('researchCache', JSON.stringify(_researchCache)); } catch(e) {} }
 
@@ -1901,8 +1902,10 @@ function researchLead(id) {
     var c = allClients.find(function(x) { return x.id === id; });
     if (!c) return;
     _researchLead = { id: id, name: c.name, email: c.email || '', phone: c.phone || '' };
+    _researchDrafts = null;
     showResearchOverlay(c.name);
-    if (_researchCache[id]) { renderResearch(_researchCache[id], true); return; }   // instant, no re-fetch
+    var entry = _researchCache[id];
+    if (entry && entry.research) { renderResearch(entry.research, true); return; }  // instant, no re-fetch
     fetchResearch(c);
 }
 
@@ -1919,8 +1922,8 @@ function fetchResearch(c) {
     .then(function(r) { return r.text().then(function(t) { return { ok: r.ok, text: t }; }); })
     .then(function(o) {
         var res = null; try { res = JSON.parse(o.text); } catch(e) {}
-        if (!res) { researchError('That timed out (research took too long). Tap 🔁 Re-run to try again.'); return; }
-        if (res.research) { _researchCache[c.id] = res.research; saveResearchCache(); renderResearch(res.research, false); }
+        if (!res) { researchError('That timed out. Tap 🔁 Re-run to try again.'); return; }
+        if (res.research) { _researchCache[c.id] = { research: res.research, drafts: null }; saveResearchCache(); renderResearch(res.research, false); }
         else if (res.raw) { renderResearchRaw(res.raw); }
         else researchError((res.error) || 'No result returned.');
     })
@@ -1932,13 +1935,15 @@ function rerunResearch() {
     var c = allClients.find(function(x) { return x.id === _researchLead.id; });
     if (!c) return;
     delete _researchCache[_researchLead.id]; saveResearchCache();
+    _researchDrafts = null;
     var b = document.getElementById('research-body');
-    if (b) b.innerHTML = researchLoadingHtml();
+    if (b) b.innerHTML = researchLoadingHtml('Researching the company, the person, and the phone number.');
     fetchResearch(c);
 }
 
-function researchLoadingHtml() {
-    return '<div style="text-align:center;padding:34px 0;color:#aaa;">Researching the company, the person, and the phone number, then drafting your email and text.<br><br><span style="color:#c9b8ff;">Working on it… this takes 20-40 seconds.</span></div>';
+function researchLoadingHtml(line) {
+    return '<div style="text-align:center;padding:34px 0;color:#aaa;">' + (line || 'Researching the company, the person, and the phone number.') +
+        '<br><br><span style="color:#c9b8ff;">Working on it…</span></div>';
 }
 
 function showResearchOverlay(name) {
@@ -1977,34 +1982,17 @@ function rBtn(onclick, label, accent) {
         : 'background:rgba(140,120,255,.14);color:#c9b8ff;border:1px solid rgba(140,120,255,.3);';
     return '<button onclick="' + onclick + '" style="' + style + 'border-radius:7px;padding:3px 10px;font-size:11px;cursor:pointer;margin-left:8px;">' + label + '</button>';
 }
+function rCopyBtn(field, label) { return rBtn('copyDraft(\'' + field + '\',this)', label || 'Copy', false); }
 
-function copyResearch(field, btn) {
-    if (!_researchData || !_researchData[field]) return;
-    navigator.clipboard.writeText(_researchData[field]).then(function() {
+function copyDraft(field, btn) {
+    if (!_researchDrafts || !_researchDrafts[field]) return;
+    navigator.clipboard.writeText(_researchDrafts[field]).then(function() {
         if (btn) { var o = btn.textContent; btn.textContent = 'Copied ✓'; setTimeout(function() { btn.textContent = o; }, 1400); }
     });
 }
 
-/* Open the drafted email in the native Mail composer, prefilled, ready to send. */
-function openResearchEmail() {
-    if (!_researchData || !_researchLead) return;
-    if (!_researchLead.email) { alert('No email on file for this lead — use Copy body and paste it yourself, or add their email via Edit.'); return; }
-    var url = 'mailto:' + encodeURIComponent(_researchLead.email) +
-        '?subject=' + encodeURIComponent(_researchData.emailSubject || '') +
-        '&body=' + encodeURIComponent(_researchData.emailBody || '');
-    window.location.href = url;
-}
-
-/* Open the drafted text in Messages, prefilled (same sms: scheme the app already uses). */
-function openResearchSms() {
-    if (!_researchData || !_researchLead) return;
-    if (!_researchLead.phone) { alert('No phone on file for this lead — use Copy text and paste it yourself.'); return; }
-    var digits = _researchLead.phone.replace(/[^0-9]/g, '');
-    window.location.href = 'sms:+' + digits + '&body=' + encodeURIComponent(_researchData.sms || '');
-}
-
+/* ---- Step 1 render: the research, plus the "Draft" zone ---- */
 function renderResearch(r, fromCache) {
-    _researchData = r;
     var b = document.getElementById('research-body');
     if (!b) return;
     var pre = 'white-space:pre-wrap;word-break:break-word;';
@@ -2021,26 +2009,101 @@ function renderResearch(r, fromCache) {
     }
     if (r.phone) html += rSection('Phone &amp; whether to text', '<div style="' + pre + '">' + escHtml(r.phone) + '</div>');
     if (r.fit) html += rSection('Fit &amp; strategy', '<div style="' + pre + '">' + escHtml(r.fit) + '</div>');
-
-    if (r.emailBody) {
-        var subj = r.emailSubject ? '<div style="margin-bottom:6px;color:#c9c6d6;"><b>Subject:</b> ' + escHtml(r.emailSubject) + '</div>' : '';
-        html += '<div style="margin-bottom:14px;border-top:1px solid var(--border);padding-top:14px;">' +
-            '<div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8a86a0;margin-bottom:6px;">Email draft' +
-                rBtn('openResearchEmail()', '✉️ Open in Mail', true) + rCopyBtn('emailBody', 'Copy body') + '</div>' +
-            subj +
-            '<div style="font-size:13.5px;line-height:1.5;color:#e8e6ef;background:#111015;border:1px solid var(--border);border-radius:8px;padding:10px 12px;' + pre + '">' + escHtml(r.emailBody) + '</div></div>';
-    }
-    if (r.sms) {
-        html += '<div style="margin-bottom:8px;">' +
-            '<div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8a86a0;margin-bottom:6px;">Text draft' +
-                rBtn('openResearchSms()', '💬 Open in Messages', true) + rCopyBtn('sms', 'Copy text') + '</div>' +
-            '<div style="font-size:13.5px;line-height:1.5;color:#e8e6ef;background:#111015;border:1px solid var(--border);border-radius:8px;padding:10px 12px;' + pre + '">' + escHtml(r.sms) + '</div></div>';
-    }
-    html += '<div style="margin-top:10px;font-size:11.5px;color:#77748a;">Drafts only — you send. Open in Mail / Messages prefills the draft so you just review and hit send. Send the email first, then the text if the number is mobile.</div>';
+    html += '<div id="research-draft-zone" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;"></div>';
     b.innerHTML = html;
+    renderDraftZone();
 }
 
-function rCopyBtn(field, label) { return rBtn('copyResearch(\'' + field + '\',this)', label || 'Copy', false); }
+/* ---- Step 2 zone: the "Draft" button, or the drafts once generated ---- */
+function draftButtonHtml() {
+    return '<button onclick="draftMessages(this)" style="background:rgba(140,120,255,.16);color:#c9b8ff;border:1px solid rgba(140,120,255,.35);border-radius:9px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;">✍️ Draft the email &amp; text</button>' +
+        '<span style="color:#77748a;font-size:11.5px;margin-left:10px;">Uses the research above. ~10-15s.</span>';
+}
+
+function renderDraftZone() {
+    var z = document.getElementById('research-draft-zone');
+    if (!z) return;
+    var entry = _researchLead && _researchCache[_researchLead.id];
+    if (entry && entry.drafts) { _researchDrafts = entry.drafts; z.innerHTML = draftsHtml(entry.drafts); }
+    else { _researchDrafts = null; z.innerHTML = draftButtonHtml(); }
+}
+
+function draftMessages(btn) {
+    if (!_researchLead) return;
+    var entry = _researchCache[_researchLead.id];
+    if (!entry || !entry.research) return;
+    var c = allClients.find(function(x) { return x.id === _researchLead.id; }) || {};
+    if (btn) { btn.disabled = true; btn.textContent = '✍️ Drafting…'; }
+    var lead = { name: c.name, email: c.email || '', phone: c.phone || '', event_type: c.event_type || '', event_date: c.event_date || '', guests: c.guests || '', notes: c.notes || '' };
+    fetch('/api/pending-replies', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'draft', lead: lead, research: entry.research })
+    })
+    .then(function(r) { return r.text().then(function(t) { return { ok: r.ok, text: t }; }); })
+    .then(function(o) {
+        var res = null; try { res = JSON.parse(o.text); } catch(e) {}
+        var z = document.getElementById('research-draft-zone');
+        if (!res) { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">That timed out. Try again.</div>' + draftButtonHtml(); return; }
+        if (res.drafts) { entry.drafts = res.drafts; saveResearchCache(); _researchDrafts = res.drafts; if (z) z.innerHTML = draftsHtml(res.drafts); }
+        else if (res.raw) { if (z) z.innerHTML = '<div style="white-space:pre-wrap;color:#e8e6ef;">' + escHtml(res.raw) + '</div>'; }
+        else { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">' + escHtml(res.error || 'Could not draft.') + '</div>' + draftButtonHtml(); }
+    })
+    .catch(function(e) { var z = document.getElementById('research-draft-zone'); if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">Network issue. Try again.</div>' + draftButtonHtml(); });
+}
+
+function draftsHtml(d) {
+    var pre = 'white-space:pre-wrap;word-break:break-word;';
+    var html = '';
+    if (d.emailBody) {
+        var subj = d.emailSubject ? '<div style="margin-bottom:6px;color:#c9c6d6;"><b>Subject:</b> ' + escHtml(d.emailSubject) + '</div>' : '';
+        html += '<div style="margin-bottom:16px;">' +
+            '<div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8a86a0;margin-bottom:6px;">Email draft' +
+                rBtn('useDraftEmail()', '✉️ Use in app email', true) + rCopyBtn('emailBody', 'Copy body') + '</div>' +
+            subj +
+            '<div style="font-size:13.5px;line-height:1.5;color:#e8e6ef;background:#111015;border:1px solid var(--border);border-radius:8px;padding:10px 12px;' + pre + '">' + escHtml(d.emailBody) + '</div></div>';
+    }
+    if (d.sms) {
+        html += '<div style="margin-bottom:12px;">' +
+            '<div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8a86a0;margin-bottom:6px;">Text draft' +
+                rBtn('useDraftSms()', '💬 Use in app SMS', true) + rCopyBtn('sms', 'Copy text') + '</div>' +
+            '<div style="font-size:13.5px;line-height:1.5;color:#e8e6ef;background:#111015;border:1px solid var(--border);border-radius:8px;padding:10px 12px;' + pre + '">' + escHtml(d.sms) + '</div></div>';
+    }
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+        '<div style="font-size:11.5px;color:#77748a;">"Use in app" opens the message window prefilled — review, then send from the app (email) or Open in Messages (text).</div>' +
+        '<button onclick="draftMessages(this)" style="background:none;border:1px solid var(--border);color:#9a97ab;border-radius:7px;padding:4px 10px;font-size:11px;cursor:pointer;white-space:nowrap;">↻ Re-draft</button></div>';
+    return html;
+}
+
+/* ---- Route a draft into the app's own compose modal (not the native apps) ---- */
+function useDraftEmail() {
+    if (!_researchDrafts || !_researchLead) return;
+    var c = allClients.find(function(x) { return x.id === _researchLead.id; });
+    if (!c) return;
+    if (!c.email) { alert('No email on file for this lead. Add their email via Edit, or use Copy body.'); return; }
+    closeResearch();
+    openComposeModal(c.id, c.name, c.email || '', c.phone || '');
+    document.getElementById('compose-channel').value = 'email';
+    onComposeChannelChange();
+    document.getElementById('compose-subject').value = _researchDrafts.emailSubject || '';
+    var body = document.getElementById('compose-body');
+    body.value = _researchDrafts.emailBody || '';
+    autoGrow(body);
+}
+
+function useDraftSms() {
+    if (!_researchDrafts || !_researchLead) return;
+    var c = allClients.find(function(x) { return x.id === _researchLead.id; });
+    if (!c) return;
+    if (!c.phone) { alert('No phone on file for this lead. Add their phone via Edit, or use Copy text.'); return; }
+    closeResearch();
+    openComposeModal(c.id, c.name, c.email || '', c.phone || '');
+    document.getElementById('compose-channel').value = 'sms';
+    onComposeChannelChange();
+    var body = document.getElementById('compose-body');
+    body.value = _researchDrafts.sms || '';
+    autoGrow(body);
+    updateComposeCharCount();
+}
 
 function renderResearchRaw(raw) {
     var b = document.getElementById('research-body');
