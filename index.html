@@ -2098,7 +2098,7 @@ function draftsHtml(d, chat) {
     });
     html += '<div style="display:flex;gap:8px;margin-top:6px;align-items:flex-end;">' +
         '<textarea id="research-refine-input" class="autogrow" rows="3" placeholder="e.g. make it warmer · did you consider the anniversary angle · shorten it and ask about the venue" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();refineDraft();}" style="flex:1;background:#111015;border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:#e8e6ef;font-size:12.5px;resize:vertical;min-height:60px;"></textarea>' +
-        '<button id="research-refine-btn" onclick="refineDraft()" style="background:rgba(140,120,255,.16);color:#c9b8ff;border:1px solid rgba(140,120,255,.35);border-radius:8px;padding:8px 14px;font-size:12.5px;cursor:pointer;white-space:nowrap;">Send</button></div>';
+        '<button id="research-refine-btn" onclick="refineDraft()" style="background:rgba(140,120,255,.16);color:#c9b8ff;border:1px solid rgba(140,120,255,.35);border-radius:8px;padding:8px 14px;font-size:12.5px;cursor:pointer;white-space:nowrap;">Refine</button></div>';
     html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;">' +
         '<div style="font-size:11.5px;color:#77748a;">"Use in app" opens the message window prefilled. Sending a note above revises both drafts and I reply.</div>' +
         '<button onclick="draftMessages(this)" style="background:none;border:1px solid var(--border);color:#9a97ab;border-radius:7px;padding:4px 10px;font-size:11px;cursor:pointer;white-space:nowrap;">↻ Start over</button></div>';
@@ -2134,13 +2134,13 @@ function refineDraft() {
             renderDraftZone();
         } else {
             if (input) input.disabled = false;
-            if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+            if (btn) { btn.disabled = false; btn.textContent = 'Refine'; }
             alert((res && res.error) || 'Could not revise that time — try again.');
         }
     })
     .catch(function(e) {
         if (input) input.disabled = false;
-        if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Refine'; }
         alert('Network issue — try again.');
     });
 }
