@@ -2031,6 +2031,7 @@ function renderDraftZone() {
         if (entry && entry.drafts && (entry.drafts.emailBody || entry.drafts.sms)) {
             _researchDrafts = entry.drafts;
             z.innerHTML = draftsHtml(entry.drafts, entry.chat);
+            requestAnimationFrame(function() { autoGrow(document.getElementById('research-refine-input')); });
         } else {
             _researchDrafts = null;
             z.innerHTML = draftButtonHtml();
@@ -2058,7 +2059,7 @@ function draftMessages(btn, attempt) {
         var res = null; try { res = JSON.parse(o.text); } catch(e) {}
         var z = document.getElementById('research-draft-zone');
         if (!res) { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">That timed out. Try again.</div>' + draftButtonHtml(); return; }
-        if (res.drafts) { entry.drafts = res.drafts; entry.chat = []; entry.instrs = []; saveResearchCache(); _researchDrafts = res.drafts; try { if (z) z.innerHTML = draftsHtml(res.drafts, entry.chat); } catch(err) { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">Draft loaded but hit a display error: ' + escHtml(err.message) + '</div>' + draftButtonHtml(); } }
+        if (res.drafts) { entry.drafts = res.drafts; entry.chat = []; entry.instrs = []; saveResearchCache(); _researchDrafts = res.drafts; try { if (z) { z.innerHTML = draftsHtml(res.drafts, entry.chat); requestAnimationFrame(function() { autoGrow(document.getElementById('research-refine-input')); }); } } catch(err) { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">Draft loaded but hit a display error: ' + escHtml(err.message) + '</div>' + draftButtonHtml(); } }
         else if (res.raw) { if (z) z.innerHTML = '<div style="white-space:pre-wrap;color:#e8e6ef;">' + escHtml(res.raw) + '</div>'; }
         else { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">' + escHtml(res.error || 'Could not draft.') + '</div>' + draftButtonHtml(); }
     })
@@ -2095,8 +2096,8 @@ function draftsHtml(d, chat) {
             (t.note ? '<div style="font-size:12.5px;color:#8fe0a5;margin-top:2px;">💬 ' + escHtml(t.note) + '</div>' : '') +
             '</div>';
     });
-    html += '<div style="display:flex;gap:8px;margin-top:6px;">' +
-        '<input id="research-refine-input" type="text" placeholder="e.g. make it warmer · did you consider the anniversary angle · shorten it and ask about the venue" onkeydown="if(event.key===\'Enter\'){event.preventDefault();refineDraft();}" style="flex:1;background:#111015;border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:#e8e6ef;font-size:12.5px;">' +
+    html += '<div style="display:flex;gap:8px;margin-top:6px;align-items:flex-end;">' +
+        '<textarea id="research-refine-input" class="autogrow" rows="3" placeholder="e.g. make it warmer · did you consider the anniversary angle · shorten it and ask about the venue" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();refineDraft();}" style="flex:1;background:#111015;border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:#e8e6ef;font-size:12.5px;resize:vertical;min-height:60px;"></textarea>' +
         '<button id="research-refine-btn" onclick="refineDraft()" style="background:rgba(140,120,255,.16);color:#c9b8ff;border:1px solid rgba(140,120,255,.35);border-radius:8px;padding:8px 14px;font-size:12.5px;cursor:pointer;white-space:nowrap;">Send</button></div>';
     html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;">' +
         '<div style="font-size:11.5px;color:#77748a;">"Use in app" opens the message window prefilled. Sending a note above revises both drafts and I reply.</div>' +
