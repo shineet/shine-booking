@@ -585,9 +585,10 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
         return { text, ref };
       }
 
-      // Single fast pass on Sonnet 5. No slow Opus fallback: two web-research passes
-      // back-to-back blow the 60s function limit (that was the 504 / "Load failed").
-      const r = await runResearch('claude-sonnet-5');
+      // Single fast pass on Opus 4.8 (testing 2026-07-13: research now persists per lead via
+      // localStorage, so it only runs once per lead, making the extra cost/latency worth it for
+      // quality). No fallback: two research passes back-to-back risk the 60s function limit.
+      const r = await runResearch('claude-opus-4-8');
       const finalText = r.text; const refused = r.ref;
 
       if (refused) { res.status(200).json({ error: 'The AI declined this one (rare false positive). Try again, or research manually.' }); return; }
