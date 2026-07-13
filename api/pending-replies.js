@@ -785,13 +785,13 @@ Shine's corporate floor is $2,500, his standard corporate anchor is $3,500. Use 
 Output PLAIN TEXT ONLY (no markdown asterisks/bold, this is pasted into a plain notes app). Use exactly this shape:
 
 SNAPSHOT
-2-4 lines: who they are, the event, date, guest count, venue, and the budget/affordability read.
+2-4 lines: who they are, the event, date, guest count, venue, and the budget/affordability read. IMPORTANT: scan the message history for any specific price/rate Shine already stated in writing (an email or text he sent). If one exists, state it explicitly here, and flag clearly if it may need revising, e.g. it was quoted for a different guest count or scope than what's now confirmed. Don't let an old written number get contradicted for free on the call.
 
 QUESTIONS TO ASK
 3-6 bullets ("- " prefix), close-blocking questions first (payment process/PO or decision authority, timing/logistics specific to their venue or organization), then personalization questions (tone, names, details to weave in). Do NOT re-ask anything they already answered in the message history below.
 
 HOW TO CLOSE
-2-4 bullets: the price to lead with and how to frame it given their budget sensitivity, plus the concrete next step to push for on the call.
+2-4 bullets: the price to lead with and how to frame it given their budget sensitivity (reconcile it with any already-quoted number from the SNAPSHOT above), plus the concrete next step to push for on the call.
 
 HARD STYLE RULE: absolutely no em dashes (—). Use commas, periods, or "to".`;
 

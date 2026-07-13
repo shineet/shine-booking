@@ -22,17 +22,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  // ── TEMP: full untruncated message content for Dedrah Ginn (remove after use) ───
-  if (req.method === 'GET' && req.query.diag === 'ginn_fullmsg_9f2a71') {
-    try {
-      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const mRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d&select=id,direction,channel,content,created_at&order=created_at.asc`, { headers: sbHeaders });
-      const messages = await mRes.json();
-      res.status(200).json({ messages });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-    return;
-  }
-
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;
