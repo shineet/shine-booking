@@ -1709,6 +1709,7 @@ function loadLeads() {
     .then(function(r) { return r.json(); })
     .then(function(clients) {
         allClients = clients;
+        mergeResearchCacheFromDb(clients);
         renderList();
         checkNewLeads();
         if (activeClientId) {
@@ -1898,7 +1899,30 @@ var _researchCache = {};    // id -> { research:{...}, drafts:{...}|null }; surv
 var _RCACHE_V = 3;          // bump to invalidate stale cache after a format change
 // localStorage (not sessionStorage) so research + drafts persist across app restarts on this browser.
 try { var _rc = JSON.parse(localStorage.getItem('researchCache') || '{}'); _researchCache = (_rc && _rc.__v === _RCACHE_V && _rc.data) ? _rc.data : {}; } catch(e) { _researchCache = {}; }
-function saveResearchCache() { try { localStorage.setItem('researchCache', JSON.stringify({ __v: _RCACHE_V, data: _researchCache })); } catch(e) {} }
+// clientId is optional: pass it whenever the change should also sync to Supabase (clients.research_cache
+// jsonb column), so research/drafts/chat survive across Shine's phone + laptop, not just this browser.
+// Local write always happens; the DB push is fire-and-forget (network hiccup shouldn't block the UI).
+function saveResearchCache(clientId) {
+    try { localStorage.setItem('researchCache', JSON.stringify({ __v: _RCACHE_V, data: _researchCache })); } catch(e) {}
+    if (clientId) syncResearchToDb(clientId);
+}
+function syncResearchToDb(clientId) {
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + clientId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ research_cache: _researchCache[clientId] || null })
+    }).catch(function(e) {});
+}
+// Called after every clients list load. Supabase is the cross-device source of truth: a
+// client's research_cache column wins over whatever's in this browser's local cache, so
+// research/drafts/refine chat done on Shine's phone shows up on his laptop and vice versa.
+function mergeResearchCacheFromDb(clients) {
+    var changed = false;
+    clients.forEach(function(c) {
+        if (c.research_cache) { _researchCache[c.id] = c.research_cache; changed = true; }
+    });
+    if (changed) { try { localStorage.setItem('researchCache', JSON.stringify({ __v: _RCACHE_V, data: _researchCache })); } catch(e) {} }
+}
 
 function researchLead(id) {
     var c = allClients.find(function(x) { return x.id === id; });
@@ -1925,7 +1949,7 @@ function fetchResearch(c) {
     .then(function(o) {
         var res = null; try { res = JSON.parse(o.text); } catch(e) {}
         if (!res) { researchError('That timed out. Tap 🔁 Re-run to try again.'); return; }
-        if (res.research) { _researchCache[c.id] = { research: res.research, drafts: null }; saveResearchCache(); renderResearch(res.research, false); }
+        if (res.research) { _researchCache[c.id] = { research: res.research, drafts: null }; saveResearchCache(c.id); renderResearch(res.research, false); }
         else if (res.raw) { renderResearchRaw(res.raw); }
         else researchError((res.error) || 'No result returned.');
     })
@@ -1936,7 +1960,7 @@ function rerunResearch() {
     if (!_researchLead) return;
     var c = allClients.find(function(x) { return x.id === _researchLead.id; });
     if (!c) return;
-    delete _researchCache[_researchLead.id]; saveResearchCache();
+    delete _researchCache[_researchLead.id]; saveResearchCache(_researchLead.id);
     _researchDrafts = null;
     var b = document.getElementById('research-body');
     if (b) b.innerHTML = researchLoadingHtml('Researching the company, the person, and the phone number.');
@@ -2059,7 +2083,7 @@ function draftMessages(btn, attempt) {
         var res = null; try { res = JSON.parse(o.text); } catch(e) {}
         var z = document.getElementById('research-draft-zone');
         if (!res) { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">That timed out. Try again.</div>' + draftButtonHtml(); return; }
-        if (res.drafts) { entry.drafts = res.drafts; entry.chat = []; entry.instrs = []; saveResearchCache(); _researchDrafts = res.drafts; try { if (z) { z.innerHTML = draftsHtml(res.drafts, entry.chat); requestAnimationFrame(function() { autoGrow(document.getElementById('research-refine-input')); }); } } catch(err) { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">Draft loaded but hit a display error: ' + escHtml(err.message) + '</div>' + draftButtonHtml(); } }
+        if (res.drafts) { entry.drafts = res.drafts; entry.chat = []; entry.instrs = []; saveResearchCache(_researchLead.id); _researchDrafts = res.drafts; try { if (z) { z.innerHTML = draftsHtml(res.drafts, entry.chat); requestAnimationFrame(function() { autoGrow(document.getElementById('research-refine-input')); }); } } catch(err) { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">Draft loaded but hit a display error: ' + escHtml(err.message) + '</div>' + draftButtonHtml(); } }
         else if (res.raw) { if (z) z.innerHTML = '<div style="white-space:pre-wrap;color:#e8e6ef;">' + escHtml(res.raw) + '</div>'; }
         else { if (z) z.innerHTML = '<div style="color:var(--red);margin-bottom:8px;">' + escHtml(res.error || 'Could not draft.') + '</div>' + draftButtonHtml(); }
     })
@@ -2129,7 +2153,7 @@ function refineDraft() {
             entry.instrs = (entry.instrs || []).concat([instruction]);
             entry.chat = (entry.chat || []).concat([{ you: instruction, note: res.drafts.note || '' }]);
             entry.drafts = res.drafts;
-            saveResearchCache();
+            saveResearchCache(_researchLead.id);
             _researchDrafts = res.drafts;
             renderDraftZone();
         } else {
