@@ -26,8 +26,9 @@ export default async function handler(req, res) {
   if (req.method === 'GET' && req.query.diag === 'ginn_dupe_check_9f2a71') {
     try {
       const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?name=ilike.*ginn*&select=id,name,email,phone,status,hot_lead,source,created_at,last_activity,last_channel`, { headers: sbHeaders });
+      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?name=ilike.${encodeURIComponent('*ginn*')}&select=id,name,email,phone,status,hot_lead,source,created_at,last_activity,last_channel`, { headers: sbHeaders });
       const clients = await cRes.json();
+      if (!Array.isArray(clients)) { res.status(200).json({ clientsRaw: clients, note: 'clients query did not return an array' }); return; }
       const ids = (clients || []).map(c => c.id);
       let messages = [];
       if (ids.length) {
