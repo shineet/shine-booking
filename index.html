@@ -569,6 +569,10 @@
     .convo-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0; }
     .convo-loading { color: var(--muted); font-size: 13px; padding: 8px 0; }
     .convo-pending { color: var(--amber); }
+    .convo-discarded { color: var(--red); }
+    .convo-restore { background: none; border: 1px solid var(--border); color: var(--accent2); border-radius: 4px; padding: 1px 6px; font-size: 10px; cursor: pointer; }
+    .convo-restore:hover { background: var(--surface2); }
+    .convo-msg.discarded .convo-bubble { opacity: .55; }
 
     /* Answers section */
     .answers-section { margin-top: 8px }
@@ -2326,15 +2330,18 @@ function loadConversationLead(clientId) {
             }) : '';
             var pending = m.status === 'pending_review'
                 ? '<span class="convo-pending">⏳ Pending review</span>' : '';
+            var discarded = m.status === 'discarded'
+                ? '<span class="convo-discarded">🚫 Discarded, not sent</span> <button class="convo-restore" onclick="restoreDiscardedMessage(\'' + m.id + '\')">&#8630; Restore &amp; edit</button>' : '';
             var subject = m.email_subject
                 ? '<div class="convo-subject">' + escHtml(m.email_subject) + '</div>' : '';
-            return '<div class="convo-msg ' + (isOut ? 'outbound' : 'inbound') + '">' +
+            return '<div class="convo-msg ' + (isOut ? 'outbound' : 'inbound') + (m.status === 'discarded' ? ' discarded' : '') + '">' +
                 subject +
                 '<div class="convo-bubble">' + escHtml(m.content || '') + '</div>' +
                 '<div class="convo-meta">' +
                 '<span class="convo-channel">' + channel + '</span>' +
                 '<span>' + time + '</span>' +
                 pending +
+                discarded +
                 '</div></div>';
         }).join('');
 
@@ -2507,6 +2514,21 @@ function discardPendingReply(id) {
     .then(function(r) { return r.json(); })
     .then(function(d) { if (d.error) throw new Error(d.error); loadPendingReplies(); })
     .catch(function(e) { alert('Error: ' + e.message); card.querySelectorAll('button').forEach(function(b) { b.disabled = false; }); });
+}
+
+function restoreDiscardedMessage(id) {
+    fetch('/api/pending-replies', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restore', messageId: id })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.error) throw new Error(d.error);
+        loadPendingReplies();
+        if (activeClientId) loadConversationLead(activeClientId);
+        document.getElementById('pending-banner').scrollIntoView({ behavior: 'smooth' });
+    })
+    .catch(function(e) { alert('Error: ' + e.message); });
 }
 
 function regeneratePendingReply(id) {

@@ -453,6 +453,26 @@ PRICING:
       return;
     }
 
+    // POST action=restore -> bring a discarded draft back into the pending-review queue
+    // so it can be edited/regenerated/sent through the normal flow.
+    if (req.method === 'POST' && req.body.action === 'restore') {
+      const { messageId } = req.body;
+      if (!messageId) { res.status(400).json({ error: 'messageId required' }); return; }
+      const sbHeaders = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+      const chkRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?id=eq.${messageId}&limit=1`, { headers: sbHeaders });
+      const chkRows = await chkRes.json();
+      const msg = Array.isArray(chkRows) ? chkRows[0] : null;
+      if (!msg) { res.status(404).json({ error: 'Message not found' }); return; }
+      if (msg.status !== 'discarded') { res.status(400).json({ error: 'Only discarded drafts can be restored' }); return; }
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?id=eq.${messageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...sbHeaders },
+        body: JSON.stringify({ status: 'pending_review' })
+      });
+      res.status(200).json({ success: true });
+      return;
+    }
+
     // POST action=regenerate -> re-draft this pending reply, optionally steered by a
     // per-message instruction the owner types after reading the client's message.
     if (req.method === 'POST' && req.body.action === 'regenerate') {
