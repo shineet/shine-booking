@@ -127,7 +127,9 @@ async function fetchLeadConversation(clientId) {
     const rows = await r.json();
     if (!Array.isArray(rows) || !rows.length) return '';
     const lines = rows
-      .map(m => (m.direction === 'inbound' ? 'THEM: ' : 'SHINE: ') + String(m.content || '').replace(/\s+/g, ' ').trim().slice(0, 500))
+      // 4000 chars, not 500: a full email (e.g. one that quotes a specific price partway
+      // through) was getting silently truncated before the model ever saw the price.
+      .map(m => (m.direction === 'inbound' ? 'THEM: ' : 'SHINE: ') + String(m.content || '').replace(/\s+/g, ' ').trim().slice(0, 4000))
       .filter(x => x.length > 8);
     return lines.length ? '\n\nWHAT THEY ACTUALLY MESSAGED (read this closely and respond to it):\n' + lines.join('\n') : '';
   } catch(e) { console.error('fetchLeadConversation failed:', e.message); return ''; }
