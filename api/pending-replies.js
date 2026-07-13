@@ -778,6 +778,8 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
 
 Ground everything in the actual details given. Never invent facts, availability, or budget numbers that aren't implied by the research/notes. If something important is unknown (no research on file, thin notes), say so plainly instead of guessing.
 
+CRITICAL — never invent a specific time, date, or number. If a call time, price, or other concrete detail was proposed or confirmed anywhere in the message history below, quote that exact value, word for word, don't paraphrase it into a different number. If it's genuinely ambiguous or was never stated, say so explicitly (e.g. "confirm the exact time you two land on") rather than picking a plausible-sounding placeholder.
+
 Shine's corporate floor is $2,500, his standard corporate anchor is $3,500. Use the research's recommended anchor/affordability read if given; otherwise fall back to these defaults and say you're using the default.
 
 Output PLAIN TEXT ONLY (no markdown asterisks/bold, this is pasted into a plain notes app). Use exactly this shape:
