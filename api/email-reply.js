@@ -1,3 +1,13 @@
+// Client email lookups use ilike instead of eq: mail servers/clients aren't
+// consistent about casing in the From header between messages (e.g. a school
+// Exchange relay sent "Dedrah.ginn@..." once and "Dedrah.Ginn@..." another time),
+// and Postgres eq. is case-sensitive, so a same-address reply silently failed to
+// match the existing client and created a duplicate lead instead. % and _ are
+// escaped since ilike treats them as wildcards.
+function emailIlikeParam(email) {
+  return encodeURIComponent(String(email || '').trim().replace(/[%_\\]/g, m => '\\' + m));
+}
+
 // ── Inbound email body decoding ──────────────────────────────────────────────
 // Some mail servers send the text/plain part with Content-Transfer-Encoding
 // base64 or quoted-printable. If we don't decode it, the dashboard + the
@@ -118,7 +128,7 @@ export default async function handler(req, res) {
 
       // Find matching client by recipient email
       const clientRes = await fetch(
-        `${process.env.SUPABASE_URL}/rest/v1/clients?email=eq.${encodeURIComponent(toEmail)}&order=created_at.desc&limit=1`,
+        `${process.env.SUPABASE_URL}/rest/v1/clients?email=ilike.${emailIlikeParam(toEmail)}&order=created_at.desc&limit=1`,
         { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
       );
       const clients = await clientRes.json();
@@ -248,7 +258,7 @@ export default async function handler(req, res) {
         // Find or create the client keyed on the submitter email
         let client = null;
         try {
-          const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?email=eq.${encodeURIComponent(clientEmail)}&order=created_at.desc&limit=1`, { headers: supaHdrs });
+          const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?email=ilike.${emailIlikeParam(clientEmail)}&order=created_at.desc&limit=1`, { headers: supaHdrs });
           const cRows = await cRes.json();
           client = Array.isArray(cRows) ? (cRows[0] || null) : null;
         } catch (e) { console.error('Wix lead lookup failed:', e.message); }
@@ -357,7 +367,7 @@ export default async function handler(req, res) {
           }
           try {
             const clientRes = await fetch(
-              `${process.env.SUPABASE_URL}/rest/v1/clients?email=eq.${encodeURIComponent(toEmail)}&order=created_at.desc&limit=1`,
+              `${process.env.SUPABASE_URL}/rest/v1/clients?email=ilike.${emailIlikeParam(toEmail)}&order=created_at.desc&limit=1`,
               { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
             );
             const clients = await clientRes.json();
@@ -452,7 +462,7 @@ export default async function handler(req, res) {
     let client = null;
     try {
       const clientRes = await fetch(
-        `${process.env.SUPABASE_URL}/rest/v1/clients?email=eq.${encodeURIComponent(fromEmail)}&order=created_at.desc&limit=1`,
+        `${process.env.SUPABASE_URL}/rest/v1/clients?email=ilike.${emailIlikeParam(fromEmail)}&order=created_at.desc&limit=1`,
         { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
       );
       const clients = await clientRes.json();

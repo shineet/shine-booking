@@ -22,27 +22,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  // ── TEMP diagnostic: Dedrah Ginn duplicate-client check (remove after use) ──────
-  if (req.method === 'GET' && req.query.diag === 'ginn_dupe_check_9f2a71') {
-    try {
-      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?name=ilike.${encodeURIComponent('*ginn*')}&select=id,name,email,phone,status,hot_lead,lead_source,created_at,last_activity,last_channel`, { headers: sbHeaders });
-      const clients = await cRes.json();
-      if (!Array.isArray(clients)) { res.status(200).json({ clientsRaw: clients, note: 'clients query did not return an array' }); return; }
-      const ids = (clients || []).map(c => c.id);
-      let messages = [];
-      if (ids.length) {
-        const mRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=in.(${ids.join(',')})&select=id,client_id,direction,channel,status,to_address,content,created_at&order=created_at.asc`, { headers: sbHeaders });
-        messages = await mRes.json();
-      }
-      res.status(200).json({
-        clients: (clients || []).map(c => ({ ...c, email_json: JSON.stringify(c.email), email_len: (c.email||'').length })),
-        messages: (messages || []).map(m => ({ ...m, content: String(m.content||'').slice(0,200) }))
-      });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-    return;
-  }
-
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;

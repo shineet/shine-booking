@@ -241,7 +241,7 @@ export default async function handler(req, res) {
       // Find or create the client keyed on the submitter email
       let client = null;
       try {
-        const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?email=eq.${encodeURIComponent(clientEmail)}&order=created_at.desc&limit=1`, { headers: supaHdrs });
+        const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?email=ilike.${emailIlikeParam(clientEmail)}&order=created_at.desc&limit=1`, { headers: supaHdrs });
         const cRows = await cRes.json();
         client = Array.isArray(cRows) ? (cRows[0] || null) : null;
       } catch (e) { console.error('webform lead lookup failed:', e.message); }
@@ -321,6 +321,14 @@ export default async function handler(req, res) {
 // Map a free-form event type (e.g. the Wix form's "Corporate Event") to the
 // dashboard's canonical option values so the Edit dropdown matches and displays
 // it. Case-insensitive; unknown values pass through unchanged so nothing is lost.
+// Postgres eq. is case-sensitive and mail clients aren't consistent about From-header
+// casing between messages, so an exact-match lookup can miss an existing client and
+// create a duplicate lead. ilike matches case-insensitively; % and _ are escaped since
+// ilike treats them as wildcards.
+function emailIlikeParam(email) {
+  return encodeURIComponent(String(email || '').trim().replace(/[%_\\]/g, function(m) { return '\\' + m; }));
+}
+
 function normalizeEventType(v) {
   if (!v) return null;
   const s = String(v).trim();
