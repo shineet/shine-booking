@@ -22,61 +22,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  // ── TEMP: merge duplicate Dedrah Ginn client rows (remove after use) ────────────
-  if (req.method === 'GET' && req.query.diag === 'ginn_merge_9f2a71') {
-    const KEEP_ID = 'f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d';   // original hot lead (phone, hot_lead)
-    const DROP_ID = '406a43fb-b1ae-4abd-8355-ae2637ba6ec8';   // today's duplicate (has today's reply + messages)
-    const commit = req.query.commit === '1';
-    try {
-      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const sbHeadersJson = { ...sbHeaders, 'Content-Type': 'application/json' };
-
-      const [keepRes, dropRes, dropMsgsRes, dropBookingsRes] = await Promise.all([
-        fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${KEEP_ID}&limit=1`, { headers: sbHeaders }),
-        fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${DROP_ID}&limit=1`, { headers: sbHeaders }),
-        fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${DROP_ID}&select=id,direction,channel,created_at`, { headers: sbHeaders }),
-        fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?client_id=eq.${DROP_ID}&select=id`, { headers: sbHeaders }),
-      ]);
-      const keep = (await keepRes.json())[0];
-      const drop = (await dropRes.json())[0];
-      const dropMsgs = await dropMsgsRes.json();
-      const dropBookings = await dropBookingsRes.json();
-
-      if (!keep || !drop) { res.status(404).json({ error: 'Expected client row missing', keep, drop }); return; }
-      if (Array.isArray(dropBookings) && dropBookings.length) {
-        res.status(409).json({ error: 'Duplicate has bookings attached — refusing to auto-delete', dropBookings }); return;
-      }
-
-      if (!commit) {
-        res.status(200).json({ dryRun: true, keep, drop, dropMessagesToMove: dropMsgs });
-        return;
-      }
-
-      // 1) Repoint the duplicate's messages onto the kept record
-      const moveRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${DROP_ID}`, {
-        method: 'PATCH', headers: sbHeadersJson, body: JSON.stringify({ client_id: KEEP_ID })
-      });
-      const moveOk = moveRes.ok;
-
-      // 2) Bring the kept record's status/last_activity up to date, preserving hot_lead + phone
-      const newestActivity = drop.last_activity && (!keep.last_activity || drop.last_activity > keep.last_activity) ? drop.last_activity : keep.last_activity;
-      const patchRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${KEEP_ID}`, {
-        method: 'PATCH', headers: sbHeadersJson,
-        body: JSON.stringify({ status: drop.status || keep.status, last_activity: newestActivity, last_channel: drop.last_channel || keep.last_channel })
-      });
-
-      // 3) Delete the duplicate client row
-      const delRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${DROP_ID}`, { method: 'DELETE', headers: sbHeaders });
-
-      res.status(200).json({
-        committed: true,
-        movedMessages: dropMsgs.length,
-        moveOk, patchOk: patchRes.ok, deleteOk: delRes.ok
-      });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-    return;
-  }
-
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;
