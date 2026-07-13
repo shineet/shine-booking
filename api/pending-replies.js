@@ -7,6 +7,33 @@ function normalizePhone(phone) {
   return phone;
 }
 
+// Real carrier/line-type lookup via Twilio Lookup v2 (line_type_intelligence add-on), used by
+// the research step so the phone-type read is a verified fact instead of an area-code guess.
+// Separate credentials (TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN) from the messaging pair
+// (TWILIO_SID/TWILIO_TOKEN) used everywhere else in this file, though today they're the same
+// Twilio account. Fails soft: returns null on any error/timeout so research always proceeds.
+async function lookupPhoneLineType(phone) {
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  const normalized = normalizePhone(phone);
+  if (!sid || !token || !normalized) return null;
+  const auth = Buffer.from(`${sid}:${token}`).toString('base64');
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const resp = await fetch(
+      `https://lookups.twilio.com/v2/PhoneNumbers/${encodeURIComponent(normalized)}?Fields=line_type_intelligence`,
+      { headers: { Authorization: 'Basic ' + auth }, signal: controller.signal }
+    );
+    clearTimeout(timeout);
+    if (!resp.ok) { console.error('Twilio Lookup error:', resp.status); return null; }
+    const data = await resp.json();
+    const lti = data && data.line_type_intelligence;
+    if (!lti || !lti.type) return null;
+    return { type: lti.type, carrierName: lti.carrier_name || null };
+  } catch(e) { console.error('Twilio Lookup failed:', e.message); return null; }
+}
+
 // Voice prompts used only by the "regenerate" action below. These MIRROR the prompts in
 // email-reply.js (EMAIL_VOICE) and reply.js (SMS_VOICE) so a re-drafted reply keeps Shine's
 // voice. If you change the voice in those files, update it here too.
@@ -518,7 +545,7 @@ PRICING:
 1. COMPANY: From the email domain and any company name, search and identify the organization — what it is, size/prestige signals, industry, location. If the email domain is a free provider (gmail/yahoo/outlook/icloud) or none is given, treat it as an individual / private lead and say so.
 2. PERSON: Search the person's name + company/domain. Surface role/title and any public LinkedIn/company-page/social snippet. Never fabricate a title, contact, or fact — if you can't find it, say so.
 3. AFFORDABILITY: Judge whether this lead can afford a HIGH or LOW price, from concrete signals (company type/prestige, role, event type, guest count, venue). Shine's corporate floor is $2,500; his real corporate booking anchor is $3,500. Give a specific recommended anchor number and a short internal price range with when to push higher.
-4. PHONE LINE TYPE: The lead's phone is "${lead.phone || '(none given)'}". Reason whether it is MOBILE or LANDLINE: note the area code's region, and if you find the company's official phone number, compare (a personal number on a mobile-heavy or different area code than the company's main line is almost certainly a cell). State your confidence. You can't get carrier data directly, so also recommend confirming at freecarrierlookup.com. Advise whether Shine should ALSO text the number (yes if likely mobile).
+4. PHONE LINE TYPE: The lead's phone is "${lead.phone || '(none given)'}". If a "VERIFIED PHONE LINE TYPE" fact is given below, state it directly and confidently (it's real carrier data, not a guess) and advise whether Shine should ALSO text the number (yes if mobile). If no verified fact is given, reason whether it is MOBILE or LANDLINE from the area code's region and, if you find the company's official phone number, whether it differs from that main line; state your confidence and recommend confirming at freecarrierlookup.com.
 5. FIT + STRATEGY: one tight paragraph on why this is (or isn't) a good fit and how to approach the reply.
 
 BE CONCISE (time-sensitive): 1-2 short sentences per field. Do not pad.
@@ -535,10 +562,15 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
   "fit": "fit + strategy paragraph"
 }`;
 
+      // Real carrier lookup runs alongside nothing else here (before the LLM call), so its
+      // ~1-2s (or 5s timeout on failure) adds minimal risk to the 60s budget.
+      const lineType = lead.phone ? await lookupPhoneLineType(lead.phone) : null;
+
       const userPrompt = [
         `Lead name: ${lead.name || '(unknown)'}`,
         `Email: ${lead.email || '(none)'}${emailDomain ? '  (domain: ' + emailDomain + ')' : ''}`,
         `Phone: ${lead.phone || '(none)'}`,
+        lineType ? `VERIFIED PHONE LINE TYPE (via Twilio carrier lookup): ${lineType.type}${lineType.carrierName ? ', carrier: ' + lineType.carrierName : ''}` : '',
         lead.company ? `Company field: ${lead.company}` : '',
         `Event type: ${lead.event_type || '(unspecified)'}`,
         lead.event_date ? `Event date: ${lead.event_date}` : '',
