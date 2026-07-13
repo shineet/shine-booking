@@ -543,9 +543,9 @@ PRICING:
       const RESEARCH_SYSTEM = `You are the research analyst for Shine Thankappan, a corporate mentalist and magician based in Austin, TX. Given one inbound lead, use the web_search tool to research the company and the person, judge how much they can afford, and resolve their phone line type. You do NOT write any outreach — a separate step drafts the messages.
 
 1. COMPANY: From the email domain and any company name, search and identify the organization — what it is, size/prestige signals, industry, location. If the email domain is a free provider (gmail/yahoo/outlook/icloud) or none is given, treat it as an individual / private lead and say so.
-2. PERSON: Always search the person's name, corporate or private lead alike. For corporate leads, search name + company/domain and surface role/title plus any public LinkedIn/company-page/social snippet. For private/individual leads, search the name (add the city/area or event details if it helps narrow a common name) for any public social media presence (Facebook, Instagram, LinkedIn, local news, etc.) — useful context is anything confirming this looks like a real person versus a spam/test entry, or a public detail relevant to the event. If multiple people share the name or nothing distinct turns up, say so plainly. Never fabricate a title, profile match, or fact.
+2. PERSON: Always search the person's name, corporate or private lead alike. For corporate leads, search name + company/domain and surface role/title plus any public LinkedIn/company-page/social snippet. For private/individual leads, run MULTIPLE targeted searches, not just one generic name search: try "<name> instagram", "<name> X" or "<name> twitter", and "<name> facebook" as separate queries (add city/area if the name is common), since a single plain-name search often misses social platforms that a targeted search catches. Useful context is anything confirming this looks like a real person versus a spam/test entry, or a public detail relevant to the event. If multiple people share the name or nothing distinct turns up, say so plainly. Never fabricate a title, profile match, or fact.
 3. AFFORDABILITY: Judge whether this lead can afford a HIGH or LOW price, from concrete signals (company type/prestige, role, event type, guest count, venue). Shine's corporate floor is $2,500; his real corporate booking anchor is $3,500. Give a specific recommended anchor number and a short internal price range with when to push higher.
-4. PHONE LINE TYPE: The lead's phone is "${lead.phone || '(none given)'}". If a "VERIFIED PHONE LINE TYPE" fact is given below, state it directly and confidently (it's real carrier data, not a guess) and advise whether Shine should ALSO text the number (yes if mobile). If no verified fact is given, reason whether it is MOBILE or LANDLINE from the area code's region and, if you find the company's official phone number, whether it differs from that main line; state your confidence and recommend confirming at freecarrierlookup.com.
+4. PHONE LINE TYPE: The lead's phone is "${lead.phone || '(none given)'}". If a "VERIFIED PHONE LINE TYPE" fact is given below, state it directly and confidently (it's real carrier data, not a guess) and advise whether Shine should ALSO text the number (yes if mobile). If no verified fact is given, say you can't determine mobile vs landline without a carrier lookup and recommend confirming at freecarrierlookup.com; do NOT speculate about the lead's location or whether they've relocated based on the area code, since people commonly keep the same number across moves and that's an unreliable signal.
 5. FIT + STRATEGY: one tight paragraph on why this is (or isn't) a good fit and how to approach the reply.
 
 BE CONCISE (time-sensitive): 1-2 short sentences per field. Do not pad.
@@ -598,7 +598,10 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
                 // which keeps the whole call under Vercel's 60s function ceiling. Tried restoring
                 // the dynamic-filtering version on 2026-07-13; measured 54.7s (vs ~23-30s here) and
                 // the model reported it couldn't complete a live search in time. Reverted.
-                tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 2 }],
+                // max_uses raised 2->4 same day so private-lead person search has room to run
+                // multiple platform-targeted queries (instagram/X/facebook) instead of one generic
+                // name search; measured latency stayed well under budget (see brain notes).
+                tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }],
                 messages
               })
             });
