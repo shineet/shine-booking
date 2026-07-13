@@ -2003,24 +2003,42 @@ function showResearchOverlay(name) {
 function closeResearch() { var o = document.getElementById('research-overlay'); if (o) o.remove(); }
 
 /* ── Call prep brief ── */
-function callPrepLead(id) {
+// Piggybacks on the same clients.research_cache jsonb column + sync plumbing that already
+// carries research/drafts cross-device (saveResearchCache/syncResearchToDb/mergeResearchCacheFromDb
+// above): _researchCache[id].callPrep = { brief, generatedAt }. No new column, no new endpoint.
+var _callPrepId = null;   // client id the open overlay belongs to (for Copy)
+var _callPrepText = null;
+
+function callPrepLead(id, forceRefresh) {
     var c = allClients.find(function(x) { return x.id === id; });
     if (!c) return;
+    _callPrepId = id;
+    var cached = _researchCache[id] && _researchCache[id].callPrep;
+
     var old = document.getElementById('callprep-overlay');
-    if (old) old.remove();
-    var ov = document.createElement('div');
-    ov.id = 'callprep-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:32px 16px;';
-    ov.onclick = function(e) { if (e.target === ov) closeCallPrep(); };
-    ov.innerHTML = '<div style="background:#17161c;border:1px solid var(--border);border-radius:14px;max-width:640px;width:100%;padding:22px 22px 26px;box-shadow:0 20px 60px rgba(0,0,0,.5);">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;">' +
-        '<div style="font-size:16px;font-weight:700;">📞 Call prep <span style="color:#888;font-weight:400;">— ' + escHtml(c.name) + '</span></div>' +
-        '<div style="display:flex;align-items:center;gap:8px;">' +
-        '<button onclick="callPrepLead(\'' + esc(id) + '\')" title="Regenerate" style="background:rgba(120,200,140,.14);color:#8fe0a5;border:1px solid rgba(120,200,140,.3);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;">🔁 Regenerate</button>' +
-        '<button onclick="closeCallPrep()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1;">&times;</button></div></div>' +
-        '<div id="callprep-body"><div style="text-align:center;padding:34px 0;color:#aaa;">Pulling together the event details, research, and message history.<br><br><span style="color:#8fe0a5;">Working on it…</span></div></div>' +
-        '</div>';
-    document.body.appendChild(ov);
+    if (!old) {
+        var ov = document.createElement('div');
+        ov.id = 'callprep-overlay';
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:32px 16px;';
+        ov.onclick = function(e) { if (e.target === ov) closeCallPrep(); };
+        ov.innerHTML = '<div style="background:#17161c;border:1px solid var(--border);border-radius:14px;max-width:640px;width:100%;padding:22px 22px 26px;box-shadow:0 20px 60px rgba(0,0,0,.5);">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;">' +
+            '<div style="font-size:16px;font-weight:700;">📞 Call prep <span style="color:#888;font-weight:400;">— ' + escHtml(c.name) + '</span></div>' +
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+            '<button onclick="callPrepLead(\'' + esc(id) + '\',true)" title="Regenerate" style="background:rgba(120,200,140,.14);color:#8fe0a5;border:1px solid rgba(120,200,140,.3);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;">🔁 Regenerate</button>' +
+            '<button onclick="closeCallPrep()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1;">&times;</button></div></div>' +
+            '<div id="callprep-body"></div>' +
+            '</div>';
+        document.body.appendChild(ov);
+    }
+
+    if (cached && cached.brief && !forceRefresh) {
+        renderCallPrep(cached.brief, cached.generatedAt);
+        return;
+    }
+
+    var b = document.getElementById('callprep-body');
+    if (b) b.innerHTML = '<div style="text-align:center;padding:34px 0;color:#aaa;">Pulling together the event details, research, and message history.<br><br><span style="color:#8fe0a5;">Working on it…</span></div>';
 
     var entry = _researchCache[id];
     var research = (entry && entry.research) || (c.research_cache && c.research_cache.research) || null;
@@ -2035,21 +2053,33 @@ function callPrepLead(id) {
     .then(function(r) { return r.text().then(function(t) { return { ok: r.ok, text: t }; }); })
     .then(function(o) {
         var res = null; try { res = JSON.parse(o.text); } catch(e) {}
-        var b = document.getElementById('callprep-body');
-        if (!b) return;
-        if (!res) { b.innerHTML = '<div style="color:var(--red);">That timed out. Tap Regenerate to try again.</div>'; return; }
-        if (res.error) { b.innerHTML = '<div style="color:var(--red);">' + escHtml(res.error) + '</div>'; return; }
-        _callPrepText = res.brief;
-        b.innerHTML = '<div style="font-size:13.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:#e8e6ef;">' + escHtml(res.brief) + '</div>' +
-            '<div style="margin-top:16px;text-align:right;"><button id="callprep-copy-btn" onclick="copyCallPrep(this)" style="background:rgba(120,200,140,.16);color:#8fe0a5;border:1px solid rgba(120,200,140,.35);border-radius:9px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">📋 Copy to notes</button></div>';
+        var body = document.getElementById('callprep-body');
+        if (!body) return;
+        if (!res) { body.innerHTML = '<div style="color:var(--red);">That timed out. Tap Regenerate to try again.</div>'; return; }
+        if (res.error) { body.innerHTML = '<div style="color:var(--red);">' + escHtml(res.error) + '</div>'; return; }
+        var generatedAt = Date.now();
+        _researchCache[id] = _researchCache[id] || {};
+        _researchCache[id].callPrep = { brief: res.brief, generatedAt: generatedAt };
+        saveResearchCache(id); // localStorage + cross-device sync via clients.research_cache
+        renderCallPrep(res.brief, generatedAt);
     })
     .catch(function() {
-        var b = document.getElementById('callprep-body');
-        if (b) b.innerHTML = '<div style="color:var(--red);">Network issue. Tap Regenerate to try again.</div>';
+        var body = document.getElementById('callprep-body');
+        if (body) body.innerHTML = '<div style="color:var(--red);">Network issue. Tap Regenerate to try again.</div>';
     });
 }
 
-var _callPrepText = null;
+function renderCallPrep(brief, generatedAt) {
+    var b = document.getElementById('callprep-body');
+    if (!b) return;
+    _callPrepText = brief;
+    var savedNote = generatedAt
+        ? '<div style="font-size:11.5px;color:#8fe0a5;margin-bottom:12px;">✓ Saved ' + new Date(generatedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' — syncs across your devices. Tap 🔁 Regenerate to refresh.</div>'
+        : '';
+    b.innerHTML = savedNote +
+        '<div style="font-size:13.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:#e8e6ef;">' + escHtml(brief) + '</div>' +
+        '<div style="margin-top:16px;text-align:right;"><button id="callprep-copy-btn" onclick="copyCallPrep(this)" style="background:rgba(120,200,140,.16);color:#8fe0a5;border:1px solid rgba(120,200,140,.35);border-radius:9px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">📋 Copy to notes</button></div>';
+}
 function copyCallPrep(btn) {
     if (!_callPrepText) return;
     navigator.clipboard.writeText(_callPrepText).then(function() {
