@@ -1916,10 +1916,16 @@ function syncResearchToDb(clientId) {
 // Called after every clients list load. Supabase is the cross-device source of truth: a
 // client's research_cache column wins over whatever's in this browser's local cache, so
 // research/drafts/refine chat done on Shine's phone shows up on his laptop and vice versa.
+// Also backfills the other direction: research done in THIS browser before the DB sync
+// existed (or before it ever successfully synced) has no research_cache row yet, so push it
+// up now. One-time per device — after this runs once, that entry has a DB row and this branch
+// no longer applies to it.
 function mergeResearchCacheFromDb(clients) {
     var changed = false;
     clients.forEach(function(c) {
+        var local = _researchCache[c.id];
         if (c.research_cache) { _researchCache[c.id] = c.research_cache; changed = true; }
+        else if (local && (local.research || local.drafts)) { syncResearchToDb(c.id); }
     });
     if (changed) { try { localStorage.setItem('researchCache', JSON.stringify({ __v: _RCACHE_V, data: _researchCache })); } catch(e) {} }
 }
