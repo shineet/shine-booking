@@ -766,6 +766,77 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
       return;
     }
 
+    // POST action=callprep -> a plain-text call prep brief for an upcoming call with this
+    // lead, meant to be copy-pasted straight into Shine's notes app. Reuses whatever research
+    // has already been cached client-side (no fresh web_search here, so this stays fast) plus
+    // the actual message history, so it doesn't re-ask anything already answered.
+    if (req.method === 'POST' && req.body.action === 'callprep') {
+      const lead = req.body.lead || {};
+      const rc = req.body.research || {};
+
+      const CALLPREP_SYSTEM = `You are helping Shine Thankappan, a corporate mentalist and magician based in Austin, TX, prepare for an upcoming phone call with a lead or client. Given everything known about them (event details, notes, any prior research, and the actual message history below), write a short CALL PREP brief he can paste straight into his notes app and glance at right before the call.
+
+Ground everything in the actual details given. Never invent facts, availability, or budget numbers that aren't implied by the research/notes. If something important is unknown (no research on file, thin notes), say so plainly instead of guessing.
+
+Shine's corporate floor is $2,500, his standard corporate anchor is $3,500. Use the research's recommended anchor/affordability read if given; otherwise fall back to these defaults and say you're using the default.
+
+Output PLAIN TEXT ONLY (no markdown asterisks/bold, this is pasted into a plain notes app). Use exactly this shape:
+
+SNAPSHOT
+2-4 lines: who they are, the event, date, guest count, venue, and the budget/affordability read.
+
+QUESTIONS TO ASK
+3-6 bullets ("- " prefix), close-blocking questions first (payment process/PO or decision authority, timing/logistics specific to their venue or organization), then personalization questions (tone, names, details to weave in). Do NOT re-ask anything they already answered in the message history below.
+
+HOW TO CLOSE
+2-4 bullets: the price to lead with and how to frame it given their budget sensitivity, plus the concrete next step to push for on the call.
+
+HARD STYLE RULE: absolutely no em dashes (—). Use commas, periods, or "to".`;
+
+      const userPrompt = [
+        `Lead name: ${lead.name || '(unknown)'}`,
+        `Event type: ${lead.event_type || '(unspecified)'}`,
+        lead.event_date ? `Event date: ${lead.event_date}` : '',
+        lead.guests ? `Guests: ${lead.guests}` : '',
+        lead.venue ? `Venue: ${lead.venue}` : '',
+        lead.status ? `Current status: ${lead.status}` : '',
+        lead.notes ? `Notes: ${lead.notes}` : '',
+        '',
+        rc && (rc.company || rc.person || rc.affordability || rc.recommendedAnchor || rc.fit)
+          ? [
+              'PRIOR RESEARCH ON FILE:',
+              rc.company ? `Company: ${rc.company}` : '',
+              rc.person ? `Person: ${rc.person}` : '',
+              rc.affordability ? `Affordability: ${rc.affordability}` : '',
+              rc.recommendedAnchor ? `Recommended anchor: ${rc.recommendedAnchor}` : '',
+              rc.priceRange ? `Price range: ${rc.priceRange}` : '',
+              rc.fit ? `Fit/strategy: ${rc.fit}` : ''
+            ].filter(Boolean).join('\n')
+          : '(No prior research on file for this lead.)'
+      ].filter(Boolean).join('\n') + (await fetchLeadConversation(lead.clientId));
+
+      let text = '';
+      try {
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: 'claude-opus-4-8', max_tokens: 900, system: CALLPREP_SYSTEM, messages: [{ role: 'user', content: userPrompt }] })
+        });
+        const data = await resp.json();
+        if (!resp.ok || data.error) throw new Error(data && data.error && data.error.message || 'Model error');
+        if (data.stop_reason === 'refusal') { res.status(200).json({ error: 'The AI declined this one (rare). Try again.' }); return; }
+        if (Array.isArray(data.content)) data.content.forEach(b => { if (b.type === 'text') text += b.text; });
+      } catch(e) {
+        console.error('Call prep failed:', e.message);
+        res.status(200).json({ error: 'Could not generate the call prep brief — try again.' });
+        return;
+      }
+
+      if (!text.trim()) { res.status(200).json({ error: 'Could not generate the call prep brief — try again.' }); return; }
+      res.status(200).json({ success: true, brief: text.trim() });
+      return;
+    }
+
     res.status(400).json({ error: 'Unknown action' });
 
   } catch(e) {
