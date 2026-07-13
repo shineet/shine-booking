@@ -549,8 +549,7 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
 
       // Server-side web search: Claude runs the searches itself. Loop on pause_turn
       // (the server-tool loop caps and pauses; re-send to resume). Kept fast + bounded so
-      // the browser reliably gets a response: Sonnet 4.6 first (fast, proven here), Opus 4.8
-      // only if that comes back empty. Fewer searches + tighter output = lower latency.
+      // the browser reliably gets a response. Fewer searches + tighter output = lower latency.
       async function runResearch(model) {
         let messages = [{ role: 'user', content: userPrompt }];
         let text = '', ref = false;
@@ -563,9 +562,10 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
                 model,
                 max_tokens: 1800,
                 system: RESEARCH_SYSTEM,
-                // Basic web search (no per-result code-exec filtering) = much faster per search,
-                // which keeps the whole call under Vercel's 60s function ceiling.
-                tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 2 }],
+                // Dynamic-filtering web search: better result quality per search. Restored after
+                // the 2026-07-11 2-step split fixed the underlying 60s-timeout risk at the
+                // architecture level, so the earlier basic-tool downgrade is no longer needed.
+                tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 2 }],
                 messages
               })
             });
@@ -584,9 +584,9 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
         return { text, ref };
       }
 
-      // Single fast pass on Sonnet 4.6. No slow Opus fallback: two web-research passes
+      // Single fast pass on Sonnet 5. No slow Opus fallback: two web-research passes
       // back-to-back blow the 60s function limit (that was the 504 / "Load failed").
-      const r = await runResearch('claude-sonnet-4-6');
+      const r = await runResearch('claude-sonnet-5');
       const finalText = r.text; const refused = r.ref;
 
       if (refused) { res.status(200).json({ error: 'The AI declined this one (rare false positive). Try again, or research manually.' }); return; }
@@ -691,7 +691,7 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
       // fell back to Opus = two stacked calls (~40s+) that the browser dropped ("Network issue"
       // client-side though the server returned 200). Sonnet is only a last-resort if Opus errors.
       let dr = await callDraft('claude-opus-4-8');
-      if (!dr.text && !dr.ref) dr = await callDraft('claude-sonnet-4-6');
+      if (!dr.text && !dr.ref) dr = await callDraft('claude-sonnet-5');
       if (dr.ref) { res.status(200).json({ error: 'The AI declined this draft (rare). Try again.' }); return; }
       if (!dr.text) { res.status(200).json({ error: 'Could not draft the messages — try again.' }); return; }
 
