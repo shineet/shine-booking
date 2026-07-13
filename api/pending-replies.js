@@ -562,10 +562,11 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
                 model,
                 max_tokens: 1800,
                 system: RESEARCH_SYSTEM,
-                // Dynamic-filtering web search: better result quality per search. Restored after
-                // the 2026-07-11 2-step split fixed the underlying 60s-timeout risk at the
-                // architecture level, so the earlier basic-tool downgrade is no longer needed.
-                tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 2 }],
+                // Basic web search (no per-result code-exec filtering) = much faster per search,
+                // which keeps the whole call under Vercel's 60s function ceiling. Tried restoring
+                // the dynamic-filtering version on 2026-07-13; measured 54.7s (vs ~23-30s here) and
+                // the model reported it couldn't complete a live search in time. Reverted.
+                tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 2 }],
                 messages
               })
             });
