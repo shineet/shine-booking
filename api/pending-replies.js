@@ -545,7 +545,7 @@ PRICING:
 1. COMPANY: From the email domain and any company name, search and identify the organization — what it is, size/prestige signals, industry, location. If the email domain is a free provider (gmail/yahoo/outlook/icloud) or none is given, treat it as an individual / private lead and say so.
 2. PERSON: Always search the person's name, corporate or private lead alike. For corporate leads, search name + company/domain and surface role/title plus any public LinkedIn/company-page/social snippet. For private/individual leads, run MULTIPLE targeted searches, not just one generic name search: try "<name> instagram", "<name> X" or "<name> twitter", and "<name> facebook" as separate queries (add city/area if the name is common), since a single plain-name search often misses social platforms that a targeted search catches. Useful context is anything confirming this looks like a real person versus a spam/test entry, or a public detail relevant to the event. If multiple people share the name or nothing distinct turns up, say so plainly. Never fabricate a title, profile match, or fact.
 3. AFFORDABILITY: Judge whether this lead can afford a HIGH or LOW price, from concrete signals (company type/prestige, role, event type, guest count, venue). Shine's corporate floor is $2,500; his real corporate booking anchor is $3,500. Give a specific recommended anchor number and a short internal price range with when to push higher.
-4. PHONE LINE TYPE: The lead's phone is "${lead.phone || '(none given)'}". If a "VERIFIED PHONE LINE TYPE" fact is given below, state it directly and confidently (it's real carrier data, not a guess) and advise whether Shine should ALSO text the number (yes if mobile). If no verified fact is given, say you can't determine mobile vs landline without a carrier lookup and recommend confirming at freecarrierlookup.com; do NOT speculate about the lead's location or whether they've relocated based on the area code, since people commonly keep the same number across moves and that's an unreliable signal.
+4. PHONE: The lead's phone is "${lead.phone || '(none given)'}". State which region/city the area code is registered to as a plain fact (this is useful for spotting out-of-town clients, e.g. a bachelorette party booking Shine from New York for an Austin event) — but do NOT speculate about whether the lead currently lives there, has relocated, or is "out of state", since people commonly keep the same number across moves and that inference is unreliable. If a "VERIFIED PHONE LINE TYPE" fact is given below, state mobile/landline directly and confidently (it's real carrier data, not a guess) and advise whether Shine should ALSO text the number (yes if mobile). If no verified fact is given, say you can't determine mobile vs landline without a carrier lookup and recommend confirming at freecarrierlookup.com.
 5. FIT + STRATEGY: one tight paragraph on why this is (or isn't) a good fit and how to approach the reply.
 
 BE CONCISE (time-sensitive): 1-2 short sentences per field. Do not pad.
@@ -558,7 +558,7 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
   "affordability": "HIGH or LOW read with the reasoning",
   "recommendedAnchor": "a dollar figure, e.g. $3,500",
   "priceRange": "internal range + when to push higher",
-  "phone": "mobile vs landline assessment, confidence, and whether to also text",
+  "phone": "area code's registered region, mobile vs landline assessment, confidence, and whether to also text",
   "fit": "fit + strategy paragraph"
 }`;
 
