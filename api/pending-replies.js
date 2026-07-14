@@ -929,7 +929,7 @@ PHASE 1, survey: use web_search to find CURRENT, ACTIVE, real event opportunitie
 5. GigSalad / The Bash / Bark.com: new open requests for magicians or mentalists
 6. Local Austin / Texas business event listings (Austin Chamber, Texas Monthly events calendar, etc.)
 
-Narrow this down to your best 5-7 candidates rather than trying to log every mention. Quality over quantity: a lead you can actually email is worth far more than a longer list of dead ends.
+Narrow this down to your best 3-4 candidates rather than trying to log every mention. Quality over quantity: a lead you can actually email is worth far more than a longer list of dead ends. You have a hard time budget for this whole task, so stop surveying once you have 3-4 solid candidates and move to phase 2, don't keep surveying for more.
 
 PHASE 2, verify contact info (do this for every candidate that has its own organization/company website, i.e. everything EXCEPT closed marketplaces like GigSalad/The Bash/Bark where contact only happens inside the platform by design): run at least one MORE targeted search specifically for that organization's contact info before concluding no email exists, e.g. "<organization name> contact email", "<organization name> contact us", "<organization name> events@ OR info@". Do not stop at the first article or aggregator listing that mentioned the opportunity, that is rarely where a contact email lives. Go to the organization's own site.
 
@@ -954,7 +954,7 @@ Return ONLY a single fenced JSON code block (\`\`\`json ... \`\`\`) and nothing 
   "draftSubject": "email subject, or null if contactEmail is null",
   "draftBody": "the drafted intro email body, or null if contactEmail is null"
 }]}
-Depth over breadth: 5-7 well-verified leads with real contact info actually checked beats 10 shallow ones you didn't dig into.`;
+Depth over breadth: 3-4 well-verified leads with real contact info actually checked beats a longer list you didn't dig into. You are on a strict search budget, spend it on verifying contact info for a few candidates, not surveying more of them.`;
 
       let text = '';
       try {
@@ -968,7 +968,7 @@ Depth over breadth: 5-7 well-verified leads with real contact info actually chec
             headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
             body: JSON.stringify({
               model: 'claude-opus-4-8', max_tokens: 4000, system: FINDLEADS_SYSTEM,
-              tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 12 }],
+              tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 8 }],
               messages
             })
           });
