@@ -60,6 +60,26 @@ export default async function handler(req, res) {
     return;
   }
 
+  // ── TEMP: restore Dedrah Ginn's notes, wiped by the intake-send bug before its fix
+  // deployed (remove after use) ────────────────────────────────────────────────────
+  if (req.method === 'GET' && req.query.diag === 'ginn_restorenotes_9f2a71') {
+    const commit = req.query.commit === '1';
+    const CLIENT_ID = 'f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d';
+    const RESTORED_NOTES = "Principal of Dahlstrom Middle School seeking an innovative way to kick off the school year and welcome teachers back. The campus had a difficult year, losing one teacher and two students within 6 weeks. Looking for a performance focused on mindset shift, positivity, unity, and motivation. Budget is a concern as it is a school — inquiring about pricing. Event type selected: Team Celebration.\n\nIntake form sent: https://shine-booking.vercel.app/intake.html?bid=d31e950c-43bf-4b54-b5fe-0599ef4c3f65";
+    try {
+      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${CLIENT_ID}&select=notes`, { headers: sbHeaders });
+      const client = (await cRes.json())[0];
+      if (!commit) { res.status(200).json({ dryRun: true, currentNotes: client && client.notes, willRestoreTo: RESTORED_NOTES }); return; }
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${CLIENT_ID}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...sbHeaders },
+        body: JSON.stringify({ notes: RESTORED_NOTES })
+      });
+      res.status(200).json({ committed: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+    return;
+  }
+
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;
