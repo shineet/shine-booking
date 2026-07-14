@@ -22,64 +22,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  // ── TEMP: check Dedrah Ginn's client + all bookings + intake state (remove after use) ──
-  if (req.method === 'GET' && req.query.diag === 'ginn_checkintake_9f2a71') {
-    try {
-      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d&select=*`, { headers: sbHeaders });
-      const client = (await cRes.json())[0];
-      const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?client_id=eq.f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d&select=*&order=created_at.desc`, { headers: sbHeaders });
-      const bookings = await bRes.json();
-      res.status(200).json({ client, bookings });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-    return;
-  }
-
-  // ── TEMP: merge Dedrah Ginn's duplicate bookings back into one (remove after use) ──
-  if (req.method === 'GET' && req.query.diag === 'ginn_mergebookings_9f2a71') {
-    const commit = req.query.commit === '1';
-    const KEEP_ID = 'd31e950c-43bf-4b54-b5fe-0599ef4c3f65';   // has the already-sent intake link
-    const DROP_ID = 'f2af1e1d-cc72-4094-94c6-25ecdf58f56b';   // has the real event_title/venue, orphaned now
-    try {
-      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const kRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${KEEP_ID}&select=*`, { headers: sbHeaders });
-      const keep = (await kRes.json())[0];
-      const dRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${DROP_ID}&select=*`, { headers: sbHeaders });
-      const drop = (await dRes.json())[0];
-      if (!keep || !drop) { res.status(404).json({ error: 'expected booking missing', keep, drop }); return; }
-
-      if (!commit) { res.status(200).json({ dryRun: true, keep, drop }); return; }
-
-      await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${KEEP_ID}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...sbHeaders },
-        body: JSON.stringify({ event_title: drop.event_title, venue_address: drop.venue_address })
-      });
-      await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${DROP_ID}`, { method: 'DELETE', headers: sbHeaders });
-      res.status(200).json({ committed: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-    return;
-  }
-
-  // ── TEMP: restore Dedrah Ginn's notes, wiped by the intake-send bug before its fix
-  // deployed (remove after use) ────────────────────────────────────────────────────
-  if (req.method === 'GET' && req.query.diag === 'ginn_restorenotes_9f2a71') {
-    const commit = req.query.commit === '1';
-    const CLIENT_ID = 'f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d';
-    const RESTORED_NOTES = "Principal of Dahlstrom Middle School seeking an innovative way to kick off the school year and welcome teachers back. The campus had a difficult year, losing one teacher and two students within 6 weeks. Looking for a performance focused on mindset shift, positivity, unity, and motivation. Budget is a concern as it is a school — inquiring about pricing. Event type selected: Team Celebration.\n\nIntake form sent: https://shine-booking.vercel.app/intake.html?bid=d31e950c-43bf-4b54-b5fe-0599ef4c3f65";
-    try {
-      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${CLIENT_ID}&select=notes`, { headers: sbHeaders });
-      const client = (await cRes.json())[0];
-      if (!commit) { res.status(200).json({ dryRun: true, currentNotes: client && client.notes, willRestoreTo: RESTORED_NOTES }); return; }
-      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${CLIENT_ID}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...sbHeaders },
-        body: JSON.stringify({ notes: RESTORED_NOTES })
-      });
-      res.status(200).json({ committed: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-    return;
-  }
-
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;
