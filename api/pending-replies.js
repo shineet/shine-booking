@@ -919,7 +919,9 @@ Order items most urgent first (high, then medium, then low). Omit any lead that 
     if (req.method === 'POST' && req.body.action === 'findleads') {
       const FINDLEADS_SYSTEM = `You are Shine Thankappan's lead-scout. He is a corporate mentalist and magician based in Austin, TX (texasmentalist.com, +1 737-271-5308, 156 five-star Google reviews). He targets corporate events, conferences, and private events with budgets fitting his floor of $2,500+.
 
-Use the web_search tool to find CURRENT, ACTIVE, real event opportunities where entertainment is plausibly still being sourced. Search across these angles (spread your searches across several of them, don't just do one):
+This is a TWO-PHASE job. Do not skip phase 2.
+
+PHASE 1, survey: use web_search to find CURRENT, ACTIVE, real event opportunities where entertainment is plausibly still being sourced. Search across these angles (spread your searches across several of them, don't just do one):
 1. Event planning / RFP boards: Cvent supplier network, EventSource, MeetingsNet, BizBash event listings
 2. Conference calendars: upcoming corporate conferences and trade shows in Austin, Houston, Dallas, and nationally where entertainment is typically hired
 3. Venue booking boards: hotel event spaces, convention centers seeking entertainment or posting open dates
@@ -927,7 +929,13 @@ Use the web_search tool to find CURRENT, ACTIVE, real event opportunities where 
 5. GigSalad / The Bash / Bark.com: new open requests for magicians or mentalists
 6. Local Austin / Texas business event listings (Austin Chamber, Texas Monthly events calendar, etc.)
 
-CRITICAL, NON-NEGOTIABLE RULE: only include a contactEmail if you found a REAL, SPECIFIC, PUBLICLY LISTED email address tied to this opportunity (e.g. an event planner's staff bio page, a "contact us" listing with a named person, a posted RFP contact). NEVER invent, guess, or construct an email address (e.g. never assume firstname@company.com just because you know the company's domain). If no real public email exists for a lead, set contactEmail to null. It is completely fine, and expected, for most leads to have contactEmail: null; do not force one.
+Narrow this down to your best 5-7 candidates rather than trying to log every mention. Quality over quantity: a lead you can actually email is worth far more than a longer list of dead ends.
+
+PHASE 2, verify contact info (do this for every candidate that has its own organization/company website, i.e. everything EXCEPT closed marketplaces like GigSalad/The Bash/Bark where contact only happens inside the platform by design): run at least one MORE targeted search specifically for that organization's contact info before concluding no email exists, e.g. "<organization name> contact email", "<organization name> contact us", "<organization name> events@ OR info@". Do not stop at the first article or aggregator listing that mentioned the opportunity, that is rarely where a contact email lives. Go to the organization's own site.
+
+A generic inbox on the organization's OWN domain (info@, contact@, events@, hello@, bookings@, rentals@, etc) counts as a REAL, usable contactEmail, it does not need to belong to a named person. Prefer it over leaving contactEmail null.
+
+CRITICAL, NON-NEGOTIABLE RULE: only include a contactEmail if you actually found it published on the organization's own site or a specific listing (a staff bio page, a "contact us" page, a posted RFP contact, a footer address). NEVER invent, guess, or construct an email address that you did not literally see (e.g. never assume firstname@company.com or info@company.com just because you know the domain, unless you actually saw that address published somewhere). The only legitimate reasons to leave contactEmail null: (a) it's a closed marketplace/platform lead where outreach only happens inside that platform, or (b) you genuinely ran a phase 2 search on that organization's own site and it truly has no published contact email anywhere. Do not default to null just because the first survey search didn't happen to surface one.
 
 For each lead found, also judge fit for Shine (corporate mentalist, stage show is his strength, Austin-based, $2,500+ floor) in one sentence.
 
@@ -946,7 +954,7 @@ Return ONLY a single fenced JSON code block (\`\`\`json ... \`\`\`) and nothing 
   "draftSubject": "email subject, or null if contactEmail is null",
   "draftBody": "the drafted intro email body, or null if contactEmail is null"
 }]}
-Find as many distinct, real, current opportunities as you reasonably can across the angles above.`;
+Depth over breadth: 5-7 well-verified leads with real contact info actually checked beats 10 shallow ones you didn't dig into.`;
 
       let text = '';
       try {
@@ -960,7 +968,7 @@ Find as many distinct, real, current opportunities as you reasonably can across 
             headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
             body: JSON.stringify({
               model: 'claude-opus-4-8', max_tokens: 4000, system: FINDLEADS_SYSTEM,
-              tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 8 }],
+              tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 12 }],
               messages
             })
           });
