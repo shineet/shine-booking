@@ -22,36 +22,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  // ── TEMP: undo Dedrah Ginn's manual booking, ready for the Stripe pay-and-book flow
-  // instead (remove after use) ─────────────────────────────────────────────────────
-  if (req.method === 'GET' && req.query.diag === 'ginn_unbook_9f2a71') {
-    const commit = req.query.commit === '1';
-    const CLIENT_ID = 'f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d';
-    const BOOKING_ID = '26c3a44f-ab9f-4a1f-8beb-bff6536f680f';
-    try {
-      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${CLIENT_ID}&select=id,booking_id,status`, { headers: sbHeaders });
-      const client = (await cRes.json())[0];
-      const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${BOOKING_ID}&select=*`, { headers: sbHeaders });
-      const booking = (await bRes.json())[0];
-
-      if (!commit) { res.status(200).json({ dryRun: true, client, booking }); return; }
-
-      if (booking) {
-        await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${BOOKING_ID}`, { method: 'DELETE', headers: sbHeaders });
-      }
-      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${CLIENT_ID}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...sbHeaders },
-        body: JSON.stringify({
-          booking_id: null, status: 'pricing_requested',
-          selected_package: null, selected_category: null, selected_price: null
-        })
-      });
-      res.status(200).json({ committed: true, deletedBooking: !!booking });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-    return;
-  }
-
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;
