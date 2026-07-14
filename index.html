@@ -410,6 +410,17 @@
         color: #7fb8a4
     }
 
+    .section-divider.inactive {
+        background: rgba(140,120,255,.05);
+        color: #8a86a0;
+        border-left-color: #5a5470;
+        border-bottom: 1px solid rgba(140,120,255,.12)
+    }
+    .section-divider.inactive span {
+        background: rgba(140,120,255,.14);
+        color: #8a86a0
+    }
+
     .section-divider.lost {
         background: rgba(58,63,88,.15);
         color: var(--muted);
@@ -1078,7 +1089,7 @@
                     <button class="filter-pill" data-filter="package_selected,booked,intake_sent,intake_completed" onclick="setFilter('package_selected,booked,intake_sent,intake_completed')">Booked</button>
                     <button class="filter-pill" data-filter="contract_sent,contract_signed" onclick="setFilter('contract_sent,contract_signed')">Contract</button>
                     <button class="filter-pill" data-filter="completed" onclick="setFilter('completed')">✓ Done</button>
-                    <button class="filter-pill" data-filter="lost" onclick="setFilter('lost')">Lost</button>
+                    <button class="filter-pill" data-filter="inactive,lost" onclick="setFilter('inactive,lost')">💤 Inactive &amp; Lost</button>
                     <button class="filter-pill" data-filter="noreply" onclick="setFilter('noreply')">⏰ No reply</button>
                 </div>
             </div>
@@ -1425,6 +1436,7 @@
                     <option value="contract_sent">Contract sent</option>
                     <option value="contract_signed">Contract signed</option>
                     <option value="completed">Completed</option>
+                    <option value="inactive">Inactive (gone quiet, might come back)</option>
                     <option value="lost">Lost</option>
                 </select>
             </div>
@@ -1597,7 +1609,7 @@ var STATUS_LABELS = {
     package_selected: 'Package selected', booked: 'Booked',
     intake_sent: 'Intake sent', intake_completed: 'Ready for contract',
     contract_sent: 'Contract sent', contract_signed: 'Contract signed',
-    completed: 'Completed', lost: 'Lost'
+    completed: 'Completed', lost: 'Lost', inactive: 'Inactive'
 };
 
 var CONFIRMED_STATUSES = ['booked','intake_sent','intake_completed','contract_sent','contract_signed'];
@@ -1671,7 +1683,9 @@ function matchesFilter(client) {
     var sectionWanted = currentSection === 'planners' ? 'planner' : 'client';
     if (clientType !== sectionWanted) return false;
     if (activeFilter === 'noreply') return isNoReply(client);
-    if (activeFilter === 'all') return true;
+    // Inactive/lost leads are hidden under "All" by default; the "Inactive & Lost" pill
+    // (or the no-reply view) is the only way to bring them back into view.
+    if (activeFilter === 'all') return client.status !== 'inactive' && client.status !== 'lost';
     return activeFilter.split(',').indexOf(client.status) !== -1;
 }
 
@@ -1866,6 +1880,7 @@ function renderList() {
         return (a.event_date||'0') < (b.event_date||'0') ? 1 : -1;
     });
 
+    var inactive = filtered.filter(function(c) { return c.status === 'inactive'; });
     var lost = filtered.filter(function(c) { return c.status === 'lost'; });
 
     var html = '';
@@ -1873,6 +1888,7 @@ function renderList() {
     if (needsAttention.length) html += '<div class="section-divider attention">Needs Attention <span>' + needsAttention.length + '</span></div>' + needsAttention.map(makeLeadRow).join('');
     if (confirmed.length)      html += '<div class="section-divider confirmed">Confirmed <span>' + confirmed.length + '</span></div>' + confirmed.map(makeLeadRow).join('');
     if (completed.length)      html += '<div class="section-divider completed">Completed <span>' + completed.length + '</span></div>' + completed.map(makeLeadRow).join('');
+    if (inactive.length)       html += '<div class="section-divider inactive">Inactive <span>' + inactive.length + '</span></div>' + inactive.map(makeLeadRow).join('');
     if (lost.length)           html += '<div class="section-divider lost">Lost <span>' + lost.length + '</span></div>' + lost.map(makeLeadRow).join('');
     if (!html) html = '<div class="list-empty">No leads here</div>';
 
@@ -2108,7 +2124,7 @@ function suggestActionItems() {
     document.body.appendChild(ov);
 
     var now = Date.now();
-    var leads = allClients.filter(function(c) { return c.status !== 'lost' && c.status !== 'completed'; }).map(function(c) {
+    var leads = allClients.filter(function(c) { return c.status !== 'lost' && c.status !== 'completed' && c.status !== 'inactive'; }).map(function(c) {
         var daysToEvent = null;
         if (c.event_date) daysToEvent = Math.round((new Date(c.event_date + 'T00:00:00').getTime() - now) / 86400000);
         var hoursSinceContact = null;
@@ -2409,6 +2425,11 @@ function renderDetail(c) {
         actions += '<button class="d-btn" style="background:rgba(224,82,82,.15);color:var(--red);border:1px solid rgba(224,82,82,.25)" onclick="generateFollowUp(\'' + esc(c.id) + '\')">⏰ Generate follow-up draft</button>';
     }
     actions += '<button class="d-btn" style="background:' + (c.hot_lead ? 'rgba(240,165,0,.25);color:#ffcc44;border:1px solid rgba(240,165,0,.3)' : 'rgba(240,165,0,.08);color:#888;border:1px solid var(--border)') + '" onclick="toggleHotLead(\'' + esc(c.id) + '\',' + (c.hot_lead ? 'false' : 'true') + ')">' + (c.hot_lead ? '🔥 Hot lead' : '🔥 Mark as hot') + '</button>';
+    if (c.status === 'inactive') {
+        actions += '<button class="d-btn" style="background:rgba(120,200,140,.14);color:#8fe0a5;border:1px solid rgba(120,200,140,.3)" onclick="reactivateLead(\'' + esc(c.id) + '\')">&#8630; Reactivate</button>';
+    } else if (c.status !== 'completed') {
+        actions += '<button class="d-btn ghost" onclick="markInactive(\'' + esc(c.id) + '\')" title="Gone quiet but might come back closer to the event, hides it from the default list without losing it">&#128564; Mark inactive</button>';
+    }
         actions += '<button class="d-btn blue" data-rid="' + esc(c.id) + '" data-rname="' + esc(c.name) + '" data-remail="' + esc(c.email||'') + '" data-rphone="' + esc(c.phone||'') + '" onclick="openComposeModal(this.dataset.rid,this.dataset.rname,this.dataset.remail,this.dataset.rphone)">✉️ Send message</button>';
     var isPlanner = c.contact_type === 'planner';
     actions += '<button class="d-btn ghost" onclick="toggleContactType(\'' + esc(c.id) + '\',\'' + (isPlanner ? 'client' : 'planner') + '\')">Mark as ' + (isPlanner ? 'direct client' : 'planner') + '</button>';
@@ -3642,6 +3663,30 @@ function toggleHotLead(id, val) {
     .then(function(r) { return r.json(); })
     .then(function() { loadLeads(); })
     .catch(function(e) { alert('Could not update: ' + e.message); });
+}
+
+// Inactive = gone quiet, not a lost cause, just parked out of the default view until they
+// resurface (e.g. closer to their event date). Distinct from Lost, which is a final outcome.
+function markInactive(id) {
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
+        body: JSON.stringify({ status: 'inactive' })
+    })
+    .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
+    .then(function() { closeDetail(); loadLeads(); }) // moves out of the default view, so close the now-stale detail pane
+    .catch(function(e) { alert('Could not mark inactive: ' + e.message); });
+}
+
+function reactivateLead(id) {
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
+        body: JSON.stringify({ status: 'chatting', last_activity: new Date().toISOString() })
+    })
+    .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
+    .then(function() { loadLeads(); })
+    .catch(function(e) { alert('Could not reactivate: ' + e.message); });
 }
 
 function openNoReplySettings() {
