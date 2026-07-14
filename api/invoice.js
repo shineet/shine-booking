@@ -37,14 +37,21 @@ module.exports = async function handler(req, res) {
         `Please find your invoice attached for the ${invoiceData.eventName || 'upcoming event'}.\n\nA ${dep}% deposit ($${depAmt}) is required to secure your date. Payment details are on page 2 of the invoice.\n\nLooking forward to an unforgettable performance!`;
 
       // Optional Stripe "Pay online" button — fully guarded: no key or any error just
-      // omits the button, the invoice email always sends normally.
+      // omits the button, the invoice email always sends normally. The card surcharge
+      // (client absorbs Stripe's processing fee instead of Shine) only applies to this
+      // card-payment amount, not to the deposit figure stated in the body/PDF for
+      // check/Zelle/Venmo/PayPal, matching how the pricing-link flow already handles it.
       let payBtnHtml = '', payLineText = '';
       try {
-        const depDollars = Math.round((invoiceData.total || 0) * dep / 100);
-        const payUrl = await createStripeDepositLink(depDollars, `Deposit (${dep}%) — ${invoiceData.eventName || 'event'}`, toEmail, invoiceData.bookingId);
+        const sc = Number(invoiceData.cardSurchargePercent) || 0;
+        const baseDep = Math.round((invoiceData.total || 0) * dep / 100);
+        const depDollars = sc ? Math.round(baseDep + baseDep * sc / 100) : baseDep;
+        const scLabel = sc ? ` + ${sc}% card fee` : '';
+        const payUrl = await createStripeDepositLink(depDollars, `Deposit (${dep}%)${scLabel} — ${invoiceData.eventName || 'event'}`, toEmail, invoiceData.bookingId);
         if (payUrl) {
-          payBtnHtml = `<div style="text-align:center;margin:28px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:bold;display:inline-block">💳 Pay ${dep}% Deposit Online ($${depDollars.toLocaleString()})</a></div>`;
-          payLineText = `\n\nPrefer to pay by card? Pay your ${dep}% deposit online ($${depDollars.toLocaleString()}): ${payUrl}`;
+          const amtNote = sc ? ` (includes a ${sc}% card processing fee)` : '';
+          payBtnHtml = `<div style="text-align:center;margin:28px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:bold;display:inline-block">💳 Pay ${dep}% Deposit Online ($${depDollars.toLocaleString()})</a>${sc ? `<div style="font-size:11px;color:#6b7280;margin-top:6px">Includes a ${sc}% card processing fee</div>` : ''}</div>`;
+          payLineText = `\n\nPrefer to pay by card? Pay your ${dep}% deposit online${amtNote} ($${depDollars.toLocaleString()}): ${payUrl}`;
         }
       } catch (e) { console.error('invoice pay-link embed skipped:', e.message); }
 

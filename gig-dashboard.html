@@ -654,6 +654,10 @@ td { padding: 9px 14px; vertical-align: middle; }
       <div class="form-group"><label>Venue</label><input type="text" id="inv-venue" placeholder="Juniper Lakehouse, Austin, TX"></div>
       <div class="form-group"><label>Guests</label><input type="text" id="inv-guests" placeholder="Approximately 45"></div>
       <div class="form-group"><label>Deposit %</label><select id="inv-deposit"><option value="50">50%</option><option value="25">25%</option></select></div>
+      <div class="form-group" style="display:flex;align-items:center;gap:6px;padding-top:18px">
+        <input type="checkbox" id="inv-surcharge" style="width:auto;margin:0">
+        <label for="inv-surcharge" style="margin:0;font-size:12px;cursor:pointer">+3% card fee (client pays it, not you)</label>
+      </div>
     </div>
 
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -2151,6 +2155,7 @@ function buildInvoicePayload() {
     venue:          document.getElementById('inv-venue').value,
     guests:         document.getElementById('inv-guests').value,
     depositPercent: parseInt(document.getElementById('inv-deposit').value) || 50,
+    cardSurchargePercent: document.getElementById('inv-surcharge').checked ? 3 : 0,
     lineItems:      invoiceLineItems.filter(i => i.description || i.amount),
     total:          invoiceLineItems.reduce((s,i) => s+(parseFloat(i.amount)||0), 0),
   };
@@ -2159,12 +2164,14 @@ function buildInvoicePayload() {
 async function generatePaymentLink(type) {
   var total = invoiceLineItems.reduce(function(s,i){ return s + (parseFloat(i.amount)||0); }, 0);
   var dep   = parseInt(document.getElementById('inv-deposit').value, 10) || 50;
-  var amount = type === 'full' ? total : Math.round(total * dep / 100 * 100) / 100;
+  var baseAmount = type === 'full' ? total : Math.round(total * dep / 100 * 100) / 100;
+  var sc = document.getElementById('inv-surcharge').checked ? 3 : 0;
+  var amount = sc ? Math.round((baseAmount + baseAmount * sc / 100) * 100) / 100 : baseAmount;
   var status = document.getElementById('pay-link-status');
   var result = document.getElementById('pay-link-result');
   if (!total || amount <= 0) { status.textContent = 'Add a line-item amount first.'; return; }
   var eventName = document.getElementById('inv-event-name').value || 'your event';
-  var label = (type === 'full' ? 'Performance fee — ' : 'Deposit (' + dep + '%) — ') + eventName;
+  var label = (type === 'full' ? 'Performance fee' : 'Deposit (' + dep + '%)') + (sc ? ' + ' + sc + '% card fee' : '') + ' — ' + eventName;
   status.textContent = 'Creating link…';
   result.style.display = 'none';
   try {
@@ -2181,7 +2188,7 @@ async function generatePaymentLink(type) {
     if (!res.ok || data.error) throw new Error(data.error || ('HTTP ' + res.status));
     document.getElementById('pay-link-url').value = data.url;
     result.style.display = 'block';
-    status.textContent = (type === 'full' ? 'Full amount' : dep + '% deposit') + ': $' + amount.toLocaleString();
+    status.textContent = (type === 'full' ? 'Full amount' : dep + '% deposit') + (sc ? ' + ' + sc + '% fee' : '') + ': $' + amount.toLocaleString();
   } catch (e) {
     status.textContent = 'Error: ' + e.message;
   }
