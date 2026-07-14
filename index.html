@@ -2914,19 +2914,50 @@ function markAsBooked(id) {
         alert('This client is already further along (' + (STATUS_LABELS[c.status] || c.status) + ') — they\'ll continue showing on the Gig Dashboard automatically, so no change is needed here.');
         return;
     }
+    if (c.booking_id) {
+        alert('This client already has a booking record, so they should already be on the Gig Dashboard.');
+        return;
+    }
 
-    if (!confirm('Mark this client as booked? This will show them in the Gig Dashboard\'s Upcoming Gigs, even before the contract is signed.')) return;
-    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id, {
-        method: 'PATCH',
+    // Gig Dashboard's Upcoming list is driven entirely by the separate `bookings` table, not
+    // clients.status (see the pricing-selection flow, api/select-package.js) — a status-only
+    // patch never made them appear there, despite this button's old copy claiming it would.
+    // Asking for the fee here (rather than requiring the pricing-link/contract flow first)
+    // is exactly for cases like a verbally-agreed price with no contract wanted.
+    var feeStr = prompt('Agreed fee for this booking? (Used for the Gig Dashboard record; you can still send pricing/contract separately, or never at all.)', c.selected_price || '');
+    if (feeStr === null) return;
+    var fee = parseFloat(feeStr);
+    if (!fee || fee <= 0) { alert('Please enter a valid dollar amount.'); return; }
+
+    if (!confirm('Mark as booked for $' + fee.toLocaleString() + '? This creates a real booking record and shows them in the Gig Dashboard\'s Upcoming Gigs right away, no contract or payment required.')) return;
+
+    fetch(SUPABASE_URL + '/rest/v1/bookings', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
-        body: JSON.stringify({ status: 'booked', last_activity: new Date().toISOString() })
+        body: JSON.stringify({
+            client_id: c.id, client_name: c.name, client_email: c.email || null,
+            event_title: c.name ? (c.name + "'s " + (c.event_type || 'Event')) : (c.event_type || 'Event'),
+            event_type: c.event_type || null, event_date: c.event_date || null,
+            venue_address: c.venue || null, fee: fee,
+            contract_status: 'not_sent', intake_status: 'not_sent', status: 'booked'
+        })
+    })
+    .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
+    .then(function(rows) {
+        var booking = rows[0];
+        if (!booking) throw new Error('Booking insert returned no row.');
+        return fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + id, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
+            body: JSON.stringify({ status: 'booked', booking_id: booking.id, selected_price: fee, last_activity: new Date().toISOString() })
+        });
     })
     .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
     .then(function() {
         closeDetail();
         loadLeads();
     })
-    .catch(function(e) { alert('Could not update status: ' + e.message); });
+    .catch(function(e) { alert('Could not mark as booked: ' + e.message); });
 }
 
 /* ── Pricing modal ── */
