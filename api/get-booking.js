@@ -22,6 +22,19 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
+  // ── TEMP: check Dedrah Ginn's client + all bookings + intake state (remove after use) ──
+  if (req.method === 'GET' && req.query.diag === 'ginn_checkintake_9f2a71') {
+    try {
+      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d&select=id,name,event_type,selected_category,selected_package,selected_price,status,booking_id`, { headers: sbHeaders });
+      const client = (await cRes.json())[0];
+      const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?client_id=eq.f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d&select=*&order=created_at.desc`, { headers: sbHeaders });
+      const bookings = await bRes.json();
+      res.status(200).json({ client, bookings });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+    return;
+  }
+
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;
