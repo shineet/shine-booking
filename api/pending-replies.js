@@ -7,6 +7,12 @@ function normalizePhone(phone) {
   return phone;
 }
 
+// Case-insensitive email match (Postgres eq. is case-sensitive; see email-reply.js/intake.js
+// for the bug this avoids). % and _ escaped since ilike treats them as wildcards.
+function emailIlikeParam(email) {
+  return encodeURIComponent(String(email || '').trim().replace(/[%_\\]/g, function(m) { return '\\' + m; }));
+}
+
 // Real carrier/line-type lookup via Twilio Lookup v2 (line_type_intelligence add-on), used by
 // the research step so the phone-type read is a verified fact instead of an area-code guess.
 // Separate credentials (TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN) from the messaging pair
@@ -902,6 +908,155 @@ Order items most urgent first (high, then medium, then low). Omit any lead that 
 
       if (!Array.isArray(items)) { res.status(200).json({ error: 'Could not read the triage results — try again.' }); return; }
       res.status(200).json({ success: true, items });
+      return;
+    }
+
+    // POST action=findleads -> web-search sweep for live event opportunities that fit Shine,
+    // each with a drafted intro email. NEVER auto-sends: every result is a draft Shine reviews
+    // and sends himself one at a time (see action=send-outreach-lead below), per the standing
+    // rule that outreach is always a draft. Contacts are only included if a real, specific,
+    // publicly-listed email was found via search, never guessed.
+    if (req.method === 'POST' && req.body.action === 'findleads') {
+      const FINDLEADS_SYSTEM = `You are Shine Thankappan's lead-scout. He is a corporate mentalist and magician based in Austin, TX (texasmentalist.com, +1 737-271-5308, 156 five-star Google reviews). He targets corporate events, conferences, and private events with budgets fitting his floor of $2,500+.
+
+Use the web_search tool to find CURRENT, ACTIVE, real event opportunities where entertainment is plausibly still being sourced. Search across these angles (spread your searches across several of them, don't just do one):
+1. Event planning / RFP boards: Cvent supplier network, EventSource, MeetingsNet, BizBash event listings
+2. Conference calendars: upcoming corporate conferences and trade shows in Austin, Houston, Dallas, and nationally where entertainment is typically hired
+3. Venue booking boards: hotel event spaces, convention centers seeking entertainment or posting open dates
+4. LinkedIn: event planners, corporate event coordinators, or DMCs posting about upcoming events or seeking entertainers
+5. GigSalad / The Bash / Bark.com: new open requests for magicians or mentalists
+6. Local Austin / Texas business event listings (Austin Chamber, Texas Monthly events calendar, etc.)
+
+CRITICAL, NON-NEGOTIABLE RULE: only include a contactEmail if you found a REAL, SPECIFIC, PUBLICLY LISTED email address tied to this opportunity (e.g. an event planner's staff bio page, a "contact us" listing with a named person, a posted RFP contact). NEVER invent, guess, or construct an email address (e.g. never assume firstname@company.com just because you know the company's domain). If no real public email exists for a lead, set contactEmail to null. It is completely fine, and expected, for most leads to have contactEmail: null; do not force one.
+
+For each lead found, also judge fit for Shine (corporate mentalist, stage show is his strength, Austin-based, $2,500+ floor) in one sentence.
+
+For every lead where you found a real contactEmail (and ONLY those), draft a short, confident, no-fluff introduction email in Shine's voice: first person, direct, no stock openers ("I hope this finds you well", "I'm excited to reach out"), no corporate filler, mention the specific event/opportunity so it's clearly not a form blast, 1-2 short paragraphs, sign off "Shine, The Mentalist | texasmentalist.com | +1 (737) 271-5308". No em dashes anywhere in any field.
+
+Return ONLY a single fenced JSON code block (\`\`\`json ... \`\`\`) and nothing else:
+{"leads": [{
+  "source": "where you found it, e.g. 'GigSalad open request' or 'BizBash Austin events calendar'",
+  "eventType": "short event type/category",
+  "eventWindow": "date or date window as stated, or 'not specified'",
+  "location": "city/venue if known",
+  "estimatedBudget": "budget or audience size signal if listed, else 'not listed'",
+  "contactName": "a real name if found, else null",
+  "contactEmail": "a real, specific, publicly-listed email, or null if none exists, NEVER guessed",
+  "fit": "one sentence on why this is (or isn't) a good fit",
+  "draftSubject": "email subject, or null if contactEmail is null",
+  "draftBody": "the drafted intro email body, or null if contactEmail is null"
+}]}
+Find as many distinct, real, current opportunities as you reasonably can across the angles above.`;
+
+      let text = '';
+      try {
+        // max_uses:8 + 2-iteration cap, not more: the research action measured ~54.7s at a
+        // similar setting and had to be pulled back to stay inside Vercel's 60s Hobby ceiling.
+        // Broader coverage isn't worth a timeout that returns nothing usable.
+        let messages = [{ role: 'user', content: 'Find current lead opportunities for Shine per the instructions.' }];
+        for (let i = 0; i < 2; i++) {
+          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+            body: JSON.stringify({
+              model: 'claude-opus-4-8', max_tokens: 4000, system: FINDLEADS_SYSTEM,
+              tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 8 }],
+              messages
+            })
+          });
+          const data = await resp.json();
+          if (!resp.ok || data.error) { console.error('Find leads model error:', data && data.error && data.error.message); break; }
+          if (data.stop_reason === 'refusal') { res.status(200).json({ error: 'The AI declined this one (rare). Try again.' }); return; }
+          text = '';
+          if (Array.isArray(data.content)) data.content.forEach(b => { if (b.type === 'text') text += b.text; });
+          if (data.stop_reason === 'pause_turn') { messages = [messages[0], { role: 'assistant', content: data.content }]; continue; }
+          break;
+        }
+      } catch(e) {
+        console.error('Find leads failed:', e.message);
+        res.status(200).json({ error: 'Could not run the lead search — try again.' });
+        return;
+      }
+
+      let leads = null;
+      try {
+        const blocks = text.match(/```json\s*([\s\S]*?)```/gi);
+        let js = null;
+        if (blocks && blocks.length) js = blocks[blocks.length - 1].replace(/```json\s*/i, '').replace(/```$/, '');
+        else { const s = text.indexOf('{'); const e = text.lastIndexOf('}'); if (s !== -1 && e > s) js = text.slice(s, e + 1); }
+        if (js) leads = (JSON.parse(js) || {}).leads;
+      } catch(e) { console.error('Find leads parse failed:', e.message); }
+
+      if (!Array.isArray(leads)) { res.status(200).json({ error: 'Could not read the lead search results — try again.' }); return; }
+      const stripCite = (s) => typeof s === 'string' ? s.replace(/<\/?cite[^>]*>/gi, '').replace(/[ \t]+\n/g, '\n').trim() : s;
+      leads.forEach(l => Object.keys(l).forEach(k => { l[k] = stripCite(l[k]); }));
+      res.status(200).json({ success: true, leads });
+      return;
+    }
+
+    // POST action=send-outreach-lead -> Shine explicitly clicked Send on one drafted intro
+    // email from action=findleads. Finds-or-creates the client (case-insensitive email match,
+    // same fix as the rest of the app) so a reply lands in the normal pipeline, then sends via
+    // Resend and logs the outbound message. This is the ONLY place a cold-outreach email
+    // actually goes out, and it only fires on an explicit per-lead click, never automatically.
+    if (req.method === 'POST' && req.body.action === 'send-outreach-lead') {
+      const { name, email, eventType, eventWindow, location, source, subject, body } = req.body;
+      if (!email || !subject || !body) { res.status(400).json({ error: 'Missing email, subject, or body' }); return; }
+      const sbHeaders = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+      const now = new Date().toISOString();
+
+      try {
+        let clientId = null;
+        const existingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?email=ilike.${emailIlikeParam(email)}&order=created_at.desc&limit=1`, { headers: sbHeaders });
+        const existingRows = await existingRes.json();
+        const existing = Array.isArray(existingRows) ? existingRows[0] : null;
+
+        if (existing) {
+          clientId = existing.id;
+        } else {
+          const notesLines = [];
+          if (source) notesLines.push('Found via cold-outreach lead search: ' + source);
+          if (eventWindow) notesLines.push('Event window: ' + eventWindow);
+          if (location) notesLines.push('Location: ' + location);
+          const createRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...sbHeaders, 'Prefer': 'return=representation' },
+            body: JSON.stringify({
+              name: name || email, email, event_type: eventType || '', notes: notesLines.join('\n'),
+              lead_source: 'Cold outreach' + (source ? ' (' + source + ')' : ''),
+              status: 'new', last_activity: now, last_channel: 'email'
+            })
+          });
+          const createdRows = await createRes.json();
+          const created = Array.isArray(createdRows) ? createdRows[0] : null;
+          if (!created) { const t = JSON.stringify(createdRows); throw new Error('Could not create client: ' + t); }
+          clientId = created.id;
+        }
+
+        const emailRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+          body: JSON.stringify({ from: 'Shine, The Mentalist <shine@texasmentalist.com>', to: email, subject, text: body })
+        });
+        if (!emailRes.ok) { const t = await emailRes.text(); throw new Error('Resend failed: ' + t); }
+
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...sbHeaders },
+          body: JSON.stringify({ client_id: clientId, channel: 'email', direction: 'outbound', content: body, status: 'sent', to_address: email, email_subject: subject, created_at: now })
+        });
+        if (existing) {
+          await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json', ...sbHeaders },
+            body: JSON.stringify({ last_activity: now, last_channel: 'email' })
+          });
+        }
+
+        res.status(200).json({ success: true, clientId, reusedExisting: !!existing });
+      } catch(e) {
+        console.error('Send outreach lead failed:', e.message);
+        res.status(500).json({ error: e.message });
+      }
       return;
     }
 
