@@ -22,6 +22,35 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
+  // ── TEMP: correct Dedrah Ginn's booking fee to the agreed $2,000 (remove after use) ──
+  if (req.method === 'GET' && req.query.diag === 'ginn_fixfee_9f2a71') {
+    const commit = req.query.commit === '1';
+    const CLIENT_ID = 'f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d';
+    const BOOKING_ID = '6dc31125-b918-43e8-a8bc-b277270289a4';
+    try {
+      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+      const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${BOOKING_ID}&select=*`, { headers: sbHeaders });
+      const booking = (await bRes.json())[0];
+      if (!booking) { res.status(404).json({ error: 'booking not found' }); return; }
+
+      if (!commit) { res.status(200).json({ dryRun: true, booking }); return; }
+
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${BOOKING_ID}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...sbHeaders },
+        body: JSON.stringify({
+          fee: 2000, event_title: 'Dahlstrom Middle School Staff Kickoff',
+          venue_address: 'Dahlstrom Middle School, Buda (Hays CISD)'
+        })
+      });
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${CLIENT_ID}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...sbHeaders },
+        body: JSON.stringify({ selected_package: 'Custom (school kickoff)', selected_price: 2000 })
+      });
+      res.status(200).json({ committed: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+    return;
+  }
+
   // ── TEMP: check what happened to Dedrah Ginn after the preview click (remove after use) ──
   if (req.method === 'GET' && req.query.diag === 'ginn_checkstate_9f2a71') {
     try {
