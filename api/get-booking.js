@@ -22,6 +22,46 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
+  // ── TEMP: Dedrah Ginn -- create her booking again, no contract, invoice-only path
+  // (remove after use) ─────────────────────────────────────────────────────────────
+  if (req.method === 'GET' && req.query.diag === 'ginn_makebooking2_9f2a71') {
+    const commit = req.query.commit === '1';
+    const CLIENT_ID = 'f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d';
+    try {
+      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${CLIENT_ID}&select=*`, { headers: sbHeaders });
+      const client = (await cRes.json())[0];
+      if (!client) { res.status(404).json({ error: 'client not found' }); return; }
+      if (client.booking_id) { res.status(200).json({ note: 'already has a booking_id', client }); return; }
+
+      if (!commit) { res.status(200).json({ dryRun: true, client }); return; }
+
+      const bookingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...sbHeaders, 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          client_id: client.id, client_name: client.name, client_email: client.email,
+          event_title: 'Dahlstrom Middle School Staff Kickoff', event_type: client.event_type,
+          event_date: client.event_date, venue_address: client.venue, fee: 2000,
+          contract_status: 'not_sent', intake_status: 'not_sent', status: 'booked'
+        })
+      });
+      const booking = (await bookingRes.json())[0];
+      if (!booking) { res.status(500).json({ error: 'booking insert failed' }); return; }
+
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...sbHeaders },
+        body: JSON.stringify({
+          booking_id: booking.id, status: 'booked', selected_category: 'corporate',
+          selected_package: 'Custom (school kickoff)', selected_price: 2000
+        })
+      });
+
+      res.status(200).json({ committed: true, booking });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+    return;
+  }
+
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;
