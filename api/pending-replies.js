@@ -841,6 +841,70 @@ HARD STYLE RULE: absolutely no em dashes (—). Use commas, periods, or "to".`;
       return;
     }
 
+    // POST action=triage -> scan the whole active pipeline in ONE call and suggest concrete
+    // next actions (follow up, call instead of text, mark lost, etc), ranked most urgent first.
+    // Frontend sends a compact per-lead summary (status, hours since Shine last heard from
+    // them, event proximity, hot flag, short notes) rather than full message history, so this
+    // stays fast and cheap even as the lead list grows.
+    if (req.method === 'POST' && req.body.action === 'triage') {
+      const leads = Array.isArray(req.body.leads) ? req.body.leads : [];
+      if (!leads.length) { res.status(200).json({ success: true, items: [] }); return; }
+
+      const TRIAGE_SYSTEM = `You are triaging Shine Thankappan's active client/lead pipeline (a mentalist and magician based in Austin, TX). You get a compact list of leads/clients: their status, how many hours since Shine last heard from them, their event date and how many days away it is, guest count, whether he's flagged them hot, the source, and short notes.
+
+Decide which ones need an action from Shine RIGHT NOW, and say exactly what to do. Guidance:
+- A quiet lead is more urgent the closer their event date is, and more urgent if flagged hot.
+- Word the action specifically to the situation, don't just say "follow up" every time: sometimes it's a follow-up text/email, sometimes "call instead of text, it's been too long for another message", sometimes "this one looks dead, consider marking it lost so it stops cluttering the list", sometimes "their event is in N days and they haven't signed the contract, this is urgent."
+- A booked/contract_sent/intake_sent lead going quiet with an event date coming up soon is a real business risk, not just an admin nag. Flag those high.
+- Skip anything that does not need action right now (recently contacted within a normal window, nothing pending on Shine's side, or already fully wrapped up).
+- Never invent facts not present in the data given, and never invent a specific date/time/number.
+
+HARD STYLE RULE: absolutely no em dashes (—). Use commas, periods, or "to".
+
+Return ONLY a single fenced JSON code block (\`\`\`json ... \`\`\`) and nothing else, with this exact shape:
+{"items": [{"clientId": "...", "urgency": "high"|"medium"|"low", "action": "one specific, concrete next step, imperative voice, under ~20 words", "reason": "one short clause grounding it in the actual facts given"}]}
+Order items most urgent first (high, then medium, then low). Omit any lead that does not need action.`;
+
+      const userPrompt = 'LEADS:\n' + leads.map(function(l) {
+        return '- id:' + l.clientId + ' name:"' + (l.name || '') + '" status:' + (l.statusLabel || l.status || '') +
+          ' hoursSinceContact:' + (l.hoursSinceContact != null ? l.hoursSinceContact : 'n/a') +
+          ' hot:' + (l.hot ? 'yes' : 'no') +
+          ' eventDate:' + (l.eventDate || 'n/a') + ' daysToEvent:' + (l.daysToEvent != null ? l.daysToEvent : 'n/a') +
+          ' guests:' + (l.guests || 'n/a') + ' source:' + (l.leadSource || 'n/a') +
+          ' notes:"' + String(l.notes || '').replace(/"/g, "'").slice(0, 200) + '"';
+      }).join('\n');
+
+      let text = '';
+      try {
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: 'claude-opus-4-8', max_tokens: Math.min(4000, 500 + leads.length * 150), system: TRIAGE_SYSTEM, messages: [{ role: 'user', content: userPrompt }] })
+        });
+        const data = await resp.json();
+        if (!resp.ok || data.error) throw new Error(data && data.error && data.error.message || 'Model error');
+        if (data.stop_reason === 'refusal') { res.status(200).json({ error: 'The AI declined this one (rare). Try again.' }); return; }
+        if (Array.isArray(data.content)) data.content.forEach(b => { if (b.type === 'text') text += b.text; });
+      } catch(e) {
+        console.error('Triage failed:', e.message);
+        res.status(200).json({ error: 'Could not run the triage — try again.' });
+        return;
+      }
+
+      let items = null;
+      try {
+        const blocks = text.match(/```json\s*([\s\S]*?)```/gi);
+        let js = null;
+        if (blocks && blocks.length) js = blocks[blocks.length - 1].replace(/```json\s*/i, '').replace(/```$/, '');
+        else { const s = text.indexOf('{'); const e = text.lastIndexOf('}'); if (s !== -1 && e > s) js = text.slice(s, e + 1); }
+        if (js) items = (JSON.parse(js) || {}).items;
+      } catch(e) { console.error('Triage parse failed:', e.message); }
+
+      if (!Array.isArray(items)) { res.status(200).json({ error: 'Could not read the triage results — try again.' }); return; }
+      res.status(200).json({ success: true, items });
+      return;
+    }
+
     res.status(400).json({ error: 'Unknown action' });
 
   } catch(e) {
