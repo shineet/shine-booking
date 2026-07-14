@@ -1140,6 +1140,7 @@
                     <option value="Website">Website</option>
                     <option value="Referral">Referral</option>
                     <option value="Event Planner">Event planner / DMC</option>
+                    <option value="Cold outreach">Cold outreach</option>
                     <option value="Other">Other</option>
                 </select>
             </div>
@@ -1416,6 +1417,7 @@
                     <option value="Website">Website</option>
                     <option value="Referral">Referral</option>
                     <option value="Event Planner">Event planner / DMC</option>
+                    <option value="Cold outreach">Cold outreach</option>
                     <option value="Other">Other</option>
                 </select>
             </div>
@@ -3337,40 +3339,50 @@ function formatDate(d) {
 
 function toggleOtherSource() {
     var v = document.getElementById('lead_source').value;
-    var show = (v === 'Other' || v === 'Event Planner');
+    var show = (v === 'Other' || v === 'Event Planner' || v === 'Cold outreach');
     document.getElementById('other-source-field').style.display = show ? 'block' : 'none';
     var lbl = document.getElementById('other-source-label');
     var inp = document.getElementById('other_source_name');
     if (v === 'Event Planner') { lbl.textContent = 'Planner / agency name'; inp.placeholder = 'e.g. Fifth Street DMC'; }
+    else if (v === 'Cold outreach') { lbl.textContent = 'Where you found them (optional)'; inp.placeholder = 'e.g. BizBash Austin listing'; }
     else { lbl.textContent = 'Source name'; inp.placeholder = 'e.g. Instagram, friend...'; }
 }
 function toggleEditOtherSource() {
     var v = document.getElementById('edit-lead_source').value;
-    var show = (v === 'Other' || v === 'Event Planner');
+    var show = (v === 'Other' || v === 'Event Planner' || v === 'Cold outreach');
     document.getElementById('edit-other-source-field').style.display = show ? 'block' : 'none';
     var lbl = document.getElementById('edit-other-source-label');
     var inp = document.getElementById('edit_other_source_name');
     if (v === 'Event Planner') { lbl.textContent = 'Planner / agency name'; inp.placeholder = 'e.g. Fifth Street DMC'; }
+    else if (v === 'Cold outreach') { lbl.textContent = 'Where you found them (optional)'; inp.placeholder = 'e.g. BizBash Austin listing'; }
     else { lbl.textContent = 'Source name'; inp.placeholder = 'e.g. Instagram, friend...'; }
 }
 // Combine a source select + its name box into the stored lead_source value.
 // Planner sources are stored as "<Agency> (Event Planner)" so the source label
 // names the planner and the Gigs-by-Source chart tracks each planner's revenue.
+// Cold outreach is stored as "Cold outreach" or "Cold outreach (<where found>)" --
+// same prefix Find Leads writes automatically, so isColdOutreach() (which just checks
+// lead_source starts with "Cold outreach") picks up leads tagged this way manually too,
+// e.g. leads Shine cold-emailed before the Cold Outreach tab/tagging existed.
 function composeSource(selectId, nameId) {
     var v = document.getElementById(selectId).value;
     if (v === 'Other') { var o = document.getElementById(nameId).value.trim(); return o || 'Other'; }
     if (v === 'Event Planner') { var p = document.getElementById(nameId).value.trim(); return p ? (p + ' (Event Planner)') : 'Event Planner'; }
+    if (v === 'Cold outreach') { var w = document.getElementById(nameId).value.trim(); return 'Cold outreach' + (w ? (' (' + w + ')') : ''); }
     return v || null;
 }
 // Reverse: set a source select + name box from a stored lead_source string.
 function applySourceToControls(ls, selectId, nameId, toggleFn) {
     var sel = document.getElementById(selectId);
     var nameEl = document.getElementById(nameId);
-    var known = ['Bark','GigSalad','TheBash','Website','Referral','Other','Event Planner'];
+    var known = ['Bark','GigSalad','TheBash','Website','Referral','Other','Event Planner','Cold outreach'];
     ls = ls || '';
     if (ls === 'Event Planner' || / \(Event Planner\)$/.test(ls)) {
         sel.value = 'Event Planner';
         if (nameEl) nameEl.value = (ls === 'Event Planner') ? '' : ls.replace(/ \(Event Planner\)$/, '');
+    } else if (ls === 'Cold outreach' || /^Cold outreach \(/.test(ls)) {
+        sel.value = 'Cold outreach';
+        if (nameEl) nameEl.value = (ls === 'Cold outreach') ? '' : ls.replace(/^Cold outreach \(/, '').replace(/\)$/, '');
     } else if (!ls || known.indexOf(ls) !== -1) {
         sel.value = ls || 'Bark';
     } else {
