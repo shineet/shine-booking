@@ -926,16 +926,17 @@ PHASE 1, survey: use web_search to find CURRENT, ACTIVE, real event opportunitie
 2. Conference calendars: upcoming corporate conferences and trade shows in Austin, Houston, Dallas, and nationally where entertainment is typically hired
 3. Venue booking boards: hotel event spaces, convention centers seeking entertainment or posting open dates
 4. LinkedIn: event planners, corporate event coordinators, or DMCs posting about upcoming events or seeking entertainers
-5. GigSalad / The Bash / Bark.com: new open requests for magicians or mentalists
-6. Local Austin / Texas business event listings (Austin Chamber, Texas Monthly events calendar, etc.)
+5. Local Austin / Texas business event listings (Austin Chamber, Texas Monthly events calendar, etc.)
+
+Do NOT search or surface leads from GigSalad, The Bash, or Bark.com. Shine already has active accounts on all three and gets notified directly of new requests there, so those results are pure duplicate noise for this tool. Skip that angle entirely, spend the freed-up search budget on the angles above instead.
 
 Narrow this down to your best 3-4 candidates rather than trying to log every mention. Quality over quantity: a lead you can actually email is worth far more than a longer list of dead ends. You have a hard time budget for this whole task, so stop surveying once you have 3-4 solid candidates and move to phase 2, don't keep surveying for more.
 
-PHASE 2, verify contact info (do this for every candidate that has its own organization/company website, i.e. everything EXCEPT closed marketplaces like GigSalad/The Bash/Bark where contact only happens inside the platform by design): run at least one MORE targeted search specifically for that organization's contact info before concluding no email exists, e.g. "<organization name> contact email", "<organization name> contact us", "<organization name> events@ OR info@". Do not stop at the first article or aggregator listing that mentioned the opportunity, that is rarely where a contact email lives. Go to the organization's own site.
+PHASE 2, verify contact info: for every candidate, run at least one MORE targeted search specifically for that organization's contact info before concluding no email exists, e.g. "<organization name> contact email", "<organization name> contact us", "<organization name> events@ OR info@". Do not stop at the first article or aggregator listing that mentioned the opportunity, that is rarely where a contact email lives. Go to the organization's own site.
 
 A generic inbox on the organization's OWN domain (info@, contact@, events@, hello@, bookings@, rentals@, etc) counts as a REAL, usable contactEmail, it does not need to belong to a named person. Prefer it over leaving contactEmail null.
 
-CRITICAL, NON-NEGOTIABLE RULE: only include a contactEmail if you actually found it published on the organization's own site or a specific listing (a staff bio page, a "contact us" page, a posted RFP contact, a footer address). NEVER invent, guess, or construct an email address that you did not literally see (e.g. never assume firstname@company.com or info@company.com just because you know the domain, unless you actually saw that address published somewhere). The only legitimate reasons to leave contactEmail null: (a) it's a closed marketplace/platform lead where outreach only happens inside that platform, or (b) you genuinely ran a phase 2 search on that organization's own site and it truly has no published contact email anywhere. Do not default to null just because the first survey search didn't happen to surface one.
+CRITICAL, NON-NEGOTIABLE RULE: only include a contactEmail if you actually found it published on the organization's own site or a specific listing (a staff bio page, a "contact us" page, a posted RFP contact, a footer address). NEVER invent, guess, or construct an email address that you did not literally see (e.g. never assume firstname@company.com or info@company.com just because you know the domain, unless you actually saw that address published somewhere). The only legitimate reason to leave contactEmail null is that you genuinely ran a phase 2 search on that organization's own site and it truly has no published contact email anywhere. Do not default to null just because the first survey search didn't happen to surface one.
 
 For each lead found, also judge fit for Shine (corporate mentalist, stage show is his strength, Austin-based, $2,500+ floor) in one sentence.
 
@@ -943,7 +944,7 @@ For every lead where you found a real contactEmail (and ONLY those), draft a sho
 
 Return ONLY a single fenced JSON code block (\`\`\`json ... \`\`\`) and nothing else:
 {"leads": [{
-  "source": "where you found it, e.g. 'GigSalad open request' or 'BizBash Austin events calendar'",
+  "source": "where you found it, e.g. 'BizBash Austin events calendar' or 'Cvent supplier network RFP'",
   "eventType": "short event type/category",
   "eventWindow": "date or date window as stated, or 'not specified'",
   "location": "city/venue if known",
