@@ -47,11 +47,12 @@ function decodeBase64Body(s) {
   } catch (e) { return s; }
 }
 
-// Extract + decode the text/plain part from a raw MIME email, honouring its
-// Content-Transfer-Encoding. Returns '' if no text/plain part is found.
-function extractPlainText(rawEmail) {
+// Shared MIME-part extractor: finds a Content-Type: <mime> part, honours its own
+// Content-Transfer-Encoding, and decodes accordingly. Returns '' if no such part exists.
+function extractMimePart(rawEmail, mime) {
   if (!rawEmail) return '';
-  const partMatch = rawEmail.match(/Content-Type:\s*text\/plain[\s\S]*?(?:\r?\n\r?\n)([\s\S]*?)(?:\r?\n--|\r?\n\r?\nContent-Type:|$)/i);
+  const re = new RegExp('Content-Type:\\s*' + mime.replace('/', '\\/') + '[\\s\\S]*?(?:\\r?\\n\\r?\\n)([\\s\\S]*?)(?:\\r?\\n--|\\r?\\n\\r?\\nContent-Type:|$)', 'i');
+  const partMatch = rawEmail.match(re);
   if (!partMatch) return '';
   const headerSection = partMatch[0].slice(0, partMatch[0].indexOf(partMatch[1]));
   const cteMatch = headerSection.match(/Content-Transfer-Encoding:\s*([^\s;]+)/i);
@@ -60,6 +61,39 @@ function extractPlainText(rawEmail) {
   if (cte === 'base64') return decodeBase64Body(payload);
   if (cte === 'quoted-printable') return decodeQuotedPrintable(payload);
   return payload;
+}
+
+// Extract + decode the text/plain part from a raw MIME email, honouring its
+// Content-Transfer-Encoding. Returns '' if no text/plain part is found.
+function extractPlainText(rawEmail) { return extractMimePart(rawEmail, 'text/plain'); }
+
+// Same, but for the text/html part (e.g. Amy's reply had only an HTML part, no
+// text/plain alternative, so the plain extractor came back empty).
+function extractHtmlPart(rawEmail) { return extractMimePart(rawEmail, 'text/html'); }
+
+// Turn an HTML email body into readable plain text: convert block-level breaks to
+// newlines BEFORE stripping tags (otherwise paragraphs run together into one line),
+// decode the handful of entities that actually show up in real mail, then collapse
+// excess blank lines.
+function htmlToText(html) {
+  if (!html) return '';
+  return String(html)
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|table|li|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/ /g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 // Decode an already-extracted body that may itself be an encoded blob.
@@ -361,7 +395,12 @@ export default async function handler(req, res) {
         if (toEmail && !toEmail.includes('texasmentalist.com') && !toEmail.includes('resend.com')) {
           let manualBody = normalizeBody(body || '');
           if (!manualBody) manualBody = extractPlainText(rawEmail);
-          if (!manualBody && rawEmail) {
+          if (!manualBody) manualBody = htmlToText(extractHtmlPart(rawEmail));
+          // Only fall back to "everything after the first blank line" for a genuinely
+          // non-multipart email: for multipart mail this heuristic grabs the raw MIME
+          // structure itself (part headers, encoding markers, unstripped HTML), not the
+          // message, which is exactly the garbled-reply bug this guard prevents.
+          if (!manualBody && rawEmail && !/Content-Type:\s*multipart\//i.test(rawEmail)) {
             const headerEnd = rawEmail.indexOf('\r\n\r\n') !== -1 ? rawEmail.indexOf('\r\n\r\n') : rawEmail.indexOf('\n\n');
             if (headerEnd > -1) manualBody = normalizeBody(rawEmail.substring(headerEnd).trim().substring(0, 2000));
           }
@@ -405,7 +444,14 @@ export default async function handler(req, res) {
     if (!emailBody) {
       emailBody = extractPlainText(rawEmail);
     }
-    if (!emailBody && rawEmail) {
+    if (!emailBody) {
+      // HTML-only reply (no text/plain alternative) -- Amy's reply hit exactly this case:
+      // extractPlainText came back empty, and the old code fell through to grabbing the raw
+      // multipart body wholesale, which is why "Content-Transfer-Encoding: quoted-printable"
+      // and raw <html><body> tags showed up verbatim in the dashboard.
+      emailBody = htmlToText(extractHtmlPart(rawEmail));
+    }
+    if (!emailBody && rawEmail && !/Content-Type:\s*multipart\//i.test(rawEmail)) {
       const headerEnd = rawEmail.indexOf('\r\n\r\n') !== -1 ? rawEmail.indexOf('\r\n\r\n') : rawEmail.indexOf('\n\n');
       if (headerEnd > -1) emailBody = normalizeBody(rawEmail.substring(headerEnd).trim().substring(0, 1000));
     }
