@@ -1695,10 +1695,13 @@ function matchesFilter(client) {
     if (currentSection === 'coldoutreach') {
         if (!isColdOutreach(client)) return false;
     } else {
+        // Cold-outreach leads live exclusively in their own tab regardless of contact_type
+        // (a cold-outreach lead can still be a planner/DMC, e.g. Cassandra Weis), so they're
+        // excluded from BOTH Leads and Planners here, not just Leads.
+        if (isColdOutreach(client)) return false;
         var clientType = client.contact_type === 'planner' ? 'planner' : 'client';
         var sectionWanted = currentSection === 'planners' ? 'planner' : 'client';
         if (clientType !== sectionWanted) return false;
-        if (currentSection === 'leads' && isColdOutreach(client)) return false;
     }
     if (activeFilter === 'noreply') return isNoReply(client);
     // Inactive/lost leads are hidden under "All" by default; the "Inactive & Lost" pill
