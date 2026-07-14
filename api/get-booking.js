@@ -22,6 +22,23 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
+  // ── TEMP: Jennifer's booking + Stripe config check (remove after use) ───────────
+  if (req.method === 'GET' && req.query.diag === 'jennifer_booking_9f2a71') {
+    try {
+      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?name=ilike.*jennifer*&select=id,name,email,phone,event_type,event_date,selected_package,selected_category,selected_price,status,booking_id`, { headers: sbHeaders });
+      const clients = await cRes.json();
+      let bookings = [];
+      const ids = (Array.isArray(clients) ? clients : []).map(c => c.booking_id).filter(Boolean);
+      if (ids.length) {
+        const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=in.(${ids.join(',')})&select=id,client_id,client_name,client_email,event_title,event_date,fee,status`, { headers: sbHeaders });
+        bookings = await bRes.json();
+      }
+      res.status(200).json({ stripeConfigured: !!process.env.STRIPE_SECRET_KEY, clients, bookings });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+    return;
+  }
+
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;
