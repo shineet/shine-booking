@@ -22,7 +22,8 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  // ── TEMP: correct Dedrah Ginn's booking fee to the agreed $2,000 (remove after use) ──
+  // ── TEMP: delete Dedrah Ginn's mistaken booking (wrong tier/price, no deposit) so her
+  // actual Stripe payment creates one clean, correct record (remove after use) ──────────
   if (req.method === 'GET' && req.query.diag === 'ginn_fixfee_9f2a71') {
     const commit = req.query.commit === '1';
     const CLIENT_ID = 'f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d';
@@ -35,18 +36,15 @@ export default async function handler(req, res) {
 
       if (!commit) { res.status(200).json({ dryRun: true, booking }); return; }
 
-      await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${BOOKING_ID}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...sbHeaders },
-        body: JSON.stringify({
-          fee: 2000, event_title: 'Dahlstrom Middle School Staff Kickoff',
-          venue_address: 'Dahlstrom Middle School, Buda (Hays CISD)'
-        })
-      });
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${BOOKING_ID}`, { method: 'DELETE', headers: sbHeaders });
       await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${CLIENT_ID}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json', ...sbHeaders },
-        body: JSON.stringify({ selected_package: 'Custom (school kickoff)', selected_price: 2000 })
+        body: JSON.stringify({
+          booking_id: null, status: 'pricing_requested',
+          selected_package: null, selected_category: null, selected_price: null
+        })
       });
-      res.status(200).json({ committed: true });
+      res.status(200).json({ committed: true, deletedBooking: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
     return;
   }
