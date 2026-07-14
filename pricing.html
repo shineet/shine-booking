@@ -917,11 +917,19 @@
         pickedPrice = price;
 
         // Single-card (agreed price) mode books directly — the price is already settled,
-        // so skip the good/better/best decision screen.
+        // so skip the good/better/best decision screen. If a deposit % is in the link (dep=),
+        // route through Stripe first: the booking only gets created by the bookOnPay webhook
+        // after payment actually succeeds, same mechanism the standard decision-page flow uses.
+        // Without dep=, there's nothing to gate on, so it books immediately as before.
         if (directBook) {
             const params = getParams();
             if (params.clientId) {
                 const btn = document.getElementById(`btn-${category}-${tier}`);
+                if (params.depPct) {
+                    if (btn) { btn.disabled = true; btn.textContent = 'Opening secure checkout...'; }
+                    payDepositAndBookDirect(btn);
+                    return;
+                }
                 if (btn) { btn.disabled = true; btn.textContent = 'Reserving your date...'; }
                 document.getElementById('main-page').style.display = 'none';
                 submitFinalSelection(true);
@@ -934,6 +942,46 @@
         }
 
         onConfirmBarClick();
+    }
+
+    // Same Stripe deposit-to-book request as payDepositAndBook() (used by the standard
+    // decision-page flow), duplicated rather than shared because its error handler assumes
+    // decision-page-only DOM (#book-shine-btn etc) that doesn't exist in single-card mode.
+    function payDepositAndBookDirect(btn) {
+        const params = getParams();
+        const isStrolling = pickedTier === 'strolling-only' || pickedTier === 'strolling-finale';
+        const baseDep = Math.round(pickedPrice * params.depPct / 100);
+        const sc = params.sc || 0;
+        const depAmt = sc ? baseDep + Math.round(baseDep * sc / 100) : baseDep;
+        const isEmail = (capturedContact || '').includes('@');
+        fetch('/api/stripe', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'create', type: 'deposit', amountDollars: depAmt,
+                label: sc ? `Deposit (${params.depPct}%) + ${sc}% card fee — ${pickedLabel}` : `Deposit (${params.depPct}%) — ${pickedLabel}`,
+                description: 'Shine, The Mentalist',
+                clientId: params.clientId || '',
+                clientEmail: isEmail ? capturedContact : undefined,
+                successUrl: 'https://shine-booking.vercel.app/payment-success.html',
+                cancelUrl: window.location.href,
+                extraMetadata: {
+                    bookOnPay: '1',
+                    category: pickedCategory, tier: pickedTier, label: pickedLabel,
+                    price: String(pickedPrice), format: isStrolling ? 'strolling' : 'stage',
+                    dur: isStrolling && strollingDuration ? String(strollingDuration) : '',
+                    name: capturedName || '', contact: capturedContact || ''
+                }
+            })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.error || !d.url) throw new Error(d.error || 'No checkout URL');
+            window.location.href = d.url;
+        })
+        .catch(e => {
+            alert('Could not open checkout — please try again, or text me and I\'ll send a link. ' + e.message);
+            if (btn) { btn.disabled = false; btn.textContent = 'Confirm & reserve your date'; }
+        });
     }
 
     function pickPackage(category, tier, label, price) {
