@@ -28,8 +28,11 @@ export default async function handler(req, res) {
         return phone;
       }
 
-      // Fetch live client record for event_date
+      // Fetch live client record for event_date + any existing booking (e.g. from Mark as
+      // booked) so this reuses it instead of creating a duplicate.
       let eventDate = null;
+      let existingBookingId = null;
+      let existingNotes = '';
       if (clientId) {
         const clientRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}&limit=1`, {
           headers: {
@@ -41,34 +44,62 @@ export default async function handler(req, res) {
         const client = Array.isArray(clientRows) ? clientRows[0] : null;
         if (client) {
           eventDate = client.event_date || null;
+          existingNotes = client.notes || '';
+          existingBookingId = client.booking_id || null;
           // Use phone from client record if not passed in
           if (!clientPhone && client.phone) clientPhone = client.phone;
         }
       }
 
-      // Create booking record
-      const bookingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': process.env.SUPABASE_SECRET_KEY,
-          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
-          'Prefer': 'return=representation'
-        },
-        body: JSON.stringify({
-          client_id:       clientId || null,
-          client_name:     clientName,
-          client_email:    clientEmail,
-          event_type:      eventType || '',
-          event_date:      eventDate,
-          fee:             fee || null,
-          contract_status: 'not_sent',
-          intake_status:   'sent'
-        })
-      });
-      const bookingRows = await bookingRes.json();
-      const booking = Array.isArray(bookingRows) ? bookingRows[0] : null;
-      if (!booking) throw new Error('Failed to create booking record');
+      // Reuse an existing booking (e.g. one already created by Mark as booked) instead of
+      // always inserting a new row -- this used to create a duplicate every time intake was
+      // (re)sent, leaving the original orphaned.
+      let booking;
+      if (existingBookingId) {
+        const updateRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${existingBookingId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.SUPABASE_SECRET_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            client_name:  clientName || undefined,
+            client_email: clientEmail || undefined,
+            event_type:   eventType || undefined,
+            event_date:   eventDate || undefined,
+            fee:          fee || undefined,
+            intake_status: 'sent'
+          })
+        });
+        const updateRows = await updateRes.json();
+        booking = Array.isArray(updateRows) ? updateRows[0] : null;
+        if (!booking) throw new Error('Failed to update existing booking record');
+      } else {
+        const bookingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.SUPABASE_SECRET_KEY,
+            'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            client_id:       clientId || null,
+            client_name:     clientName,
+            client_email:    clientEmail,
+            event_type:      eventType || '',
+            event_date:      eventDate,
+            fee:             fee || null,
+            contract_status: 'not_sent',
+            intake_status:   'sent'
+          })
+        });
+        const bookingRows = await bookingRes.json();
+        booking = Array.isArray(bookingRows) ? bookingRows[0] : null;
+        if (!booking) throw new Error('Failed to create booking record');
+      }
 
       const intakeLink = `https://shine-booking.vercel.app/intake.html?bid=${booking.id}`;
 
@@ -114,7 +145,9 @@ export default async function handler(req, res) {
             status:        'intake_sent',
             booking_id:    booking.id,
             last_activity: new Date().toISOString(),
-            notes:         `Intake form sent: ${intakeLink}`
+            // Append rather than overwrite -- this used to wipe out any real notes already
+            // on the client (call recaps, context, etc) every time intake was (re)sent.
+            notes:         existingNotes ? `${existingNotes}\n\nIntake form sent: ${intakeLink}` : `Intake form sent: ${intakeLink}`
           })
         });
       }
