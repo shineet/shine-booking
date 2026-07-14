@@ -1026,6 +1026,7 @@
     <div class="topbar-tabs">
         <button class="ttab active" onclick="showView('pipeline')">Leads</button>
         <button class="ttab" onclick="showView('planners')">Planners</button>
+        <button class="ttab" onclick="showView('coldoutreach')">&#129505; Cold Outreach</button>
         <button class="ttab" onclick="messagingExistingClientId=null;showView('new-lead')">+ New Lead</button>
     </div>
     <div class="topbar-spacer"></div>
@@ -1641,19 +1642,21 @@ var QUESTION_LABELS = {
 
 /* ── View switching ── */
 function showView(view) {
-    document.getElementById('pipeline-shell').style.display  = (view === 'pipeline' || view === 'planners') ? 'flex'  : 'none';
+    document.getElementById('pipeline-shell').style.display  = (view === 'pipeline' || view === 'planners' || view === 'coldoutreach') ? 'flex'  : 'none';
     document.getElementById('new-lead-shell').style.display  = view === 'new-lead'  ? 'block' : 'none';
     document.querySelectorAll('.ttab').forEach(function(t) { t.classList.remove('active'); });
     document.querySelectorAll('.ttab').forEach(function(t) {
         if ((view === 'pipeline' && t.textContent.trim() === 'Leads') ||
             (view === 'planners' && t.textContent.trim() === 'Planners') ||
+            (view === 'coldoutreach' && t.textContent.trim().indexOf('Cold Outreach') !== -1) ||
             (view === 'new-lead' && t.textContent.trim() === '+ New Lead'))
             t.classList.add('active');
     });
-    if (view === 'pipeline' || view === 'planners') {
-        currentSection = view === 'planners' ? 'planners' : 'leads';
-        document.getElementById('list-pane-title-text').textContent = currentSection === 'planners' ? 'All planners' : 'All leads';
-        document.getElementById('detail-back-btn').innerHTML = currentSection === 'planners' ? '&#8592; All planners' : '&#8592; All leads';
+    if (view === 'pipeline' || view === 'planners' || view === 'coldoutreach') {
+        currentSection = view === 'planners' ? 'planners' : (view === 'coldoutreach' ? 'coldoutreach' : 'leads');
+        var titleText = currentSection === 'planners' ? 'All planners' : (currentSection === 'coldoutreach' ? 'Cold outreach' : 'All leads');
+        document.getElementById('list-pane-title-text').textContent = titleText;
+        document.getElementById('detail-back-btn').innerHTML = '&#8592; ' + titleText;
         closeDetail();
         loadLeads();
         loadReviewModeState();
@@ -1679,10 +1682,22 @@ function isNoReply(client) {
     return hours >= NO_REPLY_HOURS;
 }
 
+// Leads created via Find Leads (action=send-outreach-lead) are tagged lead_source =
+// "Cold outreach (<source>)" -- kept out of the main Leads tab and given their own tab so
+// Shine can tell inbound leads apart from ones he initiated himself.
+function isColdOutreach(client) {
+    return !!(client.lead_source && client.lead_source.indexOf('Cold outreach') === 0);
+}
+
 function matchesFilter(client) {
-    var clientType = client.contact_type === 'planner' ? 'planner' : 'client';
-    var sectionWanted = currentSection === 'planners' ? 'planner' : 'client';
-    if (clientType !== sectionWanted) return false;
+    if (currentSection === 'coldoutreach') {
+        if (!isColdOutreach(client)) return false;
+    } else {
+        var clientType = client.contact_type === 'planner' ? 'planner' : 'client';
+        var sectionWanted = currentSection === 'planners' ? 'planner' : 'client';
+        if (clientType !== sectionWanted) return false;
+        if (currentSection === 'leads' && isColdOutreach(client)) return false;
+    }
     if (activeFilter === 'noreply') return isNoReply(client);
     // Inactive/lost leads are hidden under "All" by default; the "Inactive & Lost" pill
     // (or the no-reply view) is the only way to bring them back into view.
