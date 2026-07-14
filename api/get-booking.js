@@ -22,49 +22,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  // ── TEMP: delete Dedrah Ginn's mistaken booking (wrong tier/price, no deposit) so her
-  // actual Stripe payment creates one clean, correct record (remove after use) ──────────
-  if (req.method === 'GET' && req.query.diag === 'ginn_fixfee_9f2a71') {
-    const commit = req.query.commit === '1';
-    const CLIENT_ID = 'f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d';
-    const BOOKING_ID = '6dc31125-b918-43e8-a8bc-b277270289a4';
-    try {
-      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${BOOKING_ID}&select=*`, { headers: sbHeaders });
-      const booking = (await bRes.json())[0];
-      if (!booking) { res.status(404).json({ error: 'booking not found' }); return; }
-
-      if (!commit) { res.status(200).json({ dryRun: true, booking }); return; }
-
-      await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${BOOKING_ID}`, { method: 'DELETE', headers: sbHeaders });
-      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${CLIENT_ID}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...sbHeaders },
-        body: JSON.stringify({
-          booking_id: null, status: 'pricing_requested',
-          selected_package: null, selected_category: null, selected_price: null
-        })
-      });
-      res.status(200).json({ committed: true, deletedBooking: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-    return;
-  }
-
-  // ── TEMP: check what happened to Dedrah Ginn after the preview click (remove after use) ──
-  if (req.method === 'GET' && req.query.diag === 'ginn_checkstate_9f2a71') {
-    try {
-      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d&select=*`, { headers: sbHeaders });
-      const client = (await cRes.json())[0];
-      let bookings = [];
-      const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?client_id=eq.f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d&select=*&order=created_at.desc`, { headers: sbHeaders });
-      bookings = await bRes.json();
-      const mRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d&select=id,direction,channel,content,email_subject,created_at&order=created_at.desc&limit=5`, { headers: sbHeaders });
-      const messages = await mRes.json();
-      res.status(200).json({ client, bookings, recentMessages: messages });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-    return;
-  }
-
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;
