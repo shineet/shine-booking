@@ -366,7 +366,7 @@ function normalizeEventType(v) {
   if (!v) return null;
   const s = String(v).trim();
   if (!s) return null;
-  const CANONICAL = ['Birthday party', 'Bachelorette party', 'Bachelor party', 'Wedding', 'Corporate event', 'Graduation', 'Baby Shower', 'Private celebration', 'Anniversary', 'Other'];
+  const CANONICAL = ['Birthday party', 'Bachelorette party', 'Bachelor party', 'Wedding', 'Corporate event', 'School / Education Event', 'Graduation', 'Baby Shower', 'Private celebration', 'Anniversary', 'Other'];
   const hit = CANONICAL.find(function (t) { return t.toLowerCase() === s.toLowerCase(); });
   return hit || s;
 }

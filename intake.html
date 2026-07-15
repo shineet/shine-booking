@@ -12,67 +12,75 @@
     }
 
     body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background: linear-gradient(180deg, #f7f7fb 0%, #f0f1f5 100%);
-        color: #1d1d1f;
+        font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #f0ebfa;
+        color: #202124;
         font-size: 15px;
         min-height: 100vh;
         padding: 16px 16px 40px
     }
 
     .page {
-        max-width: 480px;
+        max-width: 520px;
         margin: 0 auto
     }
 
     .header {
         text-align: center;
-        padding: 28px 0 18px
+        padding: 20px 0 22px
     }
 
     .header .star {
         font-size: 30px;
         margin-bottom: 12px;
         display: inline-block;
-        filter: drop-shadow(0 2px 6px rgba(0, 113, 227, 0.25))
+        filter: drop-shadow(0 2px 6px rgba(103, 80, 164, 0.3))
     }
 
     .header h1 {
-        font-size: 21px;
+        font-size: 22px;
         font-weight: 700;
         letter-spacing: -0.01em
     }
 
     .header p {
         font-size: 13.5px;
-        color: #6e6e73;
+        color: #5f6368;
         margin-top: 8px;
         line-height: 1.6;
         padding: 0 8px
     }
 
+    /* Section = a plain, unboxed group heading; each field below renders as its own
+       Google-Forms-style card (see .field), not nested inside a shared box. */
     .section {
-        background: #fff;
-        border-radius: 18px;
-        padding: 20px;
-        margin-bottom: 14px;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.05)
+        margin-bottom: 24px
     }
 
     .section-title {
-        font-size: 11.5px;
+        font-size: 19px;
         font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: #0071e3;
+        color: #202124;
         margin-bottom: 14px;
+        padding-bottom: 10px;
+        border-bottom: 3px solid #6750a4;
         display: flex;
         align-items: center;
-        gap: 6px
+        gap: 8px
     }
 
     .field {
-        margin-bottom: 18px
+        background: #fff;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 12px;
+        box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08), 0 1px 6px rgba(60, 64, 67, 0.06);
+        border-left: 3px solid transparent;
+        transition: border-color 0.15s
+    }
+
+    .field:focus-within {
+        border-left-color: #6750a4
     }
 
     .field:last-child {
@@ -81,16 +89,16 @@
 
     .field label {
         display: block;
-        font-size: 13.5px;
-        color: #1d1d1f;
-        margin-bottom: 7px;
-        font-weight: 600;
+        font-size: 15px;
+        color: #202124;
+        margin-bottom: 10px;
+        font-weight: 500;
         line-height: 1.4
     }
 
     .field .hint {
         font-size: 12px;
-        color: #aeaeb2;
+        color: #80868b;
         font-weight: 400;
         display: block;
         margin-top: 2px
@@ -98,27 +106,34 @@
 
     .field input, .field select, .field textarea {
         width: 100%;
-        padding: 11px 13px;
+        padding: 9px 2px;
         font-size: 15px;
-        border: 1.5px solid #e5e5ea;
-        border-radius: 11px;
-        background: #fafafc;
-        color: #1d1d1f;
+        border: none;
+        border-bottom: 1.5px solid #dadce0;
+        border-radius: 0;
+        background: transparent;
+        color: #202124;
         font-family: inherit;
         -webkit-appearance: none;
-        transition: border-color 0.15s, background 0.15s
+        transition: border-color 0.15s
     }
 
     .field input:focus, .field select:focus, .field textarea:focus {
         outline: none;
-        border-color: #0071e3;
-        background: #fff
+        border-bottom-color: #6750a4
     }
 
     .field textarea {
         resize: vertical;
-        min-height: 72px;
-        line-height: 1.5
+        min-height: 64px;
+        line-height: 1.5;
+        border: 1.5px solid #dadce0;
+        border-radius: 8px;
+        padding: 10px 12px
+    }
+
+    .field textarea:focus {
+        border-color: #6750a4
     }
 
     .two-col {
@@ -130,32 +145,31 @@
     .radio-group {
         display: flex;
         flex-direction: column;
-        gap: 10px;
-        margin-top: 6px
+        gap: 4px;
+        margin-top: 4px
     }
 
     .radio-option {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         gap: 14px;
-        padding: 14px 16px;
-        border: 1.5px solid #e5e5ea;
-        border-radius: 12px;
+        padding: 9px 4px;
+        border: none;
+        border-radius: 0;
         cursor: pointer;
-        background: #fafafc;
-        transition: border-color 0.15s, background 0.15s
+        background: transparent
     }
 
     .radio-option input[type="radio"] {
         appearance: none;
         -webkit-appearance: none;
         -moz-appearance: none;
-        margin: 1px 0 0 0;
-        width: 21px;
-        height: 21px;
-        min-width: 21px;
+        margin: 0;
+        width: 20px;
+        height: 20px;
+        min-width: 20px;
         border-radius: 50%;
-        border: 2px solid #d1d1d6;
+        border: 2px solid #5f6368;
         background: #fff;
         flex-shrink: 0;
         display: grid;
@@ -166,10 +180,10 @@
 
     .radio-option input[type="radio"]::before {
         content: '';
-        width: 11px;
-        height: 11px;
+        width: 10px;
+        height: 10px;
         border-radius: 50%;
-        background: #0071e3;
+        background: #6750a4;
         transform: scale(0);
         transition: transform 0.12s
     }
@@ -179,34 +193,34 @@
     }
 
     .radio-option input[type="radio"]:checked {
-        border-color: #0071e3
+        border-color: #6750a4
     }
 
     .radio-option span.label-text {
         font-size: 14.5px;
-        font-weight: 500;
-        line-height: 1.45;
-        padding-top: 1px
+        font-weight: 400;
+        color: #3c4043;
+        line-height: 1.45
     }
 
-    .radio-option.selected {
-        border-color: #0071e3;
-        background: #f0f7ff
+    .radio-option.selected span.label-text {
+        color: #202124;
+        font-weight: 500
     }
 
     .submit-btn {
         width: 100%;
         padding: 16px;
-        background: #0071e3;
+        background: #6750a4;
         color: #fff;
         border: none;
-        border-radius: 14px;
+        border-radius: 24px;
         font-size: 16.5px;
         font-weight: 700;
         cursor: pointer;
         font-family: inherit;
         margin-top: 6px;
-        box-shadow: 0 4px 14px rgba(0, 113, 227, 0.3);
+        box-shadow: 0 4px 14px rgba(103, 80, 164, 0.35);
         transition: transform 0.1s, box-shadow 0.1s
     }
 
@@ -215,7 +229,7 @@
     }
 
     .submit-btn:disabled {
-        background: #b0c8f0;
+        background: #d0c7e8;
         box-shadow: none;
         cursor: not-allowed
     }
@@ -224,9 +238,9 @@
         width: 100%;
         padding: 14px;
         background: transparent;
-        color: #0071e3;
-        border: 1.5px solid #d1d9f0;
-        border-radius: 14px;
+        color: #6750a4;
+        border: 1.5px solid #d8cdf0;
+        border-radius: 24px;
         font-size: 14.5px;
         font-weight: 600;
         cursor: pointer;
@@ -236,7 +250,7 @@
     }
 
     .save-draft-btn:active {
-        background: #f0f7ff
+        background: #f3edfc
     }
 
     .save-draft-btn:disabled {
@@ -252,9 +266,9 @@
         gap: 6px;
         margin-top: 10px;
         padding: 12px;
-        background: #f0f7ff;
-        color: #0071e3;
-        border: 1.5px solid #cde0fc;
+        background: #f3edfc;
+        color: #6750a4;
+        border: 1.5px solid #d8cdf0;
         border-radius: 11px;
         font-size: 14px;
         font-weight: 600;
@@ -263,7 +277,7 @@
     }
 
     .text-photo-btn:active {
-        background: #e0effe
+        background: #e9defa
     }
 
     .loading {
@@ -368,7 +382,7 @@
     function photoField(fieldId, personLabel, opts) {
         opts = opts || {};
         const labelText = opts.labelText || ('Link to a photo of ' + personLabel);
-        const hintText = opts.hintText || '(Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)';
+        const hintText = opts.hintText || '(Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#6750a4;text-decoration:none">+1 (612) 865-7681</a>)';
         return `
       <div class="field">
         <label>${labelText} <span class="hint">${hintText}</span></label>
@@ -384,6 +398,9 @@
         document.getElementById('greeting-text').textContent = "Thank you for booking my show! This short questionnaire helps me personalize the experience and ensure everything runs smoothly for your event. — Shine, The Mentalist";
 
         const eventType = (d.eventType || '').toLowerCase();
+        // School/education bookings skip indoor/outdoor (near-always indoors on campus) and
+        // get a different Section 2/3 question set below, tailored to a staff/faculty event.
+        const isSchool = eventType.includes('school') || eventType.includes('education');
         let html = '';
 
         // Section 1: Event basics
@@ -395,20 +412,19 @@
 
         d.eventDate || ''}">
     </div>
-    <div class="two-col">
-      <div class="field">
-        <label>Start time</label>
-        <input type="time" id="q_start_time">
-      </div>
-      <div class="field">
-        <label>Guest count</label>
-        <input type="text" id="q_guests" placeholder="e.g. 25">
-      </div>
+    <div class="field">
+      <label>Start time</label>
+      <input type="time" id="q_start_time">
+    </div>
+    <div class="field">
+      <label>Guest count</label>
+      <input type="text" id="q_guests" placeholder="e.g. 25">
     </div>
     <div class="field">
       <label>Event location / address</label>
       <input type="text" id="q_address" placeholder="Full address">
     </div>
+  ` + (isSchool ? '' : `
     <div class="field">
       <label>Indoor or outdoor event?</label>
       <div class="radio-group">${
@@ -430,9 +446,7 @@
 
         radioGroup('q_indoor_outdoor', ['Indoor', 'Outdoor', 'Both'])}</div>
     </div>
-  `
-
-        ;
+  `);
         html += '</div>';
 
         // Section 2: Event-specific questions
@@ -458,7 +472,7 @@
       <div class="field"><label>Any other entertainment before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
       <div class="field"><label>Tell me about the bride <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know — I'll use this to personalize the show and a few custom touches)</span></label><textarea id="q_trivia_bride"></textarea></div>
       <div class="field"><label>Tell me about the groom <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know — I'll use this to personalize the show and a few custom touches)</span></label><textarea id="q_trivia_groom"></textarea></div>
-      ${photoField('q_photo_bride', 'the bride', { labelText: 'Please share a photo of the bride, with or without the groom', hintText: 'You can give the link here for the photo or share with me via text. (Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)' })}
+      ${photoField('q_photo_bride', 'the bride', { labelText: 'Please share a photo of the bride, with or without the groom', hintText: 'You can give the link here for the photo or share with me via text. (Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#6750a4;text-decoration:none">+1 (612) 865-7681</a>)' })}
       <div class="field"><label>Anything else I should know? <span class="hint">(how they met, the proposal story, etc.)</span></label><textarea id="q_anything_else"></textarea></div>
     `
 
@@ -520,10 +534,8 @@
             ;
         } else if (eventType.includes('anniversary')) {
             html += `
-      <div class="two-col">
-        <div class="field"><label>Spouse 1's full name</label><input type="text" id="q_spouse1_name"></div>
-        <div class="field"><label>Spouse 2's full name</label><input type="text" id="q_spouse2_name"></div>
-      </div>
+      <div class="field"><label>Spouse 1's full name</label><input type="text" id="q_spouse1_name"></div>
+      <div class="field"><label>Spouse 2's full name</label><input type="text" id="q_spouse2_name"></div>
       <div class="field"><label>Date of marriage</label><input type="date" id="q_marriage_date"></div>
       <div class="field"><label>Any VIPs or special people attending?</label><input type="text" id="q_vips"></div>
       <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
@@ -539,9 +551,9 @@
             radioGroup('q_vibe', ['Clean elegant & classy', 'Family friendly', 'Light adult humor', 'Slightly edgy / flirty', 'Bold & edgy'])}</div>
       </div>
       <div class="field"><label>Tell me about spouse 1 <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know)</span></label><textarea id="q_trivia_spouse1"></textarea></div>
-      ${photoField('q_photo_spouse1', 'spouse 1', { hintText: '(or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)' })}
+      ${photoField('q_photo_spouse1', 'spouse 1', { hintText: '(or text it to me at <a href="sms:+16128657681" style="color:#6750a4;text-decoration:none">+1 (612) 865-7681</a>)' })}
       <div class="field"><label>Tell me about spouse 2 <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know)</span></label><textarea id="q_trivia_spouse2"></textarea></div>
-      ${photoField('q_photo_spouse2', 'spouse 2', { hintText: '(or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)' })}
+      ${photoField('q_photo_spouse2', 'spouse 2', { hintText: '(or text it to me at <a href="sms:+16128657681" style="color:#6750a4;text-decoration:none">+1 (612) 865-7681</a>)' })}
       <div class="field"><label>Anything else I should know? <span class="hint">(how they met, favorite memories, etc.)</span></label><textarea id="q_anything_else"></textarea></div>
     `
 
@@ -549,6 +561,19 @@
 
 
 
+
+            ;
+        } else if (isSchool) {
+            html += `
+      <div class="field"><label>Grade levels or departments represented <span class="hint">(optional)</span></label><input type="text" id="q_grade_levels" placeholder="e.g. all staff, K-5 teachers, front office"></div>
+      <div class="field"><label>How would you describe the year your team has had? <span class="hint">(optional — helps me strike the right tone)</span></label><textarea id="q_year_recap"></textarea></div>
+      <div class="field"><label>What's the main goal for this event?</label>
+        <div class="radio-group">${radioGroup('q_goal', ['Team building & morale', 'Celebrate wins & achievements', 'Fresh start for the new year', 'Just have fun'])}</div>
+      </div>
+      <div class="field"><label>Are administrators or district staff attending? Would you like them involved in the show?</label><input type="text" id="q_vips"></div>
+      <div class="field"><label>Any staff achievements, milestones, or moments from this year you'd like recognized?</label><textarea id="q_inside_jokes"></textarea></div>
+      <div class="field"><label>Any topics or sensitive subjects I should be aware of, or intentionally avoid?</label><textarea id="q_exclude"></textarea></div>
+    `
 
             ;
         } else if (eventType.includes('corporate')) {
@@ -659,7 +684,7 @@
       </div>
       <div class="field"><label>Any other entertainment before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
       <div class="field"><label>If there's a guest of honor, tell me about them <span class="hint">(personality, hobbies, a funny story, anything most people don't know — optional)</span></label><textarea id="q_trivia"></textarea></div>
-      ${photoField('q_photo_honoree', 'the guest of honor', { hintText: '(optional — Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#0071e3;text-decoration:none">+1 (612) 865-7681</a>)' })}
+      ${photoField('q_photo_honoree', 'the guest of honor', { hintText: '(optional — Google Drive, Dropbox, or any shareable link, or text it to me at <a href="sms:+16128657681" style="color:#6750a4;text-decoration:none">+1 (612) 865-7681</a>)' })}
     `
 
 
@@ -671,7 +696,20 @@
 
         // Section 3: Logistics
         html += '<div class="section"><div class="section-title">⚡ Logistics</div>';
-        html += `
+        html += isSchool ? `
+    <div class="field">
+      <label>What kind of space will this be in?</label>
+      <div class="radio-group">${radioGroup('q_room_type', ['Gym', 'Cafeteria', 'Auditorium', 'Classroom', 'Other'])}</div>
+    </div>
+    <div class="field">
+      <label>Is a sound system and projector/screen available on site?</label>
+      <div class="radio-group">${radioGroup('q_av_available', ["Yes, both available", "Sound only", "Projector only", "Neither, I'll bring my own", "Not sure yet"])}</div>
+    </div>
+    <div class="field">
+      <label>Name and contact for whoever handles sound/AV at the venue <span class="hint">(so we can coordinate ahead of time)</span></label>
+      <input type="text" id="q_av_contact" placeholder="Name, phone or email">
+    </div>
+  ` : `
     <div class="field">
       <label>Will there be a clear area for the show?</label>
       <div class="radio-group">${
@@ -685,9 +723,7 @@
 
         radioGroup('q_power', ['Yes', 'No', 'Not sure'])}</div>
     </div>
-  `
-
-        ;
+  `;
         html += '</div>';
 
         html += '<button class="submit-btn" id="submit-btn" onclick="submitIntake(false)">Submit questionnaire</button>';
