@@ -36,22 +36,33 @@ module.exports = async function handler(req, res) {
       const body       = customMessage ||
         `Please find your invoice attached for the ${invoiceData.eventName || 'upcoming event'}.\n\nA ${dep}% deposit ($${depAmt}) is required to secure your date. Payment details are on page 2 of the invoice.\n\nLooking forward to an unforgettable performance!`;
 
-      // Optional Stripe "Pay online" button — fully guarded: no key or any error just
-      // omits the button, the invoice email always sends normally. The card surcharge
-      // (client absorbs Stripe's processing fee instead of Shine) only applies to this
-      // card-payment amount, not to the deposit figure stated in the body/PDF for
-      // check/Zelle/Venmo/PayPal, matching how the pricing-link flow already handles it.
+      // Prefer a stable, never-expiring link (invoice-view.html) over a raw Stripe
+      // Checkout URL — the old approach baked a one-time link straight into the email
+      // that Stripe expires after ~24h and that lived nowhere else, so if the client
+      // lost the email there was nothing to resend without generating a brand new one.
+      // invoice-view.html carries the full invoice payload in its URL and creates a
+      // fresh Stripe session itself at click time, so the link never goes stale.
+      // Falls back to the old direct-Stripe-link behavior for ad-hoc invoices with no
+      // bookingId (nothing for invoice-view.html to look up payment status against).
       let payBtnHtml = '', payLineText = '';
       try {
         const sc = Number(invoiceData.cardSurchargePercent) || 0;
         const baseDep = Math.round((invoiceData.total || 0) * dep / 100);
         const depDollars = sc ? Math.round(baseDep + baseDep * sc / 100) : baseDep;
         const scLabel = sc ? ` + ${sc}% card fee` : '';
-        const payUrl = await createStripeDepositLink(depDollars, `Deposit (${dep}%)${scLabel} — ${invoiceData.eventName || 'event'}`, toEmail, invoiceData.bookingId);
+        let payUrl = null;
+        if (invoiceData.bookingId) {
+          payUrl = `https://shine-booking.vercel.app/invoice-view.html?bid=${encodeURIComponent(invoiceData.bookingId)}&d=${encodeURIComponent(JSON.stringify(invoiceData))}`;
+        } else {
+          payUrl = await createStripeDepositLink(depDollars, `Deposit (${dep}%)${scLabel} — ${invoiceData.eventName || 'event'}`, toEmail, invoiceData.bookingId);
+        }
         if (payUrl) {
           const amtNote = sc ? ` (includes a ${sc}% card processing fee)` : '';
-          payBtnHtml = `<div style="text-align:center;margin:28px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:bold;display:inline-block">💳 Pay ${dep}% Deposit Online ($${depDollars.toLocaleString()})</a>${sc ? `<div style="font-size:11px;color:#6b7280;margin-top:6px">Includes a ${sc}% card processing fee</div>` : ''}</div>`;
-          payLineText = `\n\nPrefer to pay by card? Pay your ${dep}% deposit online${amtNote} ($${depDollars.toLocaleString()}): ${payUrl}`;
+          const label = invoiceData.bookingId ? '📄 View Invoice &amp; Pay Online' : `💳 Pay ${dep}% Deposit Online ($${depDollars.toLocaleString()})`;
+          payBtnHtml = `<div style="text-align:center;margin:28px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:bold;display:inline-block">${label}</a>${sc ? `<div style="font-size:11px;color:#6b7280;margin-top:6px">Includes a ${sc}% card processing fee</div>` : ''}</div>`;
+          payLineText = invoiceData.bookingId
+            ? `\n\nView your invoice and pay your ${dep}% deposit online${amtNote} ($${depDollars.toLocaleString()}): ${payUrl}`
+            : `\n\nPrefer to pay by card? Pay your ${dep}% deposit online${amtNote} ($${depDollars.toLocaleString()}): ${payUrl}`;
         }
       } catch (e) { console.error('invoice pay-link embed skipped:', e.message); }
 
@@ -299,9 +310,19 @@ function buildInvoicePDF(data) {
       String(remit).split('\n').forEach(function (ln) { doc.font('Helvetica').fontSize(9).fillColor(DARK).text(ln, col1, yc); yc += 11; });
     }
     yc += 4;
-    doc.font('Helvetica').fontSize(8).fillColor(GRAY)
-       .text('Also: Zelle 2020shine@gmail.com  |  Venmo @Shine-Thankappan  |  PayPal shine_e_thankappan@yahoo.com  |  Cash',
-             col1, yc, { width: colW });
+    var alsoLine = 'Also: Zelle 2020shine@gmail.com  |  Venmo @Shine-Thankappan  |  PayPal shine_e_thankappan@yahoo.com  |  Cash';
+    doc.font('Helvetica').fontSize(8).fillColor(GRAY).text(alsoLine, col1, yc, { width: colW });
+
+    // Clickable "pay by card online" link — only when this PDF is tied to a real
+    // booking (invoice-view.html needs a bookingId to look up live payment status).
+    // Previously this option only existed in the emailed HTML button, never in the
+    // PDF itself, so a client who only had the attachment had no card option at all.
+    if (data.bookingId) {
+      yc += doc.heightOfString(alsoLine, { width: colW, fontSize: 8 }) + 8;
+      var payUrl = 'https://shine-booking.vercel.app/invoice-view.html?bid=' + encodeURIComponent(data.bookingId) + '&d=' + encodeURIComponent(JSON.stringify(data));
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#1a7f5a').text('Pay by card online (view invoice)', col1, yc, { width: colW });
+      doc.link(col1, yc, colW, 11, payUrl);
+    }
 
     // Col 2 — Payment Terms (full payment vs deposit + balance)
     doc.font('Helvetica').fontSize(9).fillColor(DARK);

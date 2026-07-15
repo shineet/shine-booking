@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Invoice — Shine, The Mentalist</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#141210;color:#1a1a2e;font-family:"Montserrat","Avenir Next","Segoe UI",Helvetica,Arial,sans-serif;
+    min-height:100vh;padding:32px 16px;display:flex;justify-content:center}
+  .wrap{max-width:640px;width:100%}
+  .brand{text-align:center;margin-bottom:20px}
+  .brand img{width:48px;height:48px;margin-bottom:8px}
+  .brand h1{font-family:"Playfair Display",Georgia,serif;color:#f4efe6;font-size:20px;font-weight:600}
+  .brand a{color:#c9a24a;font-size:12px;text-decoration:none}
+  .card{background:#fff;border-radius:12px;padding:32px;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+  .top-row{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #B8960C;padding-bottom:14px;margin-bottom:20px}
+  .top-row h2{font-size:22px;color:#1a1a2e}
+  .top-row .gold{color:#B8960C;font-size:26px;font-weight:700;letter-spacing:1px}
+  .meta{display:flex;justify-content:space-between;gap:20px;margin-bottom:20px;font-size:13px}
+  .meta .label{color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+  .meta .block{flex:1}
+  .section-label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#6b7280;margin:18px 0 8px}
+  .event-rows div{display:flex;justify-content:space-between;padding:8px 10px;font-size:13px;border-bottom:1px solid #f0f0f0}
+  .event-rows div span:first-child{color:#6b7280;font-weight:600}
+  table.items{width:100%;border-collapse:collapse;font-size:13px}
+  table.items th{background:#1a1a2e;color:#fff;text-align:left;padding:8px 10px;font-size:11px;text-transform:uppercase}
+  table.items th:last-child, table.items td:last-child{text-align:right}
+  table.items td{padding:9px 10px;border-bottom:1px solid #f0f0f0}
+  .total-row{display:flex;justify-content:space-between;align-items:center;border:1.5px solid #B8960C;border-radius:6px;padding:12px 16px;margin-top:14px}
+  .total-row .amt{color:#B8960C;font-size:18px;font-weight:700}
+  .dep-note{font-size:12px;color:#6b7280;margin-top:8px}
+  .pay-methods{font-size:12px;color:#4b5563;line-height:1.7;margin-top:6px}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
+  button{font-family:inherit;font-size:14px;font-weight:700;padding:13px 24px;border-radius:8px;border:none;cursor:pointer}
+  .btn-pay{background:#1a7f5a;color:#fff;flex:1;min-width:220px}
+  .btn-pay:disabled{opacity:.6;cursor:default}
+  .btn-dl{background:#f3f4f6;color:#1a1a2e;border:1px solid #d1d5db}
+  .paid-banner{background:rgba(26,127,90,.1);border:1px solid rgba(26,127,90,.3);color:#1a7f5a;padding:14px 16px;border-radius:8px;font-weight:700;text-align:center;font-size:14px}
+  .err{color:#e05252;text-align:center;padding:20px}
+  .footer-note{text-align:center;color:#a99f8e;font-size:12px;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <img src="/icons/logo.png" alt="Shine, The Mentalist">
+    <h1>Shine, The Mentalist</h1>
+    <a href="https://texasmentalist.com">texasmentalist.com</a>
+  </div>
+  <div class="card" id="card">
+    <div class="err" id="err" style="display:none"></div>
+    <div id="content" style="display:none">
+      <div class="top-row">
+        <h2 id="bill-to">—</h2>
+        <div class="gold">INVOICE</div>
+      </div>
+      <div class="meta">
+        <div class="block"><div class="label">Invoice #</div><div id="m-number">—</div></div>
+        <div class="block"><div class="label">Invoice Date</div><div id="m-date">—</div></div>
+        <div class="block"><div class="label">Due Date</div><div id="m-due">—</div></div>
+      </div>
+      <div class="section-label">Event Details</div>
+      <div class="event-rows" id="event-rows"></div>
+      <div class="section-label">Services</div>
+      <table class="items">
+        <thead><tr><th>Description</th><th>Details</th><th>Amount</th></tr></thead>
+        <tbody id="items-body"></tbody>
+      </table>
+      <div class="total-row"><span>TOTAL</span><span class="amt" id="m-total">$0</span></div>
+      <div class="dep-note" id="dep-note"></div>
+      <div class="section-label">Payment Methods</div>
+      <div class="pay-methods">Zelle 2020shine@gmail.com &nbsp;|&nbsp; Venmo @Shine-Thankappan &nbsp;|&nbsp; PayPal shine_e_thankappan@yahoo.com &nbsp;|&nbsp; Cash &nbsp;|&nbsp; Check (mail-to on PDF)</div>
+      <div class="actions">
+        <div id="pay-section" style="display:none;flex:1;min-width:220px">
+          <button class="btn-pay" id="pay-btn"></button>
+        </div>
+        <button class="btn-dl" id="dl-btn" onclick="downloadPdf()">Download PDF</button>
+      </div>
+    </div>
+  </div>
+  <div class="footer-note">Shine, The Mentalist &middot; (737) 271-5308 &middot; 2020shine@gmail.com</div>
+</div>
+<script>
+const qs  = new URLSearchParams(location.search);
+const bid = qs.get('bid');
+let invoiceData = null;
+try { invoiceData = JSON.parse(qs.get('d') || 'null'); } catch(e) { invoiceData = null; }
+let booking = null;
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+function showError(msg) {
+  document.getElementById('err').textContent = msg;
+  document.getElementById('err').style.display = 'block';
+  document.getElementById('content').style.display = 'none';
+}
+
+async function load() {
+  if (!bid) { showError('This invoice link is missing its reference — please ask Shine to resend it.'); return; }
+  try {
+    const r = await fetch('/api/get-booking?bid=' + encodeURIComponent(bid) + '&mode=invoice');
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    booking = d;
+  } catch (e) {
+    showError('Could not load this invoice. Please contact Shine directly at 2020shine@gmail.com.');
+    return;
+  }
+
+  if (!invoiceData) {
+    invoiceData = {
+      clientName: booking.clientName || '', clientCompany: booking.clientName || '',
+      invoiceNumber: '', invoiceDate: '', dueDate: '',
+      eventName: booking.eventTitle || '', eventDate: fmtDate(booking.eventDate),
+      venue: booking.venueAddress || '',
+      depositPercent: 50, cardSurchargePercent: 0,
+      lineItems: booking.fee ? [{ description: 'Performance Fee', details: booking.eventTitle || '', amount: booking.fee }] : [],
+      total: booking.fee || 0
+    };
+  }
+  render();
+}
+
+function render() {
+  document.getElementById('content').style.display = 'block';
+  document.getElementById('bill-to').textContent = invoiceData.clientCompany || invoiceData.clientName || booking.clientName || 'Client';
+  document.getElementById('m-number').textContent = invoiceData.invoiceNumber || '—';
+  document.getElementById('m-date').textContent   = invoiceData.invoiceDate || '—';
+  document.getElementById('m-due').textContent    = invoiceData.dueDate || '—';
+
+  const rows = [
+    ['Event', invoiceData.eventName],
+    ['Date', invoiceData.eventDate],
+    ['Venue', invoiceData.venue],
+    ['Guests', invoiceData.guests]
+  ].filter(r => r[1]);
+  document.getElementById('event-rows').innerHTML = rows.map(r =>
+    '<div><span>' + r[0] + '</span><span>' + r[1] + '</span></div>').join('');
+
+  const items = (invoiceData.lineItems || []).filter(i => i.description || i.amount);
+  document.getElementById('items-body').innerHTML = items.map(i =>
+    '<tr><td>' + (i.description || '') + '</td><td>' + (i.details || '') + '</td><td>$' + Number(i.amount || 0).toLocaleString() + '</td></tr>'
+  ).join('') || '<tr><td colspan="3" style="color:#6b7280">No line items</td></tr>';
+
+  const total = Number(invoiceData.total) || items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  document.getElementById('m-total').textContent = '$' + total.toLocaleString();
+
+  const dep = invoiceData.depositPercent || 50;
+  const sc  = Number(invoiceData.cardSurchargePercent) || 0;
+  const baseDep = Math.round(total * dep / 100);
+  const depAmt  = sc ? Math.round(baseDep + baseDep * sc / 100) : baseDep;
+  document.getElementById('dep-note').textContent = dep >= 100
+    ? 'Full payment ($' + total.toLocaleString() + ') due on or before the event date.'
+    : dep + '% deposit ($' + baseDep.toLocaleString() + ') due to secure the date. Balance due on day of performance.';
+
+  const isPaid = booking.depositPaid || booking.paidInFull;
+  const paySection = document.getElementById('pay-section');
+  if (isPaid) {
+    paySection.style.display = 'block';
+    paySection.innerHTML = '<div class="paid-banner">&#10003; Payment received — thank you!</div>';
+  } else if (total > 0) {
+    paySection.style.display = 'block';
+    const btn = document.getElementById('pay-btn');
+    btn.textContent = 'Pay ' + dep + '% Deposit Online ($' + depAmt.toLocaleString() + ')' + (sc ? ' incl. ' + sc + '% card fee' : '');
+    btn.onclick = payOnline;
+  }
+}
+
+async function payOnline() {
+  const btn = document.getElementById('pay-btn');
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = 'Redirecting…';
+  const total = Number(invoiceData.total) || 0;
+  const dep = invoiceData.depositPercent || 50;
+  const sc  = Number(invoiceData.cardSurchargePercent) || 0;
+  const baseDep = Math.round(total * dep / 100);
+  const amount  = sc ? Math.round(baseDep + baseDep * sc / 100) : baseDep;
+  try {
+    const r = await fetch('/api/stripe', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create', type: 'deposit', amountDollars: amount,
+        label: 'Deposit (' + dep + '%)' + (sc ? ' + ' + sc + '% card fee' : '') + ' — ' + (invoiceData.eventName || 'event'),
+        description: 'Shine, The Mentalist — ' + (invoiceData.eventName || 'event'),
+        clientEmail: booking.clientEmail || undefined,
+        bookingId: bid, clientId: booking.clientId || ''
+      })
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || 'Could not start payment.');
+    location.href = d.url;
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = orig;
+    alert('Error: ' + e.message);
+  }
+}
+
+async function downloadPdf() {
+  const btn = document.getElementById('dl-btn');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Preparing…';
+  try {
+    const r = await fetch('/api/invoice', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'generate', ...invoiceData, bookingId: bid })
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    const bytes = atob(d.pdf);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const blob = new Blob([arr], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = d.filename || 'invoice.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+
+load();
+</script>
+</body>
+</html>

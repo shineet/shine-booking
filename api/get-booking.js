@@ -163,6 +163,22 @@ export default async function handler(req, res) {
       return;
     }
 
+    // mode=invoice -> for invoice-view.html (stable client-facing invoice/pay link)
+    if (mode === 'invoice') {
+      res.status(200).json({
+        clientId: booking.client_id,
+        clientEmail: booking.client_email,
+        clientName: booking.client_name,
+        fee: booking.fee,
+        depositPaid: !!booking.deposit_paid,
+        paidInFull: !!booking.paid_in_full,
+        eventDate: booking.event_date,
+        eventTitle: booking.event_title,
+        venueAddress: booking.venue_address
+      });
+      return;
+    }
+
     // mode=answers -> for dashboard "View answers" modal
     if (mode === 'answers') {
       res.status(200).json({

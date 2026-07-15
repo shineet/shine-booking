@@ -698,6 +698,18 @@ td { padding: 9px 14px; vertical-align: middle; }
       </div>
     </div>
 
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px">
+      <p style="margin:0 0 10px;font-size:12px;font-weight:600;color:var(--muted)">🔗 Stable invoice link (never expires — always shows the current amount &amp; payment status)</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="secondary" onclick="buildStableInvoiceLink()">Get link</button>
+        <span id="stable-link-status" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="stable-link-result" style="display:none;margin-top:12px">
+        <input type="text" id="stable-link-url" readonly onclick="this.select()" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:8px">
+        <button class="secondary" onclick="copyStableLink()">Copy link</button>
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button class="secondary" onclick="closeModal('invoice-modal')">Cancel</button>
       <button class="secondary" onclick="downloadInvoice()">Download PDF</button>
@@ -2268,8 +2280,34 @@ async function sendInvoiceEmail() {
     const msg = document.getElementById('invoiceStatusMsg');
     msg.textContent = 'Invoice sent to ' + toEmail;
     msg.style.display = 'block';
+    buildStableInvoiceLink(); // surface the same never-expiring link here too, so it's on hand without digging through email
   } catch(err) { alert('Failed to send invoice: ' + err.message); }
   finally { btn.textContent = orig; btn.disabled = false; }
+}
+
+// Stable, never-expiring link to invoice-view.html — carries the full invoice
+// payload in its URL and creates a fresh Stripe session at click time, so unlike
+// the raw Stripe links above it never goes stale and can be re-grabbed here any
+// time without having to resend the whole email.
+function buildStableInvoiceLink() {
+  if (!invoicePayCtx.bookingId) {
+    document.getElementById('stable-link-status').textContent = 'Open this from an Upcoming gig card first — needs a booking to link to.';
+    return;
+  }
+  var payload = buildInvoicePayload();
+  var url = 'https://shine-booking.vercel.app/invoice-view.html?bid=' + encodeURIComponent(invoicePayCtx.bookingId) +
+            '&d=' + encodeURIComponent(JSON.stringify(payload));
+  document.getElementById('stable-link-url').value = url;
+  document.getElementById('stable-link-result').style.display = 'block';
+  document.getElementById('stable-link-status').textContent = '';
+}
+
+function copyStableLink() {
+  var el = document.getElementById('stable-link-url');
+  el.select();
+  navigator.clipboard.writeText(el.value).then(function(){
+    document.getElementById('stable-link-status').textContent = 'Link copied!';
+  }, function(){ /* fallback: it's already selected for manual copy */ });
 }
 </script>
 </body>
