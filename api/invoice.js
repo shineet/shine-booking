@@ -310,15 +310,33 @@ function buildInvoicePDF(data) {
       String(remit).split('\n').forEach(function (ln) { doc.font('Helvetica').fontSize(9).fillColor(DARK).text(ln, col1, yc); yc += 11; });
     }
     yc += 4;
-    var alsoLine = 'Also: Zelle 2020shine@gmail.com  |  Venmo @Shine-Thankappan  |  PayPal shine_e_thankappan@yahoo.com  |  Cash';
-    doc.font('Helvetica').fontSize(8).fillColor(GRAY).text(alsoLine, col1, yc, { width: colW });
+    doc.font('Helvetica').fontSize(8).fillColor(GRAY).text('Also: Zelle 2020shine@gmail.com  |  Cash', col1, yc, { width: colW });
+    yc += 12;
+
+    // Venmo/PayPal as clickable links (they're manual, no-fee-to-Shine transfers,
+    // so they link to the plain deposit amount, not the Stripe-surcharge-inflated
+    // one below). Zelle/Cash have no equivalent deep-link format, so stay as text.
+    var depAmtRaw = Math.round((data.total || 0) * dep / 100);
+    var payDue = fullPay ? Math.round(data.total || 0) : depAmtRaw;
+    var venmoUrl  = 'https://venmo.com/Shine-Thankappan?txn=pay&amount=' + payDue + '&note=' + encodeURIComponent('Deposit — ' + (data.eventName || 'event'));
+    var paypalUrl = 'https://paypal.me/ShineT/' + payDue;
+    var venmoText = 'Venmo @Shine-Thankappan';
+    var venmoH = doc.heightOfString(venmoText, { width: colW, fontSize: 8 });
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#1a7f5a').text(venmoText, col1, yc, { width: colW });
+    doc.link(col1, yc, colW, venmoH, venmoUrl);
+    yc += venmoH + 2;
+    var paypalText = 'PayPal shine_e_thankappan@yahoo.com';
+    var paypalH = doc.heightOfString(paypalText, { width: colW, fontSize: 8 });
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#1a7f5a').text(paypalText, col1, yc, { width: colW });
+    doc.link(col1, yc, colW, paypalH, paypalUrl);
+    yc += paypalH + 2;
 
     // Clickable "pay by card online" link — only when this PDF is tied to a real
     // booking (invoice-view.html needs a bookingId to look up live payment status).
     // Previously this option only existed in the emailed HTML button, never in the
     // PDF itself, so a client who only had the attachment had no card option at all.
     if (data.bookingId) {
-      yc += doc.heightOfString(alsoLine, { width: colW, fontSize: 8 }) + 8;
+      yc += 4;
       var payUrl = 'https://shine-booking.vercel.app/invoice-view.html?bid=' + encodeURIComponent(data.bookingId) + '&d=' + encodeURIComponent(JSON.stringify(data));
       doc.font('Helvetica-Bold').fontSize(8).fillColor('#1a7f5a').text('Pay by card online (view invoice)', col1, yc, { width: colW });
       doc.link(col1, yc, colW, 11, payUrl);
