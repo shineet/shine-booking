@@ -167,7 +167,7 @@ button.success { background: #1a3a28; color: #6ee0a4; border: 1px solid #2a5a38;
 /* ── KPI row ── */
 .kpi-row {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -183,6 +183,7 @@ button.success { background: #1a3a28; color: #6ee0a4; border: 1px solid #2a5a38;
 .kpi .value.green { color: var(--green); }
 .kpi .value.purple { color: var(--accent); }
 .kpi .value.blue { color: var(--accent2); }
+.kpi .value.amber { color: var(--amber); }
 
 /* ── Year strip ── */
 .year-strip { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -468,6 +469,7 @@ td { padding: 9px 14px; vertical-align: middle; }
   <!-- KPIs -->
   <div class="kpi-row">
     <div class="kpi"><div class="label">Total Revenue</div><div class="value green" id="kpi-total">—</div><div class="sub" id="kpi-gigs-sub">—</div></div>
+    <div class="kpi"><div class="label">Revenue in Pipeline</div><div class="value amber" id="kpi-pipeline">—</div><div class="sub" id="kpi-pipeline-sub">—</div></div>
     <div class="kpi"><div class="label">This Year (2026)</div><div class="value purple" id="kpi-year">—</div><div class="sub" id="kpi-year-sub">—</div></div>
     <div class="kpi"><div class="label">Avg Fee / Gig</div><div class="value blue" id="kpi-avg">—</div><div class="sub">paid gigs only</div></div>
     <div class="kpi"><div class="label">Top Source</div><div class="value" id="kpi-source" style="font-size:18px">—</div><div class="sub" id="kpi-source-sub">—</div></div>
@@ -1382,7 +1384,11 @@ function renderKPIs() {
     return t > b.t ? {g, t} : b;
   }, {g:null, t:0});
 
+  const pipeline = upcoming.reduce((s, u) => s + (Number(u.selected_price)||0), 0);
+
   document.getElementById('kpi-total').textContent    = fmt(total);
+  document.getElementById('kpi-pipeline').textContent = fmt(pipeline);
+  document.getElementById('kpi-pipeline-sub').textContent = `${upcoming.length} upcoming gig${upcoming.length===1?'':'s'}`;
   document.getElementById('kpi-gigs-sub').textContent = `${allGigs.length} total gigs`;
   document.getElementById('kpi-year').textContent     = fmt(yrRev);
   document.getElementById('kpi-year-sub').textContent = `${yr.length} gigs in 2026`;
