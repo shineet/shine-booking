@@ -81,7 +81,7 @@
       <div class="dep-note" id="dep-note"></div>
       <div class="section-label">Payment</div>
       <div id="pay-section" style="display:none">
-        <div class="tip-row">
+        <div class="tip-row" id="tip-row">
           <label for="tip-input">Add a tip (optional, applies to any method below)</label>
           <span>$</span>
           <input type="number" id="tip-input" min="0" step="1" placeholder="0">
@@ -171,47 +171,66 @@ function render() {
   const dep = invoiceData.depositPercent || 50;
   const sc  = Number(invoiceData.cardSurchargePercent) || 0;
   const baseDep = Math.round(total * dep / 100);
-  const depAmt  = sc ? Math.round(baseDep + baseDep * sc / 100) : baseDep;
   document.getElementById('dep-note').textContent = dep >= 100
     ? 'Full payment ($' + total.toLocaleString() + ') due on or before the event date.'
     : dep + '% deposit ($' + baseDep.toLocaleString() + ') due to secure the date. Balance due on day of performance.';
 
-  const isPaid = booking.depositPaid || booking.paidInFull;
+  // Three states: nothing paid yet (deposit-only invoices collect just the
+  // deposit, full-payment invoices collect everything up front), deposit already
+  // paid (collect the remaining balance), or fully paid (nothing left to collect).
+  // Tip only makes sense on the LAST payment before/at the event — never on the
+  // upfront deposit — so it's hidden in 'deposit' mode and shown for 'balance'/'full'.
+  let mode, amountDueNow;
+  if (booking.paidInFull) {
+    mode = 'paidInFull';
+  } else if (booking.depositPaid) {
+    mode = 'balance';
+    amountDueNow = Math.max(0, total - (Number(booking.paymentAmount) || baseDep));
+  } else if (dep >= 100) {
+    mode = 'full';
+    amountDueNow = total;
+  } else {
+    mode = 'deposit';
+    amountDueNow = baseDep;
+  }
+
   const paySection = document.getElementById('pay-section');
-  if (isPaid) {
+  if (mode === 'paidInFull') {
     paySection.style.display = 'block';
-    paySection.innerHTML = '<div class="paid-banner">&#10003; Payment received — thank you!</div>';
-  } else if (total > 0) {
+    paySection.innerHTML = '<div class="paid-banner">&#10003; Payment received in full — thank you!</div>';
+  } else if (amountDueNow > 0) {
     paySection.style.display = 'block';
-    document.getElementById('tip-input').oninput = updatePaymentUI;
-    updatePaymentUI();
-    document.getElementById('pay-btn').onclick = payOnline;
+    if (mode === 'balance') {
+      paySection.insertAdjacentHTML('afterbegin', '<div class="paid-banner" style="margin-bottom:14px">&#10003; Deposit received — $' + amountDueNow.toLocaleString() + ' balance remaining</div>');
+    }
+    document.getElementById('tip-row').style.display = (mode === 'deposit') ? 'none' : 'flex';
+    document.getElementById('tip-input').oninput = () => updatePaymentUI(mode, amountDueNow);
+    updatePaymentUI(mode, amountDueNow);
+    document.getElementById('pay-btn').onclick = () => payOnline(mode, amountDueNow);
   }
 }
 
 // The tip (if any) applies the same way no matter which method the client picks,
 // so Stripe/Venmo/PayPal all recompute together off one shared amount. Venmo/PayPal
 // are manual, no-fee-to-Shine transfers, so the card surcharge only inflates the
-// Stripe amount, never theirs.
-function computeChargeAmount() {
-  const total = Number(invoiceData.total) || 0;
-  const dep   = invoiceData.depositPercent || 50;
-  const sc    = Number(invoiceData.cardSurchargePercent) || 0;
-  const baseDep = Math.round(total * dep / 100);
-  const tip = Math.max(0, Number(document.getElementById('tip-input').value) || 0);
-  const plainDue = (dep >= 100 ? total : baseDep) + tip;
+// Stripe amount, never theirs. Tip is forced to 0 in 'deposit' mode since the field
+// is hidden there — it only applies to a balance/full payment.
+function computeChargeAmount(mode, amountDueNow) {
+  const sc  = Number(invoiceData.cardSurchargePercent) || 0;
+  const tip = mode === 'deposit' ? 0 : Math.max(0, Number(document.getElementById('tip-input').value) || 0);
+  const plainDue = amountDueNow + tip;
   const stripeAmount = sc ? Math.round(plainDue + plainDue * sc / 100) : plainDue;
-  return { dep, sc, tip, plainDue, stripeAmount };
+  return { sc, tip, plainDue, stripeAmount };
 }
 
-function updatePaymentUI() {
-  const { dep, sc, tip, plainDue, stripeAmount } = computeChargeAmount();
-  const depLabel = dep >= 100 ? 'Full Payment' : dep + '% Deposit';
+function updatePaymentUI(mode, amountDueNow) {
+  const { sc, tip, plainDue, stripeAmount } = computeChargeAmount(mode, amountDueNow);
+  const modeLabel = mode === 'balance' ? 'Remaining Balance' : (mode === 'full' ? 'Full Payment' : (invoiceData.depositPercent || 50) + '% Deposit');
 
   const btn = document.getElementById('pay-btn');
-  btn.textContent = 'Pay ' + depLabel + (tip ? ' + Tip' : '') + ' Online ($' + stripeAmount.toLocaleString() + ')' + (sc ? ' incl. ' + sc + '% card fee' : '');
+  btn.textContent = 'Pay ' + modeLabel + (tip ? ' + Tip' : '') + ' Online ($' + stripeAmount.toLocaleString() + ')' + (sc ? ' incl. ' + sc + '% card fee' : '');
 
-  const note = encodeURIComponent('Deposit — ' + (invoiceData.eventName || 'event'));
+  const note = encodeURIComponent((mode === 'balance' ? 'Balance' : mode === 'full' ? 'Payment' : 'Deposit') + ' — ' + (invoiceData.eventName || 'event'));
   const venmoBtn = document.getElementById('venmo-btn');
   venmoBtn.href = 'https://venmo.com/Shine-Thankappan?txn=pay&amount=' + plainDue + '&note=' + note;
   venmoBtn.textContent = 'Pay $' + plainDue.toLocaleString() + ' with Venmo';
@@ -221,18 +240,22 @@ function updatePaymentUI() {
   paypalBtn.textContent = 'Pay $' + plainDue.toLocaleString() + ' with PayPal';
 }
 
-async function payOnline() {
+async function payOnline(mode, amountDueNow) {
   const btn = document.getElementById('pay-btn');
   btn.disabled = true;
   const orig = btn.textContent;
   btn.textContent = 'Redirecting…';
-  const { dep, sc, tip, stripeAmount } = computeChargeAmount();
+  const { sc, tip, stripeAmount } = computeChargeAmount(mode, amountDueNow);
+  const modeLabel = mode === 'balance' ? 'Remaining balance' : (mode === 'full' ? 'Full payment' : (invoiceData.depositPercent || 50) + '% deposit');
   try {
     const r = await fetch('/api/stripe', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'create', type: 'deposit', amountDollars: stripeAmount,
-        label: 'Deposit (' + dep + '%)' + (tip ? ' + $' + tip + ' tip' : '') + (sc ? ' + ' + sc + '% card fee' : '') + ' — ' + (invoiceData.eventName || 'event'),
+        // Deposit-only payments still leave a balance due, so they mark deposit_paid;
+        // paying off the balance or a full-payment invoice settles everything, so
+        // both use type:'full' to also flag the booking paid_in_full.
+        action: 'create', type: mode === 'deposit' ? 'deposit' : 'full', amountDollars: stripeAmount,
+        label: modeLabel + (tip ? ' + $' + tip + ' tip' : '') + (sc ? ' + ' + sc + '% card fee' : '') + ' — ' + (invoiceData.eventName || 'event'),
         description: 'Shine, The Mentalist — ' + (invoiceData.eventName || 'event'),
         clientEmail: booking.clientEmail || undefined,
         bookingId: bid, clientId: booking.clientId || ''

@@ -172,6 +172,7 @@ export default async function handler(req, res) {
         fee: booking.fee,
         depositPaid: !!booking.deposit_paid,
         paidInFull: !!booking.paid_in_full,
+        paymentAmount: booking.payment_amount || null,
         eventDate: booking.event_date,
         eventTitle: booking.event_title,
         venueAddress: booking.venue_address
