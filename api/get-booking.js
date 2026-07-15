@@ -22,6 +22,27 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
+  // ── TEMP: switch Dedrah Ginn to the new School/Education category (remove after use) ──
+  if (req.method === 'GET' && req.query.diag === 'ginn_setschool_9f2a71') {
+    const commit = req.query.commit === '1';
+    const CLIENT_ID = 'f97154ac-ad1d-4398-ba74-c8d5c6b0fa2d';
+    const BOOKING_ID = 'd31e950c-43bf-4b54-b5fe-0599ef4c3f65';
+    try {
+      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+      if (!commit) { res.status(200).json({ dryRun: true, willSet: 'School / Education Event' }); return; }
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${CLIENT_ID}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...sbHeaders },
+        body: JSON.stringify({ event_type: 'School / Education Event' })
+      });
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${BOOKING_ID}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', ...sbHeaders },
+        body: JSON.stringify({ event_type: 'School / Education Event' })
+      });
+      res.status(200).json({ committed: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+    return;
+  }
+
   // ── Dashboard auth + Supabase proxy (POST) ──────────────────────────────────
   if (req.method === 'POST') {
     let body = req.body;
