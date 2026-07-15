@@ -113,36 +113,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { bid, mode, diag } = req.query;
-    if (diag === 'dedrah_school_check_0715') {
-      const h = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?name=ilike.*dedrah*&select=id,name,email,booking_id,selected_category,contact_type,status`, { headers: h });
-      const clients = await cRes.json();
-      const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?client_name=ilike.*dedrah*&select=id,client_id,client_name,event_type,event_date,fee,status`, { headers: h });
-      const bookings = await bRes.json();
-      res.status(200).json({ clients, bookings });
-      return;
-    }
-    if (diag === 'fix_dedrah_school_0715') {
-      const h = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
-      if (req.query.commit !== '1') {
-        res.status(200).json({ dryRun: true, wouldSet: 'event_type=School / Education Event on booking d31e950c-43bf-4b54-b5fe-0599ef4c3f65' });
-        return;
-      }
-      const r3 = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.d31e950c-43bf-4b54-b5fe-0599ef4c3f65`, {
-        method: 'PATCH', headers: h, body: JSON.stringify({ event_type: 'School / Education Event' })
-      });
-      const rows3 = await r3.json();
-      res.status(200).json({ committed: true, rows3 });
-      return;
-    }
-    if (diag === 'bid_direct_0715' && req.query.bid2) {
-      const h = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const r2 = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${req.query.bid2}&select=*`, { headers: h });
-      const rows2 = await r2.json();
-      res.status(200).json(rows2);
-      return;
-    }
+    const { bid, mode } = req.query;
     if (!bid) {
       res.status(400).json({ error: 'Missing booking id' });
       return;
