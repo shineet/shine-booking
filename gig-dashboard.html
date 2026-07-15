@@ -546,6 +546,7 @@ td { padding: 9px 14px; vertical-align: middle; }
       <button class="secondary" onclick="closeModal('detail-modal')">Close</button>
       <button class="secondary" onclick="downloadEventIcs()">📅 Add to Calendar</button>
       <button class="secondary" onclick="downloadContactVcf()">👤 Save Contact</button>
+      <button class="secondary" onclick="openPaymentReceived()">💰 Mark Payment Received</button>
       <button class="success" id="detail-done-btn" onclick="openMarkDone()">Mark as Done</button>
     </div>
   </div>
@@ -564,6 +565,43 @@ td { padding: 9px 14px; vertical-align: middle; }
     <div class="modal-actions">
       <button class="secondary" onclick="closeModal('done-modal')">Cancel</button>
       <button class="success" onclick="confirmDone()">Archive &amp; Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Mark Payment Received Modal (for Venmo/PayPal/Zelle/Cash paid outside Stripe) ── -->
+<div class="modal-overlay" id="payment-received-modal">
+  <div class="modal">
+    <h2>Mark Payment Received</h2>
+    <p style="margin:0 0 14px;font-size:12.5px;color:var(--muted);line-height:1.5">
+      Only needed when a client pays outside the app's online link (Venmo, PayPal, Zelle, cash, check) — Stripe payments are already tracked automatically.
+    </p>
+    <div id="pr-summary" style="margin-bottom:14px;font-size:13px;color:var(--muted)"></div>
+    <div class="form-group">
+      <label>Amount received ($)</label>
+      <input type="number" id="pr-amount" min="0" step="1" placeholder="0">
+    </div>
+    <div class="form-group">
+      <label>Method</label>
+      <select id="pr-method">
+        <option value="venmo">Venmo</option>
+        <option value="paypal">PayPal</option>
+        <option value="zelle">Zelle</option>
+        <option value="cash">Cash</option>
+        <option value="check">Check</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>This payment...</label>
+      <select id="pr-settles">
+        <option value="deposit">Is a deposit — balance still due</option>
+        <option value="full">Settles the full remaining balance</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('payment-received-modal')">Cancel</button>
+      <button class="success" onclick="confirmPaymentReceived()">Save</button>
     </div>
   </div>
 </div>
@@ -1366,6 +1404,55 @@ async function confirmDone() {
     if (c.booking_id) await sbPatch('bookings', c.booking_id, { status: 'completed' });
 
     closeModal('done-modal');
+    activeClient = null;
+    await loadAll();
+  } catch (err) {
+    console.error(err);
+    setSyncState('error', 'Save failed — check console');
+    alert('Could not save. Error: ' + err.message);
+  }
+}
+
+// ── Mark Payment Received (manual — Venmo/PayPal/Zelle/cash paid outside Stripe) ──
+// Stripe payments already set deposit_paid/paid_in_full/payment_amount via the
+// webhook automatically; this does the same thing by hand for anything that
+// doesn't go through Stripe, so invoice-view.html's balance-due tracking (and the
+// rest of the app) reflects reality either way.
+function openPaymentReceived() {
+  if (!activeClient) return;
+  const c = activeClient;
+  const booking = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings;
+  const fee = Number(c.selected_price) || 0;
+  const alreadyPaid = Number(booking?.payment_amount) || 0;
+
+  document.getElementById('pr-summary').innerHTML = booking?.paid_in_full
+    ? `<strong>${esc(c.name)}</strong><br>Already marked paid in full.`
+    : `<strong>${esc(c.name)}</strong><br>Fee: $${fee.toLocaleString()}` +
+      (booking?.deposit_paid ? `<br>Already received: $${alreadyPaid.toLocaleString()} &middot; Balance remaining: $${Math.max(0, fee - alreadyPaid).toLocaleString()}` : '');
+  document.getElementById('pr-amount').value = '';
+  document.getElementById('pr-method').value = 'venmo';
+  document.getElementById('pr-settles').value = booking?.deposit_paid ? 'full' : 'deposit';
+  closeModal('detail-modal');
+  openModal('payment-received-modal');
+}
+
+async function confirmPaymentReceived() {
+  if (!activeClient || !activeClient.booking_id) return;
+  const amount = Number(document.getElementById('pr-amount').value);
+  if (!amount || amount <= 0) { alert('Enter the amount received.'); return; }
+  const method = document.getElementById('pr-method').value;
+  const settlesFull = document.getElementById('pr-settles').value === 'full';
+
+  try {
+    setSyncState('syncing', 'Saving...');
+    await sbPatch('bookings', activeClient.booking_id, {
+      deposit_paid:   true,
+      paid_in_full:   settlesFull,
+      payment_amount: amount,
+      payment_type:   'manual:' + method,
+      paid_at:        new Date().toISOString()
+    });
+    closeModal('payment-received-modal');
     activeClient = null;
     await loadAll();
   } catch (err) {
