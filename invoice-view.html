@@ -75,6 +75,11 @@
       <div class="pay-methods">Zelle 2020shine@gmail.com &nbsp;|&nbsp; <a id="venmo-link" href="#" target="_blank" rel="noopener">Venmo</a> &nbsp;|&nbsp; <a id="paypal-link" href="#" target="_blank" rel="noopener">PayPal</a> &nbsp;|&nbsp; Cash &nbsp;|&nbsp; Check (mail-to on PDF)</div>
       <div class="actions">
         <div id="pay-section" style="display:none;flex:1;min-width:220px">
+          <div id="tip-row" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px;color:#4b5563">
+            <label for="tip-input">Add a tip (optional)</label>
+            <span>$</span>
+            <input type="number" id="tip-input" min="0" step="1" placeholder="0" style="width:70px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          </div>
           <button class="btn-pay" id="pay-btn"></button>
         </div>
         <button class="btn-dl" id="dl-btn" onclick="downloadPdf()">Download PDF</button>
@@ -172,10 +177,30 @@ function render() {
     paySection.innerHTML = '<div class="paid-banner">&#10003; Payment received — thank you!</div>';
   } else if (total > 0) {
     paySection.style.display = 'block';
-    const btn = document.getElementById('pay-btn');
-    btn.textContent = 'Pay ' + dep + '% Deposit Online ($' + depAmt.toLocaleString() + ')' + (sc ? ' incl. ' + sc + '% card fee' : '');
-    btn.onclick = payOnline;
+    document.getElementById('tip-input').oninput = updatePayButtonLabel;
+    updatePayButtonLabel();
+    document.getElementById('pay-btn').onclick = payOnline;
   }
+}
+
+// baseDep(+tip) is the actual amount Shine receives; sc (card surcharge) inflates
+// only what's charged through Stripe, same treatment whether or not a tip's added.
+function computeChargeAmount() {
+  const total = Number(invoiceData.total) || 0;
+  const dep   = invoiceData.depositPercent || 50;
+  const sc    = Number(invoiceData.cardSurchargePercent) || 0;
+  const baseDep = Math.round(total * dep / 100);
+  const tip = Math.max(0, Number(document.getElementById('tip-input').value) || 0);
+  const beforeFee = (dep >= 100 ? total : baseDep) + tip;
+  const amount = sc ? Math.round(beforeFee + beforeFee * sc / 100) : beforeFee;
+  return { dep, sc, tip, amount };
+}
+
+function updatePayButtonLabel() {
+  const { dep, sc, tip, amount } = computeChargeAmount();
+  const btn = document.getElementById('pay-btn');
+  const depLabel = dep >= 100 ? 'Full Payment' : dep + '% Deposit';
+  btn.textContent = 'Pay ' + depLabel + (tip ? ' + Tip' : '') + ' Online ($' + amount.toLocaleString() + ')' + (sc ? ' incl. ' + sc + '% card fee' : '');
 }
 
 async function payOnline() {
@@ -183,17 +208,13 @@ async function payOnline() {
   btn.disabled = true;
   const orig = btn.textContent;
   btn.textContent = 'Redirecting…';
-  const total = Number(invoiceData.total) || 0;
-  const dep = invoiceData.depositPercent || 50;
-  const sc  = Number(invoiceData.cardSurchargePercent) || 0;
-  const baseDep = Math.round(total * dep / 100);
-  const amount  = sc ? Math.round(baseDep + baseDep * sc / 100) : baseDep;
+  const { dep, sc, tip, amount } = computeChargeAmount();
   try {
     const r = await fetch('/api/stripe', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'create', type: 'deposit', amountDollars: amount,
-        label: 'Deposit (' + dep + '%)' + (sc ? ' + ' + sc + '% card fee' : '') + ' — ' + (invoiceData.eventName || 'event'),
+        label: 'Deposit (' + dep + '%)' + (tip ? ' + $' + tip + ' tip' : '') + (sc ? ' + ' + sc + '% card fee' : '') + ' — ' + (invoiceData.eventName || 'event'),
         description: 'Shine, The Mentalist — ' + (invoiceData.eventName || 'event'),
         clientEmail: booking.clientEmail || undefined,
         bookingId: bid, clientId: booking.clientId || ''
