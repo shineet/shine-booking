@@ -610,8 +610,8 @@
                 <strong style="display:block;margin-bottom:6px">Prefer to skip the card fee?</strong>
                 Pay your deposit fee-free with:<br>
                 &bull; Zelle — 2020shine@gmail.com<br>
-                &bull; Venmo — @Shine-Thankappan<br>
-                &bull; PayPal — shine_e_thankappan@yahoo.com<br>
+                &bull; <a id="venmo-alt-link" href="#" target="_blank" rel="noopener" style="color:#fff;text-decoration:underline">Venmo</a><br>
+                &bull; <a id="paypal-alt-link" href="#" target="_blank" rel="noopener" style="color:#fff;text-decoration:underline">PayPal</a><br>
                 <span style="opacity:.7">Then tap "Reserve now" above — I'll confirm your date as soon as it arrives.</span>
             </div>
         </div>
@@ -1046,6 +1046,8 @@
                 `Reserve now — pay later<span class="sub">Hold my date; I'll pay the deposit by invoice</span>`;
             // Surcharge mode: offer the fee-free alternatives.
             document.getElementById('pay-alternatives').style.display = sc ? 'block' : 'none';
+            document.getElementById('venmo-alt-link').href = 'https://venmo.com/Shine-Thankappan?txn=pay&amount=' + depAmt + '&note=' + encodeURIComponent('Deposit — ' + pickedLabel);
+            document.getElementById('paypal-alt-link').href = 'https://paypal.me/ShineT/' + depAmt;
         }
         document.getElementById('decision-page').style.display = 'block';
     }

@@ -320,12 +320,12 @@ function buildInvoicePDF(data) {
     var payDue = fullPay ? Math.round(data.total || 0) : depAmtRaw;
     var venmoUrl  = 'https://venmo.com/Shine-Thankappan?txn=pay&amount=' + payDue + '&note=' + encodeURIComponent('Deposit — ' + (data.eventName || 'event'));
     var paypalUrl = 'https://paypal.me/ShineT/' + payDue;
-    var venmoText = 'Venmo @Shine-Thankappan';
+    var venmoText = 'Venmo (tap to pay)';
     var venmoH = doc.heightOfString(venmoText, { width: colW, fontSize: 8 });
     doc.font('Helvetica-Bold').fontSize(8).fillColor('#1a7f5a').text(venmoText, col1, yc, { width: colW });
     doc.link(col1, yc, colW, venmoH, venmoUrl);
     yc += venmoH + 2;
-    var paypalText = 'PayPal shine_e_thankappan@yahoo.com';
+    var paypalText = 'PayPal (tap to pay)';
     var paypalH = doc.heightOfString(paypalText, { width: colW, fontSize: 8 });
     doc.font('Helvetica-Bold').fontSize(8).fillColor('#1a7f5a').text(paypalText, col1, yc, { width: colW });
     doc.link(col1, yc, colW, paypalH, paypalUrl);

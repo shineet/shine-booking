@@ -310,8 +310,17 @@ function buildInvoicePDF(data) {
     doc.addPage();
     doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Payment Methods',50,60);
     doc.font('Helvetica').fontSize(11).fillColor(DARK)
-       .text('Zelle: 2020shine@gmail.com',50,85).text('Venmo: @Shine-Thankappan',50,102)
-       .text('PayPal: shine_e_thankappan@yahoo.com',50,119).text('Check payable to: Shine Thankappan',50,136).text('Cash also accepted',50,153);
+       .text('Zelle: 2020shine@gmail.com',50,85)
+       .text('Check payable to: Shine Thankappan',50,136).text('Cash also accepted',50,153);
+    // Venmo/PayPal as clickable links (deposit amount pre-filled) rather than
+    // showing the handle/email as plain text.
+    var depAmtRaw = Math.round((data.total||0)*dep/100);
+    var venmoUrl  = 'https://venmo.com/Shine-Thankappan?txn=pay&amount=' + depAmtRaw + '&note=' + encodeURIComponent('Deposit — ' + (data.eventName || 'event'));
+    var paypalUrl = 'https://paypal.me/ShineT/' + depAmtRaw;
+    doc.font('Helvetica-Bold').fillColor('#1a7f5a').text('Venmo (tap to pay)',50,102);
+    doc.link(50,102,200,14,venmoUrl);
+    doc.font('Helvetica-Bold').fillColor('#1a7f5a').text('PayPal (tap to pay)',50,119);
+    doc.link(50,119,200,14,paypalUrl);
     doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Payment Terms',50,185);
     doc.font('Helvetica').fontSize(11).fillColor(DARK).text(`${dep}% deposit due upon booking.`,50,205).text('Balance due on day of performance.',50,222).text('Cancellation policy per agreement.',50,239);
     doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Questions?',50,270);
