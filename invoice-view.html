@@ -30,15 +30,23 @@
   .total-row{display:flex;justify-content:space-between;align-items:center;border:1.5px solid #B8960C;border-radius:6px;padding:12px 16px;margin-top:14px}
   .total-row .amt{color:#B8960C;font-size:18px;font-weight:700}
   .dep-note{font-size:12px;color:#6b7280;margin-top:8px}
-  .pay-methods{font-size:12px;color:#4b5563;line-height:1.7;margin-top:6px}
-  .pay-methods a{color:#1a7f5a;font-weight:600;text-decoration:none}
-  .pay-methods a:hover{text-decoration:underline}
-  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
+  .tip-row{display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;color:#4b5563}
+  .tip-row input{width:70px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-family:inherit}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
   button{font-family:inherit;font-size:14px;font-weight:700;padding:13px 24px;border-radius:8px;border:none;cursor:pointer}
-  .btn-pay{background:#1a7f5a;color:#fff;flex:1;min-width:220px}
+  .btn-pay{background:#1a7f5a;color:#fff;width:100%}
   .btn-pay:disabled{opacity:.6;cursor:default}
   .btn-dl{background:#f3f4f6;color:#1a1a2e;border:1px solid #d1d5db}
   .paid-banner{background:rgba(26,127,90,.1);border:1px solid rgba(26,127,90,.3);color:#1a7f5a;padding:14px 16px;border-radius:8px;font-weight:700;text-align:center;font-size:14px}
+  .alt-divider{display:flex;align-items:center;gap:10px;margin:18px 0;color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.6px}
+  .alt-divider::before,.alt-divider::after{content:'';flex:1;height:1px;background:#e5e7eb}
+  .alt-methods{display:flex;gap:10px;flex-wrap:wrap}
+  .btn-alt{flex:1;min-width:160px;text-align:center;padding:12px 18px;border-radius:8px;font-weight:700;font-size:13.5px;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;border:1.5px solid;cursor:pointer;box-sizing:border-box}
+  .btn-venmo{color:#0074DE;border-color:#0074DE;background:#eaf4fd}
+  .btn-venmo:hover{background:#dcecfb}
+  .btn-paypal{color:#003087;border-color:#003087;background:#eaeef7}
+  .btn-paypal:hover{background:#dde4f2}
+  .manual-methods{font-size:12px;color:#6b7280;margin-top:16px;text-align:center}
   .err{color:#e05252;text-align:center;padding:20px}
   .footer-note{text-align:center;color:#a99f8e;font-size:12px;margin-top:18px}
 </style>
@@ -71,17 +79,22 @@
       </table>
       <div class="total-row"><span>TOTAL</span><span class="amt" id="m-total">$0</span></div>
       <div class="dep-note" id="dep-note"></div>
-      <div class="section-label">Payment Methods</div>
-      <div class="pay-methods">Zelle 2020shine@gmail.com &nbsp;|&nbsp; <a id="venmo-link" href="#" target="_blank" rel="noopener">Venmo</a> &nbsp;|&nbsp; <a id="paypal-link" href="#" target="_blank" rel="noopener">PayPal</a> &nbsp;|&nbsp; Cash &nbsp;|&nbsp; Check (mail-to on PDF)</div>
-      <div class="actions">
-        <div id="pay-section" style="display:none;flex:1;min-width:220px">
-          <div id="tip-row" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px;color:#4b5563">
-            <label for="tip-input">Add a tip (optional)</label>
-            <span>$</span>
-            <input type="number" id="tip-input" min="0" step="1" placeholder="0" style="width:70px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
-          </div>
-          <button class="btn-pay" id="pay-btn"></button>
+      <div class="section-label">Payment</div>
+      <div id="pay-section" style="display:none">
+        <div class="tip-row">
+          <label for="tip-input">Add a tip (optional, applies to any method below)</label>
+          <span>$</span>
+          <input type="number" id="tip-input" min="0" step="1" placeholder="0">
         </div>
+        <button class="btn-pay" id="pay-btn"></button>
+        <div class="alt-divider"><span>or use an alternate method</span></div>
+        <div class="alt-methods">
+          <a id="venmo-btn" class="btn-alt btn-venmo" href="#" target="_blank" rel="noopener"></a>
+          <a id="paypal-btn" class="btn-alt btn-paypal" href="#" target="_blank" rel="noopener"></a>
+        </div>
+        <div class="manual-methods">Also accepted: Zelle 2020shine@gmail.com &middot; Cash &middot; Check (mail-to on PDF)</div>
+      </div>
+      <div class="actions">
         <button class="btn-dl" id="dl-btn" onclick="downloadPdf()">Download PDF</button>
       </div>
     </div>
@@ -163,13 +176,6 @@ function render() {
     ? 'Full payment ($' + total.toLocaleString() + ') due on or before the event date.'
     : dep + '% deposit ($' + baseDep.toLocaleString() + ') due to secure the date. Balance due on day of performance.';
 
-  // Venmo/PayPal are manual, no-fee-to-Shine transfers — link to the plain deposit
-  // amount (baseDep), not the Stripe-card-surcharge-inflated depAmt above.
-  const payDue = dep >= 100 ? total : baseDep;
-  const note = encodeURIComponent('Deposit — ' + (invoiceData.eventName || 'event'));
-  document.getElementById('venmo-link').href = 'https://venmo.com/Shine-Thankappan?txn=pay&amount=' + payDue + '&note=' + note;
-  document.getElementById('paypal-link').href = 'https://paypal.me/ShineT/' + payDue;
-
   const isPaid = booking.depositPaid || booking.paidInFull;
   const paySection = document.getElementById('pay-section');
   if (isPaid) {
@@ -177,30 +183,42 @@ function render() {
     paySection.innerHTML = '<div class="paid-banner">&#10003; Payment received — thank you!</div>';
   } else if (total > 0) {
     paySection.style.display = 'block';
-    document.getElementById('tip-input').oninput = updatePayButtonLabel;
-    updatePayButtonLabel();
+    document.getElementById('tip-input').oninput = updatePaymentUI;
+    updatePaymentUI();
     document.getElementById('pay-btn').onclick = payOnline;
   }
 }
 
-// baseDep(+tip) is the actual amount Shine receives; sc (card surcharge) inflates
-// only what's charged through Stripe, same treatment whether or not a tip's added.
+// The tip (if any) applies the same way no matter which method the client picks,
+// so Stripe/Venmo/PayPal all recompute together off one shared amount. Venmo/PayPal
+// are manual, no-fee-to-Shine transfers, so the card surcharge only inflates the
+// Stripe amount, never theirs.
 function computeChargeAmount() {
   const total = Number(invoiceData.total) || 0;
   const dep   = invoiceData.depositPercent || 50;
   const sc    = Number(invoiceData.cardSurchargePercent) || 0;
   const baseDep = Math.round(total * dep / 100);
   const tip = Math.max(0, Number(document.getElementById('tip-input').value) || 0);
-  const beforeFee = (dep >= 100 ? total : baseDep) + tip;
-  const amount = sc ? Math.round(beforeFee + beforeFee * sc / 100) : beforeFee;
-  return { dep, sc, tip, amount };
+  const plainDue = (dep >= 100 ? total : baseDep) + tip;
+  const stripeAmount = sc ? Math.round(plainDue + plainDue * sc / 100) : plainDue;
+  return { dep, sc, tip, plainDue, stripeAmount };
 }
 
-function updatePayButtonLabel() {
-  const { dep, sc, tip, amount } = computeChargeAmount();
-  const btn = document.getElementById('pay-btn');
+function updatePaymentUI() {
+  const { dep, sc, tip, plainDue, stripeAmount } = computeChargeAmount();
   const depLabel = dep >= 100 ? 'Full Payment' : dep + '% Deposit';
-  btn.textContent = 'Pay ' + depLabel + (tip ? ' + Tip' : '') + ' Online ($' + amount.toLocaleString() + ')' + (sc ? ' incl. ' + sc + '% card fee' : '');
+
+  const btn = document.getElementById('pay-btn');
+  btn.textContent = 'Pay ' + depLabel + (tip ? ' + Tip' : '') + ' Online ($' + stripeAmount.toLocaleString() + ')' + (sc ? ' incl. ' + sc + '% card fee' : '');
+
+  const note = encodeURIComponent('Deposit — ' + (invoiceData.eventName || 'event'));
+  const venmoBtn = document.getElementById('venmo-btn');
+  venmoBtn.href = 'https://venmo.com/Shine-Thankappan?txn=pay&amount=' + plainDue + '&note=' + note;
+  venmoBtn.textContent = 'Pay $' + plainDue.toLocaleString() + ' with Venmo';
+
+  const paypalBtn = document.getElementById('paypal-btn');
+  paypalBtn.href = 'https://paypal.me/ShineT/' + plainDue;
+  paypalBtn.textContent = 'Pay $' + plainDue.toLocaleString() + ' with PayPal';
 }
 
 async function payOnline() {
@@ -208,12 +226,12 @@ async function payOnline() {
   btn.disabled = true;
   const orig = btn.textContent;
   btn.textContent = 'Redirecting…';
-  const { dep, sc, tip, amount } = computeChargeAmount();
+  const { dep, sc, tip, stripeAmount } = computeChargeAmount();
   try {
     const r = await fetch('/api/stripe', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'create', type: 'deposit', amountDollars: amount,
+        action: 'create', type: 'deposit', amountDollars: stripeAmount,
         label: 'Deposit (' + dep + '%)' + (tip ? ' + $' + tip + ' tip' : '') + (sc ? ' + ' + sc + '% card fee' : '') + ' — ' + (invoiceData.eventName || 'event'),
         description: 'Shine, The Mentalist — ' + (invoiceData.eventName || 'event'),
         clientEmail: booking.clientEmail || undefined,
