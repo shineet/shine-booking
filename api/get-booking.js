@@ -113,20 +113,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { bid, mode, diag } = req.query;
-    if (diag === 'fix_dedrah_school_0715b') {
-      const h = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
-      if (req.query.commit !== '1') {
-        res.status(200).json({ dryRun: true, wouldSet: 'event_type=School / Education Event on booking d31e950c-43bf-4b54-b5fe-0599ef4c3f65' });
-        return;
-      }
-      const r3 = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.d31e950c-43bf-4b54-b5fe-0599ef4c3f65`, {
-        method: 'PATCH', headers: h, body: JSON.stringify({ event_type: 'School / Education Event' })
-      });
-      const rows3 = await r3.json();
-      res.status(200).json({ committed: true, rows3 });
-      return;
-    }
+    const { bid, mode } = req.query;
     if (!bid) {
       res.status(400).json({ error: 'Missing booking id' });
       return;
