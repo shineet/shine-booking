@@ -2543,7 +2543,7 @@ function renderDetail(c) {
     }
     if (['package_selected','booked','intake_sent'].indexOf(c.status) !== -1) {
         var intakeLabel = c.status === 'package_selected' ? 'Send questionnaire' : 'Resend intake';
-        actions += '<button class="d-btn blue" onclick="sendIntakeForm(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.selected_category||'') + '\',' + (c.selected_price||0) + ')">' + intakeLabel + '</button>';
+        actions += '<button class="d-btn blue" onclick="sendIntakeForm(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\',\'' + esc(c.email||'') + '\',\'' + esc(c.event_type||c.selected_category||'') + '\',' + (c.selected_price||0) + ')">' + intakeLabel + '</button>';
     }
     if (['package_selected','booked','intake_sent','intake_completed','contract_sent'].indexOf(c.status) !== -1) {
         actions += '<button class="d-btn green" onclick="markAsBooked(\'' + esc(c.id) + '\')">Mark as booked (show on Gig Dashboard)</button>';
