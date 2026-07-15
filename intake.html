@@ -30,10 +30,10 @@
         padding: 20px 0 22px
     }
 
-    .header .star {
-        font-size: 30px;
+    .header .logo {
+        width: 64px;
+        height: 64px;
         margin-bottom: 12px;
-        display: inline-block;
         filter: drop-shadow(0 2px 6px rgba(103, 80, 164, 0.3))
     }
 
@@ -87,7 +87,12 @@
         margin-bottom: 0
     }
 
-    .field label {
+    /* Direct-child combinator, not a plain descendant selector: a bare ".field label"
+       also matched the radio-option <label> nested inside .radio-group (a grandchild of
+       .field), and its higher specificity (class+tag beats .radio-option's class alone)
+       silently forced display:block onto every radio row, breaking the flex layout that
+       sits the circle and its text side by side. */
+    .field > label {
         display: block;
         font-size: 16px;
         color: #202124;
@@ -353,7 +358,7 @@
 <body>
     <div class="page" id="main-page">
         <div class="header">
-            <div class="star">✦</div>
+            <img class="logo" src="/icons/logo.png" alt="Shine, The Mentalist">
             <h1 id="greeting-title">Event Details</h1>
             <p id="greeting-text">Loading your questionnaire...</p>
         </div>
