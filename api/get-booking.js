@@ -109,17 +109,17 @@ export default async function handler(req, res) {
         const msgs = await mRes.json();
         out.push({ client: { id: c.id, name: c.name, email: c.email, last_activity: c.last_activity }, messages: msgs });
       }
-      let resendEmails = [];
+      let resendRaw = null, resendStatus = null;
       try {
         const rr = await fetch('https://api.resend.com/emails?limit=100', {
           headers: { 'Authorization': `Bearer ${process.env.RESEND_KEY}` }
         });
-        const rd = await rr.json();
-        resendEmails = Array.isArray(rd.data) ? rd.data : (rd.data || []);
+        resendStatus = rr.status;
+        resendRaw = await rr.text();
       } catch (e) {
-        resendEmails = [{ error: e.message }];
+        resendRaw = 'fetch threw: ' + e.message;
       }
-      res.status(200).json({ out, resendEmails });
+      res.status(200).json({ out, resendStatus, resendRaw, hasResendKey: !!process.env.RESEND_KEY });
       return;
     }
 
