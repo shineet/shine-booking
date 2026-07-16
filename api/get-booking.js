@@ -95,6 +95,34 @@ export default async function handler(req, res) {
       return;
     }
 
+    // TEMP DIAGNOSTIC (remove after use) — checks a client's logged messages + real Resend delivery status
+    if (body.action === 'diag-mail-check' && body.token === 'c77babaf5258a6765d7a37420ea426dc') {
+      const h = {
+        'apikey': process.env.SUPABASE_SECRET_KEY,
+        'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+      };
+      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?name=ilike.*${encodeURIComponent(body.name || 'Melissa')}*`, { headers: h });
+      const clients = await cRes.json();
+      const out = [];
+      for (const c of clients) {
+        const mRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${c.id}&direction=eq.outbound&channel=eq.email&order=created_at.desc`, { headers: h });
+        const msgs = await mRes.json();
+        out.push({ client: { id: c.id, name: c.name, email: c.email, last_activity: c.last_activity }, messages: msgs });
+      }
+      let resendEmails = [];
+      try {
+        const rr = await fetch('https://api.resend.com/emails?limit=100', {
+          headers: { 'Authorization': `Bearer ${process.env.RESEND_KEY}` }
+        });
+        const rd = await rr.json();
+        resendEmails = Array.isArray(rd.data) ? rd.data : (rd.data || []);
+      } catch (e) {
+        resendEmails = [{ error: e.message }];
+      }
+      res.status(200).json({ out, resendEmails });
+      return;
+    }
+
     res.status(400).json({ error: 'Unknown action' });
     return;
   }
