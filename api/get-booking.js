@@ -95,6 +95,26 @@ export default async function handler(req, res) {
       return;
     }
 
+    // TEMP DIAGNOSTIC (remove after use) — read-only client + thread lookup by name
+    if (body.action === 'diag-client-thread' && body.token === 'c77babaf5258a6765d7a37420ea426dc') {
+      const h = {
+        'apikey': process.env.SUPABASE_SECRET_KEY,
+        'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+      };
+      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?name=ilike.*${encodeURIComponent(body.name || '')}*`, { headers: h });
+      const clients = await cRes.json();
+      const out = [];
+      for (const c of clients) {
+        const mRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${c.id}&order=created_at.asc`, { headers: h });
+        const msgs = await mRes.json();
+        const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?client_id=eq.${c.id}`, { headers: h });
+        const bookings = await bRes.json();
+        out.push({ client: c, messages: msgs, bookings });
+      }
+      res.status(200).json({ out });
+      return;
+    }
+
     res.status(400).json({ error: 'Unknown action' });
     return;
   }
