@@ -126,6 +126,20 @@ export default async function handler(req, res) {
       return;
     }
 
+    // TEMP DIAGNOSTIC (remove after use) — account-wide recent SMS status scan
+    if (body.action === 'diag-sms-health' && body.token === 'c77babaf5258a6765d7a37420ea426dc') {
+      const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+      const tr = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json?From=${encodeURIComponent(process.env.TWILIO_FROM)}&PageSize=100`, {
+        headers: { 'Authorization': `Basic ${twilioAuth}` }
+      });
+      const td = await tr.json();
+      const msgs = (td.messages || []).map(m => ({ date_sent: m.date_sent, to: m.to, status: m.status, error_code: m.error_code }));
+      const counts = {};
+      for (const m of msgs) counts[m.status] = (counts[m.status] || 0) + 1;
+      res.status(200).json({ total: msgs.length, counts, failedOrUndelivered: msgs.filter(m => m.status === 'failed' || m.status === 'undelivered') });
+      return;
+    }
+
     res.status(400).json({ error: 'Unknown action' });
     return;
   }
