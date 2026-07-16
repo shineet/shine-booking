@@ -33,11 +33,13 @@ export default async function handler(req, res) {
         const d = await r.json();
         if (d.status === 'failed' || d.error_code) throw new Error(d.message || 'SMS failed');
       } else if (channel === 'email' && toEmail) {
-        await fetch('https://api.resend.com/emails', {
+        const resendRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
           body: JSON.stringify({ from: 'Shine, The Mentalist <shine@texasmentalist.com>', to: toEmail, subject: subject || 'Message from Shine, The Mentalist', text: body })
         });
+        const resendData = await resendRes.json();
+        if (!resendData.id) throw new Error(resendData.message || 'Email failed to send');
       }
       if (clientId) {
         const now = new Date().toISOString();
@@ -49,7 +51,16 @@ export default async function handler(req, res) {
         await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
-          body: JSON.stringify({ client_id: clientId, channel, direction: 'outbound', content: body, status: 'sent', created_at: now })
+          body: JSON.stringify({
+            client_id: clientId,
+            channel,
+            direction: 'outbound',
+            content: body,
+            status: 'sent',
+            to_address: channel === 'email' ? toEmail : normalizePhone(toPhone),
+            email_subject: channel === 'email' ? (subject || null) : null,
+            created_at: now
+          })
         });
       }
       return res.status(200).json({ success: true });
