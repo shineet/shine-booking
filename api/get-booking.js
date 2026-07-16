@@ -95,17 +95,6 @@ export default async function handler(req, res) {
       return;
     }
 
-    // TEMP DIAGNOSTIC (remove after use) — read-only lookup by name for verification
-    if (body.action === 'diag-client-lookup' && body.token === 'c77babaf5258a6765d7a37420ea426dc') {
-      const h = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?name=ilike.*${encodeURIComponent(body.name || '')}*`, { headers: h });
-      const clients = await cRes.json();
-      const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?client_name=ilike.*${encodeURIComponent(body.name || '')}*`, { headers: h });
-      const bookings = await bRes.json();
-      res.status(200).json({ clients, bookings });
-      return;
-    }
-
     res.status(400).json({ error: 'Unknown action' });
     return;
   }
