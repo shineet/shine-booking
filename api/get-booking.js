@@ -95,6 +95,37 @@ export default async function handler(req, res) {
       return;
     }
 
+    // TEMP DIAGNOSTIC (remove after use) — hot-lead thread + real delivery-status pull
+    if (body.action === 'diag-hot-leads' && body.token === 'c77babaf5258a6765d7a37420ea426dc') {
+      const h = {
+        'apikey': process.env.SUPABASE_SECRET_KEY,
+        'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+      };
+      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?hot_lead=eq.true&order=last_activity.desc`, { headers: h });
+      const clients = await cRes.json();
+      const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+      const out = [];
+      for (const c of clients) {
+        const mRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${c.id}&order=created_at.asc`, { headers: h });
+        const msgs = await mRes.json();
+        let twilioMsgs = [];
+        if (c.phone) {
+          try {
+            const tr = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json?To=${encodeURIComponent(c.phone)}&PageSize=50`, {
+              headers: { 'Authorization': `Basic ${twilioAuth}` }
+            });
+            const td = await tr.json();
+            twilioMsgs = (td.messages || []).map(m => ({ date_sent: m.date_sent, status: m.status, error_code: m.error_code, error_message: m.error_message, body: (m.body || '').slice(0, 60) }));
+          } catch (e) {
+            twilioMsgs = [{ error: e.message }];
+          }
+        }
+        out.push({ client: c, messages: msgs, twilioMsgs });
+      }
+      res.status(200).json({ count: clients.length, out });
+      return;
+    }
+
     res.status(400).json({ error: 'Unknown action' });
     return;
   }
