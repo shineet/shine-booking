@@ -34,7 +34,7 @@ module.exports = async function handler(req, res) {
       const dep        = invoiceData.depositPercent || 50;
       const depAmt     = Math.round((invoiceData.total || 0) * dep / 100).toLocaleString();
       const body       = customMessage ||
-        `Please find your invoice attached for the ${invoiceData.eventName || 'upcoming event'}.\n\nA ${dep}% deposit ($${depAmt}) is required to secure your date. Payment details are on page 2 of the invoice.\n\nLooking forward to an unforgettable performance!`;
+        `Thank you so much for booking ${invoiceData.eventName || 'your event'} — I'm really looking forward to it!\n\nPlease find your invoice attached. A ${dep}% deposit ($${depAmt}) is required to secure your date.`;
 
       // Prefer a stable, never-expiring link (invoice-view.html) over a raw Stripe
       // Checkout URL — the old approach baked a one-time link straight into the email
@@ -60,10 +60,8 @@ module.exports = async function handler(req, res) {
           const amtNote = sc ? ` (includes a ${sc}% card processing fee)` : '';
           const label = invoiceData.bookingId ? '📄 View Invoice &amp; Pay Online' : `💳 Pay ${dep}% Deposit Online ($${depDollars.toLocaleString()})`;
           const altNote = 'Prefer check, Venmo, PayPal, or Zelle? Those details are in the attached invoice.';
-          payBtnHtml = `<div style="text-align:center;margin:28px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:bold;display:inline-block">${label}</a>${sc ? `<div style="font-size:11px;color:#6b7280;margin-top:6px">Includes a ${sc}% card processing fee</div>` : ''}<div style="font-size:12px;color:#6b7280;margin-top:8px">${altNote}</div></div>`;
-          payLineText = (invoiceData.bookingId
-            ? `\n\nView your invoice and pay your ${dep}% deposit online${amtNote} ($${depDollars.toLocaleString()}): ${payUrl}`
-            : `\n\nPrefer to pay by card? Pay your ${dep}% deposit online${amtNote} ($${depDollars.toLocaleString()}): ${payUrl}`) + `\n\n${altNote}`;
+          payBtnHtml = `<p style="margin:20px 0 4px">If you'd like to pay online, just click below:</p><div style="text-align:center;margin:12px 0 28px"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:bold;display:inline-block">${label}</a>${sc ? `<div style="font-size:11px;color:#6b7280;margin-top:6px">Includes a ${sc}% card processing fee</div>` : ''}<div style="font-size:15px;color:#374151;font-weight:600;margin-top:10px">${altNote}</div></div>`;
+          payLineText = `\n\nIf you'd like to pay online, just click below:\n${payUrl}${amtNote}\n\n${altNote}`;
         }
       } catch (e) { console.error('invoice pay-link embed skipped:', e.message); }
 
