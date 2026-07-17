@@ -189,8 +189,9 @@ module.exports = async function handler(req, res) {
       const depDollars = Math.round(payTotal * dep / 100);
       const payUrl     = await createStripeDepositLink(depDollars, `Deposit (${dep}%) — ${eventTitle || 'event'}`, clientEmail, resolvedBookingId);
       if (payUrl) {
-        payBtnHtml  = `<div style="text-align:center;margin:24px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:13px 30px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:bold;display:inline-block">💳 Pay ${dep}% Deposit Online ($${depDollars.toLocaleString()})</a></div>`;
-        payLineText = `\n\nPrefer to pay the deposit by card? ${payUrl}`;
+        const altNote = hasInvoice ? '<div style="font-size:12px;color:#6b7280;margin-top:8px">Prefer check, Venmo, PayPal, or Zelle? Those details are in the attached invoice.</div>' : '';
+        payBtnHtml  = `<div style="text-align:center;margin:24px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:13px 30px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:bold;display:inline-block">💳 Pay ${dep}% Deposit Online ($${depDollars.toLocaleString()})</a>${altNote}</div>`;
+        payLineText = `\n\nPrefer to pay the deposit by card? ${payUrl}` + (hasInvoice ? '\n\nPrefer check, Venmo, PayPal, or Zelle instead? Those details are in the attached invoice.' : '');
       }
     } catch (e) { console.error('contract pay-link embed skipped:', e.message); }
 

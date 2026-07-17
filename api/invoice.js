@@ -59,10 +59,11 @@ module.exports = async function handler(req, res) {
         if (payUrl) {
           const amtNote = sc ? ` (includes a ${sc}% card processing fee)` : '';
           const label = invoiceData.bookingId ? '📄 View Invoice &amp; Pay Online' : `💳 Pay ${dep}% Deposit Online ($${depDollars.toLocaleString()})`;
-          payBtnHtml = `<div style="text-align:center;margin:28px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:bold;display:inline-block">${label}</a>${sc ? `<div style="font-size:11px;color:#6b7280;margin-top:6px">Includes a ${sc}% card processing fee</div>` : ''}</div>`;
-          payLineText = invoiceData.bookingId
+          const altNote = 'Prefer check, Venmo, PayPal, or Zelle? Those details are in the attached invoice.';
+          payBtnHtml = `<div style="text-align:center;margin:28px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:bold;display:inline-block">${label}</a>${sc ? `<div style="font-size:11px;color:#6b7280;margin-top:6px">Includes a ${sc}% card processing fee</div>` : ''}<div style="font-size:12px;color:#6b7280;margin-top:8px">${altNote}</div></div>`;
+          payLineText = (invoiceData.bookingId
             ? `\n\nView your invoice and pay your ${dep}% deposit online${amtNote} ($${depDollars.toLocaleString()}): ${payUrl}`
-            : `\n\nPrefer to pay by card? Pay your ${dep}% deposit online${amtNote} ($${depDollars.toLocaleString()}): ${payUrl}`;
+            : `\n\nPrefer to pay by card? Pay your ${dep}% deposit online${amtNote} ($${depDollars.toLocaleString()}): ${payUrl}`) + `\n\n${altNote}`;
         }
       } catch (e) { console.error('invoice pay-link embed skipped:', e.message); }
 
