@@ -220,7 +220,7 @@ module.exports = async function handler(req, res) {
           <p>Looking forward to an unforgettable performance!</p>
           <p>– Shine</p>
           <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
-            Shine, The Mentalist &nbsp;|&nbsp; texasmentalist.com &nbsp;|&nbsp; 2020shine@gmail.com
+            Shine, The Mentalist &nbsp;|&nbsp; texasmentalist.com &nbsp;|&nbsp; shine@texasmentalist.com
           </div>
         </div>`,
       attachments,
@@ -324,7 +324,7 @@ function buildInvoicePDF(data) {
     doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Payment Terms',50,185);
     doc.font('Helvetica').fontSize(11).fillColor(DARK).text(`${dep}% deposit due upon booking.`,50,205).text('Balance due on day of performance.',50,222).text('Cancellation policy per agreement.',50,239);
     doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Questions?',50,270);
-    doc.font('Helvetica').fontSize(11).fillColor(DARK).text('texasmentalist.com',50,290).text('2020shine@gmail.com',50,307);
+    doc.font('Helvetica').fontSize(11).fillColor(DARK).text('texasmentalist.com',50,290).text('shine@texasmentalist.com',50,307);
     doc.font('Helvetica').fontSize(10).fillColor(GRAY).text('Thank you for choosing Shine, The Mentalist — looking forward to an unforgettable evening!',50,340,{align:'center',width:512});
     doc.moveTo(50,360).lineTo(562,360).lineWidth(1).strokeColor(GOLD).stroke();
     doc.end();

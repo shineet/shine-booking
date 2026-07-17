@@ -244,9 +244,14 @@ Rules:
     // Update Supabase — failure safe
     if (client) {
       try {
+        // Ordinary chat replies shouldn't regress a client that's already past
+        // the chatting stage (e.g. booked/intake_sent/contract_signed) back to
+        // 'chatting' -- only move status forward, never backward.
+        const STATUS_RANK = { new: 0, chatting: 1, pricing_requested: 1, pricing_sent: 2, package_selected: 3, booked: 4, intake_sent: 5, intake_completed: 6, contract_sent: 7, contract_signed: 8, completed: 9 };
         let newStatus = 'chatting';
         if (pricingRequested) newStatus = 'pricing_requested';
         if (bookingIntent) newStatus = 'booked';
+        if ((STATUS_RANK[newStatus] ?? 0) < (STATUS_RANK[client.status] ?? 0)) newStatus = client.status;
 
         await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
           method: 'PATCH',

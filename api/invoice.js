@@ -80,7 +80,7 @@ module.exports = async function handler(req, res) {
           ${body.split('\n').map(l => l ? `<p style="margin:6px 0">${l}</p>` : '<br>').join('')}
           ${payBtnHtml}
           <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
-            Shine, The Mentalist &nbsp;|&nbsp; texasmentalist.com &nbsp;|&nbsp; 2020shine@gmail.com
+            Shine, The Mentalist &nbsp;|&nbsp; texasmentalist.com &nbsp;|&nbsp; shine@texasmentalist.com
           </div></div>`,
         attachments: [{ filename, content: buf.toString('base64') }],
       });
@@ -356,7 +356,7 @@ function buildInvoicePDF(data) {
     // Col 3 — Questions
     doc.font('Helvetica').fontSize(9).fillColor(DARK)
        .text('texasmentalist.com',  col3,88)
-       .text('2020shine@gmail.com', col3,104)
+       .text('shine@texasmentalist.com', col3,104)
        .text('+1 (737) 271-5308',   col3,120);
 
     doc.font('Helvetica').fontSize(10).fillColor(GRAY)
