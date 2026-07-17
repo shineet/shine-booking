@@ -70,6 +70,7 @@ module.exports = async function handler(req, res) {
       await resend.emails.send({
         from:    'Shine, The Mentalist <shine@texasmentalist.com>',
         to:      [toEmail],
+        bcc:     ['shinethementalist@gmail.com'],
         subject: `Invoice – ${invoiceData.eventName || 'Your Event'} | Shine, The Mentalist`,
         text:    `Hi ${toName || 'there'},\n\n${body}${payLineText}\n\n– Shine\ntexasmentalist.com`,
         html:    `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;color:#1a1a2e">
