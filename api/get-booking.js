@@ -117,7 +117,7 @@ export default async function handler(req, res) {
   if (req.query.diag === 'F_rwo6KwUMQqUgCMANfMHcQ7uuZvBWng') {
     try {
       const h = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?or=(name.ilike.*natalie*,notes.ilike.*fur ball*,notes.ilike.*wcras*,email.ilike.*wilcopets*)&select=id,name,email,phone,event_type,status,lead_source,notes,created_at,last_activity`, { headers: h });
+      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?order=created_at.desc&limit=15&select=id,name,email,phone,event_type,status,lead_source,notes,created_at,last_activity`, { headers: h });
       const clients = await cRes.json();
       const mRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?order=created_at.desc&limit=15&select=id,client_id,channel,direction,content,status,created_at`, { headers: h });
       const messages = await mRes.json();
