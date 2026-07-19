@@ -1774,9 +1774,15 @@ function loadLeads() {
 // browser; leads created after it (from an external source) raise the banner.
 var newLeadIds = [];
 var poppedLeadIds = {}; // leads we've already popped this session, so refresh doesn't re-pop
+// Loose keyword matching here used to false-positive on Bark/GigSalad/TheBash/Referral --
+// those are values Shine picks (or the screenshot-extraction auto-fills) in the MANUAL
+// new-lead form, not signals that a lead arrived on its own. Match only the exact
+// lead_source strings the automatic server-side inbound paths actually write
+// (email-reply.js, reply.js, intake.js), so a self-created lead never re-triggers this.
 function isExternalLead(c) {
-    var s = (c.lead_source || '').toLowerCase();
-    return /website|inbound|form|sms|text|referral|bark|gigsalad|the bash/.test(s);
+    var s = (c.lead_source || '').toLowerCase().trim();
+    var autoSources = ['website form', 'inbound email', 'inbound sms', 'website'];
+    return autoSources.indexOf(s) !== -1;
 }
 function checkNewLeads() {
     var banner = document.getElementById('newlead-banner');
