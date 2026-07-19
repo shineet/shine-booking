@@ -3476,8 +3476,30 @@ function handleScreenshotUpload(fileList) {
         if (ex.event_date) document.getElementById('date').value = ex.event_date;
         if (ex.guests) { var g = mapGuestsToOption(ex.guests); if (g) document.getElementById('guests').value = g; }
         if (ex.venue) document.getElementById('venue').value = ex.venue;
-        if (ex.notes) document.getElementById('notes').value = ex.notes;
-        statusEl.textContent = '✓ Filled in — please review before creating the lead.';
+        // Only auto-set the source dropdown when the screenshot itself told us which
+        // platform it's from -- never fall back to a guess (that's the bug this fixes:
+        // the dropdown's first <option> is "Bark", so leaving this unset silently
+        // mislabeled every non-Bark screenshot as Bark).
+        if (ex.lead_source) applySourceToControls(ex.lead_source, 'lead_source', 'other_source_name', toggleOtherSource);
+        // Budget gets its own highlighted line instead of being buried inside notes,
+        // so it can't be missed when reviewing the lead before creating it.
+        var notesVal = ex.notes || '';
+        if (ex.budget_mentioned) {
+            var budgetLine = '💰 Budget mentioned: ' + ex.budget_mentioned;
+            if (ex.budget_advice) budgetLine += '\nApproach: ' + ex.budget_advice;
+            notesVal = budgetLine + (notesVal ? '\n\n' + notesVal : '');
+        }
+        if (notesVal) document.getElementById('notes').value = notesVal;
+        statusEl.style.whiteSpace = 'pre-line';
+        if (ex.budget_mentioned) {
+            statusEl.style.color = 'var(--amber, #B8960C)';
+            statusEl.style.fontWeight = '600';
+            statusEl.textContent = '✓ Filled in — please review before creating the lead.\n💰 Budget mentioned: ' + ex.budget_mentioned + (ex.budget_advice ? '\nApproach: ' + ex.budget_advice : '');
+        } else {
+            statusEl.style.color = '';
+            statusEl.style.fontWeight = '';
+            statusEl.textContent = '✓ Filled in — please review before creating the lead.';
+        }
     })
     .catch(function(e) { statusEl.textContent = 'Could not extract: ' + e.message; })
     .finally(function() { btn.disabled = false; document.getElementById('lead-screenshot-input').value = ''; });
