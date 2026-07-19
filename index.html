@@ -3437,10 +3437,36 @@ function applySourceToControls(ls, selectId, nameId, toggleFn) {
     if (toggleFn) toggleFn();
 }
 
+// Retina/full-window screenshots are routinely several MB as raw PNG -- a few of
+// them together can exceed Vercel's ~4.5MB request body limit and get rejected
+// before the function even runs (no server log, just a generic client-side
+// fetch failure). Downscale + re-encode as JPEG so a typical screenshot lands
+// well under that ceiling; skip the re-encode if the image is already small.
 function fileToBase64(file) {
     return new Promise(function(resolve, reject) {
         var reader = new FileReader();
-        reader.onload = function() { resolve(reader.result.substring(reader.result.indexOf(',') + 1)); };
+        reader.onload = function() {
+            var dataUrl = reader.result;
+            var img = new Image();
+            img.onload = function() {
+                var maxDim = 1600;
+                var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+                if (scale >= 1) {
+                    resolve({ data: dataUrl.substring(dataUrl.indexOf(',') + 1), mediaType: file.type || 'image/png' });
+                    return;
+                }
+                var canvas = document.createElement('canvas');
+                canvas.width = Math.round(img.width * scale);
+                canvas.height = Math.round(img.height * scale);
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                var jpegDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                resolve({ data: jpegDataUrl.substring(jpegDataUrl.indexOf(',') + 1), mediaType: 'image/jpeg' });
+            };
+            img.onerror = function() {
+                resolve({ data: dataUrl.substring(dataUrl.indexOf(',') + 1), mediaType: file.type || 'image/png' });
+            };
+            img.src = dataUrl;
+        };
         reader.onerror = reject;
         reader.readAsDataURL(file);
     });
@@ -3465,7 +3491,7 @@ function handleScreenshotUpload(fileList) {
     var btn = document.getElementById('upload-screenshot-btn');
     statusEl.style.display = 'block'; statusEl.textContent = 'Reading screenshot(s)...'; btn.disabled = true;
     Promise.all(files.map(function(file) {
-        return fileToBase64(file).then(function(b64) { return { data: b64, mediaType: file.type||'image/png' }; });
+        return fileToBase64(file);
     }))
     .then(function(images) {
         statusEl.textContent = 'Extracting details...';
