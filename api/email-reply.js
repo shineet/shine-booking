@@ -176,16 +176,6 @@ export default async function handler(req, res) {
     return;
   }
 
-  // TEMP test-only hook (to be reverted): exercise emergencySaveInbound() in
-  // isolation, with zero Claude calls and zero outbound sends to the test
-  // sender, so the new safety-net function can be verified before relying on
-  // it inside the real outer catch.
-  if (req.body && req.body.__testEmergencySave === 'F_rwo6KwUMQqUgCMANfMHcQ7uuZvBWng') {
-    const saved = await emergencySaveInbound(req.body, 'isolated test run');
-    res.status(200).json({ testMode: true, saved });
-    return;
-  }
-
   // Handle outbound email.sent events (Gmail sends via Resend SMTP)
   if (req.body && req.body.type === 'email.sent') {
     try {
