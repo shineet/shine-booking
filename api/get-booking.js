@@ -112,6 +112,22 @@ export default async function handler(req, res) {
     return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
   }
 
+  // TEMP diagnostic (read+cleanup, to be reverted): find and delete the
+  // synthetic test client created by the emergencySaveInbound isolation test.
+  if (req.query.diag === 'F_rwo6KwUMQqUgCMANfMHcQ7uuZvBWng') {
+    const h = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+    const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?email=ilike.*example-testonly.invalid*&select=id,name,email,status,lead_source,created_at`, { headers: h });
+    const clients = await cRes.json();
+    if (req.query.cleanup === '1' && Array.isArray(clients)) {
+      for (const c of clients) {
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${c.id}`, { method: 'DELETE', headers: h });
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${c.id}`, { method: 'DELETE', headers: h });
+      }
+    }
+    res.status(200).json({ clients, cleaned: req.query.cleanup === '1' });
+    return;
+  }
+
   try {
     const { bid, mode } = req.query;
     if (!bid) {
