@@ -111,9 +111,78 @@ function normalizeBody(body) {
   return b;
 }
 
+// Last-resort safety net for the OUTER catch-all: if anything throws anywhere
+// in the main handler (before or after the Claude call — decoding, a Supabase
+// lookup, whatever), this still finds-or-creates a client and saves the raw
+// inbound message, exactly like saveInboundForManualReply() does for the
+// narrower "Claude declined/errored" case. Declared at module scope (not
+// inside the try block) so the outer catch can call it even though the normal
+// per-request variables (from, fromEmail, client, etc.) are out of scope by
+// then. Takes the raw req.body directly instead.
+async function emergencySaveInbound(reqBody, reasonLabel) {
+  try {
+    const from = reqBody?.from || '';
+    if (!from) return false;
+    const subject = reqBody?.subject || '';
+    const rawEmail = reqBody?.rawEmail || '';
+    const fromEmail = from.match(/<(.+)>/)?.[1] || from;
+    const fromNameMatch = from.match(/^"?([^"<]+)"?\s*<.+>$/);
+    const fromName = fromNameMatch ? fromNameMatch[1].trim() : '';
+    const emailBody = normalizeBody(reqBody?.body || '') || extractPlainText(rawEmail) || htmlToText(extractHtmlPart(rawEmail)) || '(could not extract email body)';
+
+    const supaHdrs = { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+
+    let client = null;
+    try {
+      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?email=ilike.${emailIlikeParam(fromEmail)}&order=created_at.desc&limit=1`, { headers: supaHdrs });
+      const rows = await cRes.json();
+      client = Array.isArray(rows) ? (rows[0] || null) : null;
+    } catch(e) { console.error('emergencySaveInbound: client lookup failed:', e.message); }
+
+    if (!client) {
+      try {
+        const createRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients`, {
+          method: 'POST', headers: { ...supaHdrs, 'Prefer': 'return=representation' },
+          body: JSON.stringify([{ name: fromName || fromEmail, email: fromEmail, status: 'new', lead_source: 'Inbound email', last_channel: 'email', last_activity: new Date().toISOString() }])
+        });
+        const rows = await createRes.json();
+        client = Array.isArray(rows) ? (rows[0] || null) : null;
+      } catch(e) { console.error('emergencySaveInbound: create client failed:', e.message); }
+    }
+
+    if (client) {
+      try {
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+          method: 'POST', headers: supaHdrs,
+          body: JSON.stringify([{ client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: subject || null }])
+        });
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
+          method: 'PATCH', headers: supaHdrs,
+          body: JSON.stringify({ last_activity: new Date().toISOString(), last_channel: 'email' })
+        });
+      } catch(e) { console.error('emergencySaveInbound: save message failed:', e.message); }
+    }
+
+    return !!client;
+  } catch (e) {
+    console.error('emergencySaveInbound: unexpected failure:', e.message);
+    return false;
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  // TEMP test-only hook (to be reverted): exercise emergencySaveInbound() in
+  // isolation, with zero Claude calls and zero outbound sends to the test
+  // sender, so the new safety-net function can be verified before relying on
+  // it inside the real outer catch.
+  if (req.body && req.body.__testEmergencySave === 'F_rwo6KwUMQqUgCMANfMHcQ7uuZvBWng') {
+    const saved = await emergencySaveInbound(req.body, 'isolated test run');
+    res.status(200).json({ testMode: true, saved });
     return;
   }
 
@@ -955,6 +1024,7 @@ Only include this block once. Do not mention this block or its contents in the v
 
   } catch(e) {
     console.error('Email reply error:', e);
+    const saved = await emergencySaveInbound(req.body, e.message);
     try {
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -963,12 +1033,14 @@ Only include this block once. Do not mention this block or its contents in the v
           from: 'Shine Booking Assistant <shine@texasmentalist.com>',
           to: 'shinethementalist@gmail.com',
           subject: '⚠️ An inbound email failed to process',
-          text: `An email came in but I couldn't generate a reply or draft for it, so nothing showed up on your dashboard for this one.\n\nError: ${e.message}\n\nYou may want to check your Gmail (shinethementalist@gmail.com) for the original message and reply manually if needed.`
+          text: saved
+            ? `An email came in but I couldn't generate a reply or draft for it. I saved it to your dashboard as a lead marked "new" so it isn't lost -- reply from there or Gmail.\n\nError: ${e.message}`
+            : `An email came in but I couldn't generate a reply or draft for it, AND I couldn't save it to your dashboard either.\n\nError: ${e.message}\n\nYou may want to check your Gmail (shinethementalist@gmail.com) for the original message and reply manually if needed.`
         })
       });
     } catch(notifyErr) {
       console.error('Failure-notification email also failed:', notifyErr.message);
     }
-    res.status(200).json({ received: true, error: e.message });
+    res.status(200).json({ received: true, error: e.message, saved });
   }
 }
