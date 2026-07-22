@@ -2401,7 +2401,7 @@ function draftMessages(btn, attempt) {
     attempt = attempt || 0;
     var c = allClients.find(function(x) { return x.id === _researchLead.id; }) || {};
     if (btn) { btn.disabled = true; btn.textContent = '✍️ Drafting…'; }
-    var lead = { clientId: c.id, name: c.name, email: c.email || '', phone: c.phone || '', event_type: c.event_type || '', event_date: c.event_date || '', guests: c.guests || '', notes: c.notes || '' };
+    var lead = { clientId: c.id, name: c.name, email: c.email || '', phone: c.phone || '', event_type: c.event_type || '', event_date: c.event_date || '', guests: c.guests || '', notes: c.notes || '', lead_source: c.lead_source || '' };
     fetch('/api/pending-replies', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'draft', lead: lead, research: entry.research })
@@ -2469,7 +2469,7 @@ function refineDraft() {
     var btn = document.getElementById('research-refine-btn');
     if (input) input.disabled = true;
     if (btn) { btn.disabled = true; btn.textContent = 'Thinking…'; }
-    var lead = { clientId: c.id, name: c.name, email: c.email || '', phone: c.phone || '', event_type: c.event_type || '', event_date: c.event_date || '', guests: c.guests || '', notes: c.notes || '' };
+    var lead = { clientId: c.id, name: c.name, email: c.email || '', phone: c.phone || '', event_type: c.event_type || '', event_date: c.event_date || '', guests: c.guests || '', notes: c.notes || '', lead_source: c.lead_source || '' };
     fetch('/api/pending-replies', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'draft', lead: lead, research: entry.research, current: entry.drafts, instruction: instruction, priorInstructions: entry.instrs || [] })

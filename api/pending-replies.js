@@ -681,21 +681,27 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
     if (req.method === 'POST' && req.body.action === 'draft') {
       const lead = req.body.lead || {};
       const rc = req.body.research || {};
+      const hasEmail = !!(lead.email && String(lead.email).trim());
+      const sourceLabel = (lead.lead_source && String(lead.lead_source).trim()) || '';
 
-      const DRAFT_SYSTEM = `You are Shine Thankappan, a corporate mentalist and magician based in Austin, TX (website texasmentalist.com, phone +1 737-271-5308). You perform a 45-60 minute interactive mentalism + visual-magic STAGE SHOW (your strength) and also do strolling/walk-around magic. Draft outreach for a new lead. These are DRAFTS you will review and send yourself.
+      const DRAFT_SYSTEM_BASE = `You are Shine Thankappan, a corporate mentalist and magician based in Austin, TX (website texasmentalist.com, phone +1 737-271-5308). You perform a 45-60 minute interactive mentalism + visual-magic STAGE SHOW (your strength) and also do strolling/walk-around magic. Draft outreach for a new lead. These are DRAFTS you will review and send yourself.
 
-Use the research context provided (company, affordability, recommended anchor, event details) to write a confident, specific reply. If a recommended anchor price is given and the lead gave enough detail, put a starting number in the email ("my rate starts at $X") rather than sending them to a form — website leads bail on friction. Ask at most 1-2 light qualifying questions. Never invent availability.
+Use the research context provided (company, affordability, recommended anchor, event details) to write a confident, specific reply. If a recommended anchor price is given and the lead gave enough detail, put a starting number in ("my rate starts at $X") rather than sending them to a form — website leads bail on friction. Ask at most 1-2 light qualifying questions. Never invent availability.
 
 Tone by event type — the STAGE SHOW is always the headline:
 - Corporate events / weddings: lead with the stage show; strolling only as an optional add-on.
 - Private parties (birthday, bachelorette, house/home, small private): lead with and emphasize the stage show; do NOT bring up strolling unless the client asked for it.
 - Cocktail parties: mention both strolling and the stage show.
 
-Voice: first person, short sentences, real contractions (I'm, that's, you're). No stock openers ("Thanks for reaching out", "I hope this finds you well"), no corporate filler ("I appreciate your interest", "don't hesitate to reach out"). One or two short paragraphs. A little genuine warmth, never try-hard. The SMS is a short friendly nudge pointing back to the email (under ~160 chars).
+Voice: first person, short sentences, real contractions (I'm, that's, you're). No stock openers ("Thanks for reaching out", "I hope this finds you well"), no corporate filler ("I appreciate your interest", "don't hesitate to reach out"). A little genuine warmth, never try-hard.
 
 HARD STYLE RULE: absolutely NO em dashes (—). Use commas, periods, or "to".
 
-If a CURRENT DRAFT and feedback from Shine are shown below, you are REVISING: change the email and SMS to address his feedback while keeping everything that already works, and directly answer any question he asks (e.g. "did you consider the anniversary angle?"). Put your reply to Shine in the "note" field — one or two short sentences, like a collaborator talking back (answer the question, or say what you changed and why). On a first draft with no feedback, leave "note" as an empty string.
+If a CURRENT DRAFT and feedback from Shine are shown below, you are REVISING: change the message(s) to address his feedback while keeping everything that already works, and directly answer any question he asks (e.g. "did you consider the anniversary angle?"). Put your reply to Shine in the "note" field — one or two short sentences, like a collaborator talking back (answer the question, or say what you changed and why). On a first draft with no feedback, leave "note" as an empty string.`;
+
+      const DRAFT_SYSTEM_EMAIL_TAIL = `
+
+This lead has an email on file, so draft BOTH an email and a short SMS nudge. The email is the primary message, one or two short paragraphs; the SMS is a short friendly nudge pointing back to the email (under ~160 chars).
 
 Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \`\`\`) and nothing else, with exactly these string fields:
 {
@@ -705,12 +711,30 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
   "sms": "a short SMS nudge"
 }`;
 
+      const DRAFT_SYSTEM_SMS_ONLY_TAIL = `
+
+This lead has NO email on file, only a phone number, so SMS is the only way to reach them. Draft ONLY a text message, leave emailSubject and emailBody as empty strings. This is the first message they'll get from you, so the text needs to do the whole job an email would have, not just nudge toward one.
+
+Because this is a first-touch cold text, be slightly warmer than a normal quick SMS reply, a genuine, personal opening line, not "Hi, saw your inquiry." ${sourceLabel ? `Open by naturally mentioning you saw their event inquiry on ${sourceLabel} (referencing their actual event details, not a generic form) so it's obviously not spam.` : `Open by naturally referencing their actual event details so it's obviously not spam.`} It's fine to run a bit longer than a normal 160-char nudge if the message needs it, but keep it reading like a real text, not an email crammed into a text box. End with a short sign-off that includes the website, for example "- Shine, texasmentalist.com".
+
+Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \`\`\`) and nothing else, with exactly these string fields:
+{
+  "note": "1-2 short sentences replying to Shine's feedback/question, or \\"\\" on a first draft",
+  "emailSubject": "",
+  "emailBody": "",
+  "sms": "the full text message, warm and specific, signed off with the website"
+}`;
+
+      const DRAFT_SYSTEM = DRAFT_SYSTEM_BASE + (hasEmail ? DRAFT_SYSTEM_EMAIL_TAIL : DRAFT_SYSTEM_SMS_ONLY_TAIL);
+
       let draftUser = [
         `Lead name: ${lead.name || '(unknown)'}`,
         `Event type: ${lead.event_type || '(unspecified)'}`,
         lead.event_date ? `Event date: ${lead.event_date}` : '',
         lead.guests ? `Guests: ${lead.guests}` : '',
         lead.notes ? `Their message / notes: ${lead.notes}` : '',
+        sourceLabel ? `Lead source: ${sourceLabel}` : '',
+        hasEmail ? '' : 'NOTE: this lead has no email on file, SMS only.',
         '',
         'RESEARCH CONTEXT:',
         rc.company ? `Company: ${rc.company}` : '',
