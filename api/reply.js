@@ -6,6 +6,61 @@ function last10(phone) {
   return d.length > 10 ? d.slice(-10) : d;
 }
 
+// Cheap keyword guard so the personal-phone-forward path (below) doesn't fire an extra
+// Claude call on every ordinary reply — only worth checking when the recent thread
+// actually mentions a call/talk together with a day or time.
+function looksLikeSchedulingTalk(text) {
+  const t = String(text || '').toLowerCase();
+  const hasCallWord = /\b(call|talk|chat|meet|meeting|phone)\b/.test(t);
+  const hasTimeWord = /\b(tomorrow|today|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|noon|midnight)\b/.test(t)
+    || /\d{1,2}(:\d{2})?\s*(am|pm)\b/.test(t);
+  return hasCallWord && hasTimeWord;
+}
+
+// Used on the personal-phone-forward path, where Shine types his own reply and there's
+// no AI drafting call already happening to piggyback the [CALL_SCHEDULED] marker onto
+// (that path is handled inline further down, in the main Claude reply call). Runs a
+// small standalone Claude call over the recent thread to catch the same "date + time
+// mutually confirmed" case when Shine is the one who typed the confirmation himself.
+async function detectAndSaveCallSuggestion(clientId, supaHeaders) {
+  if (!clientId) return;
+  try {
+    const histRes = await fetch(
+      `${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${clientId}&channel=eq.sms&order=created_at.desc&limit=10&select=direction,content`,
+      { headers: supaHeaders }
+    );
+    const histRows = await histRes.json();
+    if (!Array.isArray(histRows) || !histRows.length) return;
+    const lines = histRows.reverse().map(m => (m.direction === 'inbound' ? 'THEM: ' : 'SHINE: ') + String(m.content || '').replace(/\s+/g, ' ').trim());
+    const convoText = lines.join('\n');
+    if (!looksLikeSchedulingTalk(convoText)) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 60,
+        system: `Today's date is ${today}. You are scanning a text conversation to check whether a specific date AND a specific time have been mutually confirmed by both people for a phone call or meeting (NOT the actual event/performance date itself). Resolve relative dates ("tomorrow", "Thursday") against today's date. If both a date and time are clearly settled by both sides, respond with EXACTLY this and nothing else: [CALL_SCHEDULED: YYYY-MM-DD|H:MM AM/PM|short title]. Otherwise respond with exactly: NONE`,
+        messages: [{ role: 'user', content: convoText }]
+      })
+    });
+    const claudeData = await claudeRes.json();
+    const text = claudeData?.content?.[0]?.text || '';
+    const match = text.match(/\[CALL_SCHEDULED:\s*(\d{4}-\d{2}-\d{2})\s*\|\s*([^\]|]+?)\s*\|\s*([^\]]+?)\s*\]/);
+    if (match) {
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
+        method: 'PATCH',
+        headers: { ...supaHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calendar_suggestion: { date: match[1], time: match[2].trim(), title: match[3].trim() } })
+      });
+    }
+  } catch(e) {
+    console.error('Call suggestion detection failed:', e.message);
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Content-Type', 'text/xml');
@@ -21,12 +76,16 @@ export default async function handler(req, res) {
       return;
     }
 
+    // Shared Supabase auth headers -- hoisted above the personal-phone branch below
+    // since that branch also needs Supabase access (message log + call detection).
+    const supaHeaders = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+
     // If Shine is replying from his personal phone, route to the last forwarded client
     if (From === '+16128657681') {
       try {
         const settingsRes = await fetch(
           `${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1&select=last_forwarded_sms_phone,last_forwarded_sms_client_id`,
-          { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
+          { headers: supaHeaders }
         );
         const settings = await settingsRes.json();
         const lastPhone    = settings[0]?.last_forwarded_sms_phone || null;
@@ -45,7 +104,7 @@ export default async function handler(req, res) {
           if (lastClientId) {
             await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+              headers: { ...supaHeaders, 'Content-Type': 'application/json' },
               body: JSON.stringify([{
                 client_id: lastClientId, channel: 'sms', direction: 'outbound',
                 content: Body, status: 'sent', to_address: lastPhone
@@ -53,9 +112,12 @@ export default async function handler(req, res) {
             });
             await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${lastClientId}`, {
               method: 'PATCH',
-              headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+              headers: { ...supaHeaders, 'Content-Type': 'application/json' },
               body: JSON.stringify({ last_activity: new Date().toISOString(), last_channel: 'sms' })
             });
+            // Shine may have just typed the confirmation himself (e.g. "Yes 12 works for
+            // me") -- the AI reply path below never runs on this branch, so check here too.
+            await detectAndSaveCallSuggestion(lastClientId, supaHeaders);
           }
         }
       } catch(e) {
@@ -70,7 +132,6 @@ export default async function handler(req, res) {
     // Inbound Twilio `From` is E.164 (+1XXXXXXXXXX). Older client records may have been
     // saved in a non-normalized format (e.g. "(610) 908-6678"), so an exact match can miss.
     // Match on the last 10 digits as a fallback, then self-heal the stored phone to E.164.
-    const supaHeaders = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
     const fromDigits = last10(From);
     let client = null;
     try {
