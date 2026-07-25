@@ -1,5 +1,3 @@
-const conversations = {};
-
 // Last 10 digits of any phone format — used to match an inbound E.164 number
 // against client records that may have been stored in a non-normalized format.
 function last10(phone) {
@@ -195,14 +193,35 @@ Rules:
       ? `${SYSTEM_PROMPT}\n\nSHINE'S CUSTOM INSTRUCTIONS (highest priority. Follow these; if they conflict with anything above, these win, but never exceed the SMS length limit and never invent availability):\n${ownerGuidance}`
       : SYSTEM_PROMPT;
 
-    if (!conversations[From]) conversations[From] = [];
-    conversations[From].push({ role: 'user', content: Body });
-    if (conversations[From].length > 10) conversations[From] = conversations[From].slice(-10);
+    // Real conversation history from the messages table, not in-memory state -- a module-level
+    // JS object doesn't reliably survive between requests on Vercel serverless (each invocation
+    // can land on a fresh container), which is exactly why Jim got asked "what day?" after he'd
+    // already said "tomorrow" in the previous text: the in-memory history had been wiped between
+    // his two messages, so the AI saw this one in total isolation. Mirrors fetchLeadConversation
+    // in pending-replies.js: a single user turn with prior turns flattened into plain text, not a
+    // multi-turn messages array (keeps this immune to any alternating-role requirement).
+    let historyBlock = '';
+    if (client && client.id) {
+      try {
+        const histRes = await fetch(
+          `${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${client.id}&channel=eq.sms&status=not.in.(discarded)&order=created_at.asc&limit=20&select=direction,content`,
+          { headers: supaHeaders }
+        );
+        const histRows = await histRes.json();
+        if (Array.isArray(histRows) && histRows.length) {
+          const lines = histRows
+            .map(m => (m.direction === 'inbound' ? 'THEM: ' : 'SHINE: ') + String(m.content || '').replace(/\s+/g, ' ').trim())
+            .filter(x => x.length > 6);
+          if (lines.length) historyBlock = 'CONVERSATION SO FAR:\n' + lines.join('\n') + '\n\n';
+        }
+      } catch(e) { console.error('SMS history fetch failed:', e.message); }
+    }
+    const userContent = historyBlock ? historyBlock + 'THEIR LATEST MESSAGE (respond to this): ' + Body : Body;
 
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 200, system: finalSystemPrompt, messages: conversations[From] })
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 200, system: finalSystemPrompt, messages: [{ role: 'user', content: userContent }] })
     });
 
     const claudeData = await claudeRes.json();
@@ -215,8 +234,6 @@ Rules:
     const bookingIntent = replyText.includes('[BOOKING_INTENT]');
     const pricingRequested = replyText.includes('[PRICING_REQUESTED]');
     const cleanReply = replyText.replace('[BOOKING_INTENT]', '').replace('[PRICING_REQUESTED]', '').trim();
-
-    conversations[From].push({ role: 'assistant', content: cleanReply });
 
     // Check global review-mode setting
     let reviewMode = false;
