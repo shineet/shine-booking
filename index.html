@@ -2269,7 +2269,7 @@ function renderTriage() {
             var locked = !!it.sent;
             draftBlock = '<div style="margin-top:10px;">' +
                 (it.channel === 'email' ? '<input type="text" id="tr-subject-' + i + '" value="' + escAttr(it.draftSubject || '') + '"' + (locked ? ' disabled' : '') + ' style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12.5px;color:#e8e6ef;margin-bottom:6px;box-sizing:border-box;">' : '') +
-                '<textarea id="tr-body-' + i + '" rows="4"' + (locked ? ' disabled' : '') + ' style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:12.5px;color:#e8e6ef;box-sizing:border-box;resize:vertical;">' + escHtml(it.draftBody || '') + '</textarea>' +
+                '<textarea id="tr-body-' + i + '" class="autogrow" rows="4"' + (locked ? ' disabled' : '') + ' style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:12.5px;color:#e8e6ef;box-sizing:border-box;resize:vertical;">' + escHtml(it.draftBody || '') + '</textarea>' +
                 '<div style="text-align:right;margin-top:8px;">' + (
                     locked
                         ? '<button disabled style="background:rgba(120,200,140,.1);color:#6fae82;border:1px solid rgba(120,200,140,.25);border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;">' + escHtml(it.sentLabel || '✓ Sent') + '</button>'
@@ -2294,6 +2294,7 @@ function renderTriage() {
             '<div style="margin-top:8px;"><button onclick="closeTriage();selectLead(\'' + esc(it.clientId) + '\')" style="background:none;border:none;color:#a89bf0;font-size:11.5px;cursor:pointer;padding:0;text-decoration:underline;">View full lead &rarr;</button></div>' +
             '</div>';
     }).join('');
+    requestAnimationFrame(autoGrowAll);
 }
 
 function draftTriageMessage(i) {
@@ -2474,7 +2475,7 @@ function renderFoundLeads() {
         var draftBlock = hasEmail ? (
             '<div style="margin-top:10px;">' +
             '<input type="text" id="fl-subject-' + i + '" value="' + escAttr(l.draftSubject || '') + '"' + (l.sent ? ' disabled' : '') + ' style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12.5px;color:#e8e6ef;margin-bottom:6px;box-sizing:border-box;">' +
-            '<textarea id="fl-body-' + i + '" rows="5"' + (l.sent ? ' disabled' : '') + ' style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:12.5px;color:#e8e6ef;box-sizing:border-box;resize:vertical;">' + escHtml(l.draftBody || '') + '</textarea>' +
+            '<textarea id="fl-body-' + i + '" class="autogrow" rows="5"' + (l.sent ? ' disabled' : '') + ' style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:12.5px;color:#e8e6ef;box-sizing:border-box;resize:vertical;">' + escHtml(l.draftBody || '') + '</textarea>' +
             '<div style="text-align:right;margin-top:8px;">' + sendBtn + '</div></div>'
         ) : '';
         return '<div id="fl-card-' + i + '" style="border:1px solid var(--border);border-radius:10px;padding:13px 15px;margin-bottom:12px;' + (l.sent ? 'opacity:.55;' : '') + '">' +
@@ -2487,6 +2488,7 @@ function renderFoundLeads() {
             draftBlock +
             '</div>';
     }).join('');
+    requestAnimationFrame(autoGrowAll);
 }
 
 function sendOutreachLead(i) {
