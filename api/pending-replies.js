@@ -33,6 +33,99 @@ function isPastEventWindow(eventWindow, todayISO) {
   return d.getTime() < today.getTime();
 }
 
+// ── Gmail (past-clients outreach) ──────────────────────────────────────────
+// Read-only Gmail access (scope: gmail.readonly) used only to (a) confirm a real thread exists
+// with a past client before nudging them and pull a little real context, and (b) sweep for past
+// clients who were never logged in this app's own database. Sending still goes through the
+// existing Resend/Twilio compose path (api/chat.js mode=compose), never through Gmail itself, so
+// logging/dedup stays consistent with every other outbound message in the app.
+const GMAIL_REDIRECT_URI = 'https://shine-booking.vercel.app/api/pending-replies?action=gmail-callback';
+
+async function getGmailRefreshToken() {
+  const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1&select=gmail_refresh_token&limit=1`, {
+    headers: { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` }
+  });
+  const rows = await r.json();
+  return (Array.isArray(rows) && rows[0] && rows[0].gmail_refresh_token) || null;
+}
+
+async function getGmailAccessToken() {
+  const refreshToken = await getGmailRefreshToken();
+  if (!refreshToken) return null;
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID, client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      refresh_token: refreshToken, grant_type: 'refresh_token'
+    }).toString()
+  });
+  const tokenData = await tokenRes.json();
+  if (!tokenRes.ok || !tokenData.access_token) { console.error('Gmail token refresh failed:', tokenData); return null; }
+  return tokenData.access_token;
+}
+
+async function gmailSearch(accessToken, query, maxResults) {
+  try {
+    const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${maxResults || 5}`;
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const data = await r.json();
+    if (!r.ok) { console.error('Gmail search failed:', data); return []; }
+    return Array.isArray(data.messages) ? data.messages : [];
+  } catch(e) { console.error('Gmail search error:', e.message); return []; }
+}
+
+async function gmailGetMessageMeta(accessToken, id) {
+  try {
+    const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=From&metadataHeaders=To`;
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const data = await r.json();
+    if (!r.ok) return null;
+    const headers = {};
+    ((data.payload && data.payload.headers) || []).forEach(h => { headers[h.name] = h.value; });
+    return { id, subject: headers.Subject || '', date: headers.Date || '', from: headers.From || '', to: headers.To || '', snippet: data.snippet || '' };
+  } catch(e) { console.error('Gmail message fetch error:', e.message); return null; }
+}
+
+// Decides whether a past (completed) client is due for a relationship-keeping note, and why.
+// daysSinceLastContact is null if Shine has never sent them anything since the event (per the
+// messages table), which lets the same rule both gate re-nagging AND let annual reminders recur.
+function computeDueReason(eventType, gigDateISO, todayISO, daysSinceLastContact) {
+  if (!gigDateISO) return null;
+  const type = (eventType || '').toLowerCase();
+  const gigDate = new Date(gigDateISO + 'T00:00:00');
+  const today = new Date(todayISO + 'T00:00:00');
+  if (isNaN(gigDate.getTime())) return null;
+  const daysSinceGig = Math.floor((today.getTime() - gigDate.getTime()) / 86400000);
+  if (daysSinceGig < 14) return null; // too soon after the show either way
+
+  if (type.includes('birthday')) {
+    // Recurs annually: fire once in the ~20-40 day window before the anniversary of the event.
+    let next = new Date(today.getFullYear(), gigDate.getMonth(), gigDate.getDate());
+    if (next.getTime() < today.getTime()) next.setFullYear(next.getFullYear() + 1);
+    const daysUntil = Math.round((next.getTime() - today.getTime()) / 86400000);
+    if (daysUntil < 20 || daysUntil > 40) return null;
+    if (daysSinceLastContact !== null && daysSinceLastContact < 300) return null; // already nudged this cycle
+    return { kind: 'birthday', label: 'Birthday season coming up in about ' + daysUntil + ' days' };
+  }
+  if (type.includes('bachelorette') || type.includes('bachelor')) {
+    if (daysSinceGig < 60) return null;
+    if (daysSinceLastContact !== null && daysSinceLastContact < 300) return null;
+    return { kind: 'checkin', label: daysSinceGig + ' days since the event, casual check-in' };
+  }
+  // Everything else: a generic periodic relationship check-in.
+  if (daysSinceGig < 150) return null;
+  if (daysSinceLastContact !== null && daysSinceLastContact < 150) return null;
+  return { kind: 'checkin', label: daysSinceGig + ' days since the event' };
+}
+
+// Pulls a plain email address out of a Gmail header value, e.g. "John Doe <john@example.com>".
+function extractEmailAddress(headerVal) {
+  if (!headerVal) return null;
+  const angle = String(headerVal).match(/<([^>]+)>/);
+  const candidate = angle ? angle[1] : String(headerVal).trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate) ? candidate.trim().toLowerCase() : null;
+}
+
 // Real carrier/line-type lookup via Twilio Lookup v2 (line_type_intelligence add-on), used by
 // the research step so the phone-type read is a verified fact instead of an area-code guess.
 // Separate credentials (TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN) from the messaging pair
@@ -189,6 +282,76 @@ export default async function handler(req, res) {
       const rows = await r.json();
       const settings = Array.isArray(rows) ? rows[0] : null;
       res.status(200).json({ reviewMode: settings ? settings.review_mode : false });
+      return;
+    }
+
+    // GET ?action=gmail-status -> whether Gmail read access is connected yet
+    if (req.method === 'GET' && req.query.action === 'gmail-status') {
+      const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1&select=gmail_refresh_token,gmail_connected_at&limit=1`, {
+        headers: { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` }
+      });
+      const rows = await r.json();
+      const row = Array.isArray(rows) ? rows[0] : null;
+      res.status(200).json({ connected: !!(row && row.gmail_refresh_token), connectedAt: row ? row.gmail_connected_at : null });
+      return;
+    }
+
+    // GET ?action=gmail-authstart -> redirect into Google's OAuth consent screen. Gmail readonly
+    // scope only (never gmail.send -- outbound still goes through Resend/Twilio like everything
+    // else). access_type=offline + prompt=consent forces a refresh_token back every time, since
+    // without it Google only issues one on the very first-ever grant.
+    if (req.method === 'GET' && req.query.action === 'gmail-authstart') {
+      const params = new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        redirect_uri: GMAIL_REDIRECT_URI,
+        response_type: 'code',
+        access_type: 'offline',
+        prompt: 'consent',
+        scope: 'https://www.googleapis.com/auth/gmail.readonly'
+      });
+      res.writeHead(302, { Location: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` });
+      res.end();
+      return;
+    }
+
+    // GET ?action=gmail-callback -> Google redirects here after consent with a one-time code.
+    // Exchange it for tokens and persist the refresh_token (the long-lived one) to app_settings.
+    if (req.method === 'GET' && req.query.action === 'gmail-callback') {
+      const code = req.query.code;
+      if (!code) { res.writeHead(302, { Location: 'https://shine-booking.vercel.app/?gmail=error' }); res.end(); return; }
+      try {
+        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: process.env.GOOGLE_CLIENT_ID, client_secret: process.env.GOOGLE_CLIENT_SECRET,
+            code, grant_type: 'authorization_code', redirect_uri: GMAIL_REDIRECT_URI
+          }).toString()
+        });
+        const tokenData = await tokenRes.json();
+        if (!tokenRes.ok || !tokenData.refresh_token) { console.error('Gmail OAuth exchange failed:', tokenData); res.writeHead(302, { Location: 'https://shine-booking.vercel.app/?gmail=error' }); res.end(); return; }
+        await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+          body: JSON.stringify({ gmail_refresh_token: tokenData.refresh_token, gmail_connected_at: new Date().toISOString() })
+        });
+        res.writeHead(302, { Location: 'https://shine-booking.vercel.app/?gmail=connected' });
+        res.end();
+      } catch(e) {
+        console.error('Gmail OAuth callback failed:', e.message);
+        res.writeHead(302, { Location: 'https://shine-booking.vercel.app/?gmail=error' });
+        res.end();
+      }
+      return;
+    }
+
+    // POST action=gmail-disconnect -> clear the stored refresh token
+    if (req.method === 'POST' && req.body.action === 'gmail-disconnect') {
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+        body: JSON.stringify({ gmail_refresh_token: null, gmail_connected_at: null })
+      });
+      res.status(200).json({ success: true });
       return;
     }
 
@@ -1117,6 +1280,133 @@ Depth over breadth: 3-4 well-verified leads with real contact info actually chec
         res.status(200).json({ success: true, clientId, reusedExisting: !!existing });
       } catch(e) {
         console.error('Send outreach lead failed:', e.message);
+        res.status(500).json({ error: e.message });
+      }
+      return;
+    }
+
+    // POST action=past-clients-scan -> find completed past clients due for a relationship-keeping
+    // note (birthday: ~1 month before the event's annual anniversary; bachelorette/bachelor: a
+    // one-time casual check-in a couple months out; everything else: a periodic check-in). Uses
+    // Gmail (read-only) to confirm real correspondence exists and pull light context, plus a
+    // lightweight secondary sweep for past clients who were never logged in this app's own
+    // database. Drafting happens per-item on demand (action=past-client-draft), same pattern as
+    // Suggested Actions; nothing here ever auto-sends.
+    if (req.method === 'POST' && req.body.action === 'past-clients-scan') {
+      const accessToken = await getGmailAccessToken();
+      if (!accessToken) { res.status(200).json({ error: 'gmail_not_connected' }); return; }
+
+      const todayISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+      const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+
+      try {
+        const clientsRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?select=id,name,email,phone,event_type,event_date,status`, { headers: sbHeaders });
+        const allClients = await clientsRes.json();
+        if (!Array.isArray(allClients)) throw new Error('Could not read clients');
+        const completed = allClients.filter(c => c.status === 'completed' && c.event_date);
+        const knownEmails = new Set(allClients.map(c => (c.email || '').toLowerCase()).filter(Boolean));
+
+        let lastOutboundByClient = {};
+        if (completed.length) {
+          const ids = completed.map(c => c.id).join(',');
+          const mRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=in.(${ids})&direction=eq.outbound&order=created_at.desc&select=client_id,created_at`, { headers: sbHeaders });
+          const mRows = await mRes.json();
+          if (Array.isArray(mRows)) mRows.forEach(m => { if (!lastOutboundByClient[m.client_id]) lastOutboundByClient[m.client_id] = m.created_at; });
+        }
+
+        const items = [];
+        for (const c of completed) {
+          const lastContact = lastOutboundByClient[c.id];
+          const daysSinceLastContact = lastContact ? Math.floor((Date.now() - new Date(lastContact).getTime()) / 86400000) : null;
+          const due = computeDueReason(c.event_type, c.event_date, todayISO, daysSinceLastContact);
+          if (!due) continue;
+
+          let gmailContext = null;
+          if (c.email) {
+            const msgs = await gmailSearch(accessToken, `to:${c.email} OR from:${c.email}`, 3);
+            if (msgs.length) {
+              const meta = await gmailGetMessageMeta(accessToken, msgs[0].id);
+              if (meta) gmailContext = { subject: meta.subject, snippet: meta.snippet, date: meta.date };
+            }
+          }
+
+          items.push({
+            clientId: c.id, name: c.name, email: c.email || null, phone: c.phone || null,
+            eventType: c.event_type || '', eventDate: c.event_date, kind: due.kind, label: due.label,
+            gmailFound: !!gmailContext, gmailContext
+          });
+        }
+
+        // Secondary sweep: past clients who exist in Gmail but were never logged in this app.
+        // Manual-confirm only, never auto-drafted or auto-added -- an email match alone isn't
+        // proof of who someone is or what event they had.
+        let possibleMissing = [];
+        try {
+          const sentMsgs = await gmailSearch(accessToken, 'in:sent (invoice OR contract OR "your event" OR "thank you for booking" OR "performance fee") older_than:90d', 10);
+          const seen = new Set();
+          for (const m of sentMsgs.slice(0, 8)) {
+            const meta = await gmailGetMessageMeta(accessToken, m.id);
+            if (!meta) continue;
+            const email = extractEmailAddress(meta.to);
+            if (!email || knownEmails.has(email) || seen.has(email)) continue;
+            if (/texasmentalist\.com|shinethementalist@gmail\.com|2020shine@gmail\.com/i.test(email)) continue;
+            seen.add(email);
+            possibleMissing.push({ email, subject: meta.subject, date: meta.date });
+            if (possibleMissing.length >= 6) break;
+          }
+        } catch(e) { console.error('Gmail missing-client sweep failed:', e.message); }
+
+        res.status(200).json({ success: true, items, possibleMissing });
+      } catch(e) {
+        console.error('Past clients scan failed:', e.message);
+        res.status(200).json({ error: 'Could not run the scan — try again.' });
+      }
+      return;
+    }
+
+    // POST action=past-client-draft -> draft a warm, low-pressure relationship-keeping note for
+    // one past client. Distinct voice from generate-reply, which is written for an active lead
+    // mid-conversation -- this is explicitly NOT a sales pitch.
+    if (req.method === 'POST' && req.body.action === 'past-client-draft') {
+      const { clientName, eventType, eventDate, kind, label, channel, gmailContext } = req.body;
+      const kindGuidance = kind === 'birthday'
+        ? 'Their next birthday party season is coming up. Write a warm, no-pressure note letting them know you\'re thinking of them and would love to help make this year\'s celebration special again if they\'re planning something. Reference their past event naturally (e.g. "last year\'s birthday bash"). This is NOT a hard sell, keep it light.'
+        : 'Write a casual, genuine check-in. No ask, no pitch. You are just checking in because you enjoyed working their event and want to stay in touch. Keep it short and warm. You can mention you\'re around if they ever want entertainment again, but this must not read as a sales message.';
+
+      const systemPrompt = `You are writing a relationship-keeping note on behalf of Shine, The Mentalist, to a PAST client whose event already happened (${eventType || 'an event'} on ${eventDate || 'an earlier date'}). This is not a lead, not a follow-up on an open conversation, just staying in touch.
+
+${kindGuidance}
+
+RULES:
+- Warm, brief, genuine, first person. Under 90 words.
+- No stock openers ("I hope this finds you well"), no corporate filler.
+- Sign off as: Shine, The Mentalist | +1 (737) 271-5308
+- Return ONLY the message body, no subject line, no commentary.
+- Absolutely no em dashes.`;
+
+      const userPrompt = [
+        'Client: ' + (clientName || ''),
+        'Reason this note is going out now: ' + (label || ''),
+        (gmailContext && gmailContext.subject) ? 'Last real email subject on file with them: ' + gmailContext.subject : ''
+      ].filter(Boolean).join('\n');
+
+      try {
+        const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-6', max_tokens: 300,
+            system: systemPrompt + (await guidanceSuffix()) + (channel === 'email' ? '\n\nFORMAT OVERRIDE: this is an EMAIL, one short paragraph is fine, ignore any SMS length instinct.' : '\n\nFORMAT: this is an SMS, keep it under ~300 characters.'),
+            messages: [{ role: 'user', content: userPrompt }]
+          })
+        });
+        const claudeData = await claudeRes.json();
+        if (claudeData.error) throw new Error(claudeData.error.message || JSON.stringify(claudeData.error));
+        let draft = '';
+        if (Array.isArray(claudeData.content)) claudeData.content.forEach(b => { if (b.type === 'text') draft += b.text; });
+        if (!draft) throw new Error('No draft generated');
+        res.status(200).json({ success: true, draft });
+      } catch(e) {
         res.status(500).json({ error: e.message });
       }
       return;

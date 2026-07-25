@@ -1039,6 +1039,7 @@
     </div>
     <button class="topbar-icon-btn" style="background:rgba(140,120,255,.14);color:#c9b8ff;border-color:rgba(140,120,255,.3);" onclick="suggestActionItems()" title="Scan the pipeline and suggest what to do next">&#129517; Suggest actions</button>
     <button class="topbar-icon-btn" style="background:rgba(120,200,140,.14);color:#8fe0a5;border-color:rgba(120,200,140,.3);" onclick="findLeads()" title="Search the web for live opportunities and draft intro emails, you review and send each one">&#128301; Find leads</button>
+    <button class="topbar-icon-btn" style="background:rgba(240,165,0,.14);color:#e0a83c;border-color:rgba(240,165,0,.3);" onclick="openPastClients()" title="Keep in touch with past clients: birthday reminders a month out, casual check-ins for others">&#128231; Past clients</button>
     <button class="topbar-icon-btn" onclick="loadLeads();loadPendingReplies();">&#8635;</button>
     <button class="topbar-icon-btn" onclick="openNoReplySettings()" title="No-reply threshold">&#9201;</button>
 </div>
@@ -1598,7 +1599,16 @@ function doLogin(pw) {
     })
     .catch(function (e) { msgEl.style.color = '#ff6b6b'; msgEl.textContent = 'Error: ' + e.message; });
 }
-function bootDashboard() { showView('pipeline'); }
+function bootDashboard() {
+    showView('pipeline');
+    var params = new URLSearchParams(window.location.search);
+    var gmailResult = params.get('gmail');
+    if (gmailResult) {
+        history.replaceState(null, '', window.location.pathname);
+        if (gmailResult === 'connected') { alert('Gmail connected. You can now run Past clients outreach.'); openPastClients(); }
+        else { alert('Gmail connection failed. Please try again, or check that GOOGLE_CLIENT_ID/SECRET are set correctly.'); }
+    }
+}
 
 var currentClientId = null;
 var NO_REPLY_HOURS = parseInt(localStorage.getItem('noReplyHours') || '24', 10);
@@ -2554,6 +2564,277 @@ function closeFindLeads() {
     syncFoundLeadsDrafts();
     saveFoundLeadsCache();
     var o = document.getElementById('findleads-overlay');
+    if (o) o.remove();
+}
+
+/* ── Past clients outreach: Gmail-backed relationship-keeping reminders ──
+   Birthday clients get an annual nudge ~1 month before the anniversary of their event;
+   bachelorette/bachelor get a one-time casual check-in; everything else gets a periodic
+   check-in. Gmail (read-only) confirms real correspondence + surfaces past clients never
+   logged in this app. Sending still goes through the normal compose path, never auto-sent. */
+var _pastClientItems = [];
+var _pastClientsMissing = [];
+var _pastClientsSavedAt = null;
+var _pastClientsExpandedIndex = null;
+var PASTCLIENTS_CACHE_KEY = 'shine_pastclients_cache_v1';
+
+function savePastClientsCache() {
+    try { localStorage.setItem(PASTCLIENTS_CACHE_KEY, JSON.stringify({ savedAt: _pastClientsSavedAt, items: _pastClientItems, missing: _pastClientsMissing })); } catch(e) {}
+}
+function loadPastClientsCache() {
+    try {
+        var raw = localStorage.getItem(PASTCLIENTS_CACHE_KEY);
+        if (!raw) return false;
+        var parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.items)) return false;
+        _pastClientItems = parsed.items;
+        _pastClientsMissing = parsed.missing || [];
+        _pastClientsSavedAt = parsed.savedAt || null;
+        return true;
+    } catch(e) { return false; }
+}
+function syncPastClientDrafts() {
+    _pastClientItems.forEach(function(it, i) {
+        if (it.sent || it.draftBody == null) return;
+        var subjEl = document.getElementById('pc-subject-' + i);
+        var bodyEl = document.getElementById('pc-body-' + i);
+        if (subjEl) it.draftSubject = subjEl.value;
+        if (bodyEl) it.draftBody = bodyEl.value;
+    });
+}
+
+function openPastClients() {
+    var old = document.getElementById('pastclients-overlay');
+    if (old) old.remove();
+    var ov = document.createElement('div');
+    ov.id = 'pastclients-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:32px 16px;';
+    ov.onclick = function(e) { if (e.target === ov) closePastClients(); };
+    ov.innerHTML = '<div style="background:#17161c;border:1px solid var(--border);border-radius:14px;max-width:680px;width:100%;padding:22px 22px 26px;box-shadow:0 20px 60px rgba(0,0,0,.5);">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:10px;">' +
+        '<div style="font-size:16px;font-weight:700;">&#128231; Past clients</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;" id="pc-header-actions"></div></div>' +
+        '<div style="font-size:11.5px;color:#8a86a0;margin-bottom:14px;">Every draft below is reviewed by you. Nothing sends until you click Send on that specific card.</div>' +
+        '<div id="pastclients-body"><div style="text-align:center;padding:34px 0;color:#aaa;">Checking Gmail connection…</div></div>' +
+        '</div>';
+    document.body.appendChild(ov);
+
+    fetch('/api/pending-replies?action=gmail-status')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.connected) { renderPastClientsHeaderActions(); scanPastClients(false); }
+        else { renderGmailConnectScreen(); }
+    })
+    .catch(function() { renderGmailConnectScreen(); });
+}
+
+function renderGmailConnectScreen() {
+    document.getElementById('pc-header-actions').innerHTML =
+        '<button onclick="closePastClients()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1;">&times;</button>';
+    var b = document.getElementById('pastclients-body');
+    if (!b) return;
+    b.innerHTML = '<div style="text-align:center;padding:20px 10px;">' +
+        '<div style="font-size:13.5px;color:#c9c6d6;margin-bottom:16px;line-height:1.5;">Connect a Gmail inbox (read-only) so this can look up your real correspondence with past clients and confirm they are genuine before drafting a note. Nothing is ever sent from Gmail itself, outbound still goes through your normal email/SMS.</div>' +
+        '<button onclick="window.location.href=\'/api/pending-replies?action=gmail-authstart\'" style="background:rgba(240,165,0,.16);color:#e0a83c;border:1px solid rgba(240,165,0,.35);border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;">Connect Gmail</button>' +
+        '</div>';
+}
+
+function renderPastClientsHeaderActions() {
+    var el = document.getElementById('pc-header-actions');
+    if (!el) return;
+    el.innerHTML =
+        '<button onclick="syncPastClientDrafts();scanPastClients(true)" title="Scan again" style="background:rgba(240,165,0,.14);color:#e0a83c;border:1px solid rgba(240,165,0,.3);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;">&#128260; Scan again</button>' +
+        '<button onclick="disconnectGmail()" title="Disconnect Gmail" style="background:none;color:#8a86a0;border:1px solid var(--border);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;">Disconnect</button>' +
+        '<button onclick="closePastClients()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1;">&times;</button>';
+}
+
+function disconnectGmail() {
+    if (!confirm('Disconnect Gmail? You can reconnect any time.')) return;
+    fetch('/api/pending-replies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'gmail-disconnect' }) })
+    .then(function() { localStorage.removeItem(PASTCLIENTS_CACHE_KEY); _pastClientItems = []; _pastClientsMissing = []; renderGmailConnectScreen(); })
+    .catch(function(e) { alert('Could not disconnect: ' + e.message); });
+}
+
+function scanPastClients(forceRefresh) {
+    var b = document.getElementById('pastclients-body');
+    if (!forceRefresh && loadPastClientsCache()) { renderPastClients(); return; }
+    if (b) b.innerHTML = '<div style="text-align:center;padding:34px 0;color:#aaa;">Checking your past clients against Gmail.<br><br><span style="color:#e0a83c;">This can take up to a minute…</span></div>';
+
+    fetch('/api/pending-replies', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'past-clients-scan' })
+    })
+    .then(function(r) { return r.text().then(function(t) { return { ok: r.ok, text: t }; }); })
+    .then(function(o) {
+        var res = null; try { res = JSON.parse(o.text); } catch(e) {}
+        var body = document.getElementById('pastclients-body');
+        if (!body) return;
+        if (!res) { body.innerHTML = '<div style="color:var(--red);">That timed out. Tap Scan again to retry.</div>'; return; }
+        if (res.error === 'gmail_not_connected') { renderGmailConnectScreen(); return; }
+        if (res.error) { body.innerHTML = '<div style="color:var(--red);">' + escHtml(res.error) + '</div>'; return; }
+        _pastClientItems = res.items || [];
+        _pastClientsMissing = res.possibleMissing || [];
+        _pastClientsSavedAt = new Date().toISOString();
+        _pastClientsExpandedIndex = null;
+        savePastClientsCache();
+        renderPastClients();
+    })
+    .catch(function() {
+        var body = document.getElementById('pastclients-body');
+        if (body) body.innerHTML = '<div style="color:var(--red);">Network issue. Tap Scan again to retry.</div>';
+    });
+}
+
+function pastClientsAgeLabel() {
+    if (!_pastClientsSavedAt) return '';
+    var mins = Math.round((Date.now() - new Date(_pastClientsSavedAt).getTime()) / 60000);
+    var when = mins < 1 ? 'just now' : mins < 60 ? (mins + 'm ago') : (Math.round(mins / 60) + 'h ago');
+    return '<div style="font-size:11px;color:#8a86a0;margin-bottom:10px;">Showing your last scan, ' + when + '. Tap &#128260; Scan again for a fresh pass.</div>';
+}
+
+function pastClientContact(it) {
+    var channel = it.phone ? 'sms' : (it.email ? 'email' : null);
+    return { channel: channel, email: it.email, phone: it.phone };
+}
+
+function renderPastClients() {
+    var b = document.getElementById('pastclients-body');
+    if (!b) return;
+    var items = _pastClientItems;
+    var kindStyle = { birthday: 'background:rgba(240,165,0,.14);color:#e0a83c;border:1px solid rgba(240,165,0,.3);', checkin: 'background:rgba(140,120,255,.12);color:#a89bf0;border:1px solid rgba(140,120,255,.25);' };
+
+    var listHtml = !items.length
+        ? '<div style="text-align:center;padding:20px 0;color:#8fe0a5;">No past clients are due for a note right now. Nothing to do here today. &#10003;</div>'
+        : items.map(function(it, i) {
+            var contact = pastClientContact(it);
+            var contactLine = contact.channel
+                ? '<div style="font-size:11.5px;color:#8a86a0;margin-top:2px;">' + (contact.channel === 'email' ? '&#9993; ' + escHtml(contact.email) : '&#128172; ' + escHtml(contact.phone)) + (it.gmailFound ? ' &middot; found in Gmail' : (it.email ? ' &middot; no Gmail history found' : '')) + '</div>'
+                : '<div style="font-size:11.5px;color:#8a86a0;margin-top:2px;">No email or phone on file.</div>';
+
+            var draftBlock = '';
+            if (it.sent) {
+                draftBlock = '<div style="margin-top:10px;padding:6px 10px;background:rgba(120,200,140,.08);border:1px solid rgba(120,200,140,.2);border-radius:8px;font-size:12px;color:#6fae82;">' + escHtml(it.sentLabel || '✓ Sent') + '</div>';
+            } else if (it.draftBody != null && _pastClientsExpandedIndex === i) {
+                draftBlock = '<div style="margin-top:10px;">' +
+                    (it.channel === 'email' ? '<input type="text" id="pc-subject-' + i + '" value="' + escAttr(it.draftSubject || '') + '" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12.5px;color:#e8e6ef;margin-bottom:6px;box-sizing:border-box;">' : '') +
+                    '<textarea id="pc-body-' + i + '" class="autogrow" rows="4" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:12.5px;color:#e8e6ef;box-sizing:border-box;resize:vertical;">' + escHtml(it.draftBody || '') + '</textarea>' +
+                    '<div style="text-align:right;margin-top:8px;">' +
+                    '<button onclick="collapsePastClientDraft(' + i + ')" style="background:none;color:#8a86a0;border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;margin-right:6px;">&#9650; Collapse</button>' +
+                    '<button onclick="draftPastClientMessage(' + i + ')" style="background:none;color:#8a86a0;border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;margin-right:6px;">&#8635; Redraft</button>' +
+                    '<button id="pc-send-' + i + '" onclick="sendPastClientMessage(' + i + ')" style="background:rgba(120,200,140,.16);color:#8fe0a5;border:1px solid rgba(120,200,140,.35);border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;">Send</button>' +
+                    '</div></div>';
+            } else if (it.draftBody != null) {
+                draftBlock = '<div style="margin-top:10px;"><button onclick="expandPastClientDraft(' + i + ')" style="background:var(--surface2);color:#c9c6d6;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12.5px;cursor:pointer;">&#9998; Draft ready, tap to review &amp; send</button></div>';
+            } else if (contact.channel) {
+                draftBlock = '<div style="margin-top:10px;"><button id="pc-draft-' + i + '" onclick="draftPastClientMessage(' + i + ')" style="background:rgba(240,165,0,.14);color:#e0a83c;border:1px solid rgba(240,165,0,.3);border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;">&#10024; Draft ' + (contact.channel === 'email' ? 'email' : 'text') + '</button></div>';
+            }
+
+            return '<div id="pc-card-' + i + '" style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;' + (it.sent ? 'opacity:.6;' : '') + '">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">' +
+                '<div style="font-weight:700;font-size:13.5px;">' + escHtml(it.name || 'Unknown') + '</div>' +
+                '<span style="' + (kindStyle[it.kind] || kindStyle.checkin) + 'border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">' + (it.kind === 'birthday' ? 'Birthday' : 'Check-in') + '</span>' +
+                '</div>' +
+                '<div style="font-size:12px;color:#8a86a0;">' + escHtml(it.eventType || 'Event') + ' &middot; ' + escHtml(fmtDate ? fmtDate(it.eventDate) : it.eventDate) + '</div>' +
+                '<div style="font-size:13px;color:#e8e6ef;margin-top:4px;">' + escHtml(it.label || '') + '</div>' +
+                contactLine +
+                draftBlock +
+                '</div>';
+        }).join('');
+
+    var missingHtml = '';
+    if (_pastClientsMissing.length) {
+        missingHtml = '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">' +
+            '<div style="font-size:12px;font-weight:700;color:#8a86a0;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">Found in Gmail, not in your CRM</div>' +
+            '<div style="font-size:11.5px;color:#8a86a0;margin-bottom:10px;">These addresses turned up in old booking-related emails but aren\'t logged as clients. Confirm and add manually, nothing here is assumed.</div>' +
+            _pastClientsMissing.map(function(m) {
+                return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;">' +
+                    '<div><div style="font-size:12.5px;color:#e8e6ef;">' + escHtml(m.email) + '</div><div style="font-size:11px;color:#8a86a0;margin-top:2px;">' + escHtml(m.subject || '') + '</div></div>' +
+                    '<button onclick="addMissingPastClientToNewLead(\'' + esc(m.email) + '\')" style="background:rgba(240,165,0,.14);color:#e0a83c;border:1px solid rgba(240,165,0,.3);border-radius:7px;padding:5px 10px;font-size:12px;cursor:pointer;white-space:nowrap;">+ Add to CRM</button>' +
+                    '</div>';
+            }).join('') + '</div>';
+    }
+
+    b.innerHTML = pastClientsAgeLabel() + listHtml + missingHtml;
+    requestAnimationFrame(autoGrowAll);
+}
+
+function expandPastClientDraft(i) { syncPastClientDrafts(); _pastClientsExpandedIndex = i; renderPastClients(); }
+function collapsePastClientDraft(i) { syncPastClientDrafts(); if (_pastClientsExpandedIndex === i) _pastClientsExpandedIndex = null; renderPastClients(); }
+
+function draftPastClientMessage(i) {
+    var it = _pastClientItems[i];
+    if (!it) return;
+    var contact = pastClientContact(it);
+    if (!contact.channel) return;
+    var btn = document.getElementById('pc-draft-' + i);
+    if (btn) { btn.disabled = true; btn.textContent = '✨ Drafting…'; }
+    fetch('/api/pending-replies', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'past-client-draft', clientName: it.name, eventType: it.eventType, eventDate: it.eventDate,
+            kind: it.kind, label: it.label, channel: contact.channel, gmailContext: it.gmailContext
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.error) throw new Error(d.error);
+        it.channel = contact.channel;
+        it.draftBody = d.draft || '';
+        if (it.draftSubject == null) it.draftSubject = contact.channel === 'email' ? (it.kind === 'birthday' ? 'Thinking of you' : 'Checking in') : '';
+        _pastClientsExpandedIndex = i;
+        savePastClientsCache();
+        renderPastClients();
+    })
+    .catch(function(e) {
+        alert('Could not draft: ' + e.message);
+        if (btn) { btn.disabled = false; btn.textContent = '✨ Draft ' + (contact.channel === 'email' ? 'email' : 'text'); }
+    });
+}
+
+function sendPastClientMessage(i) {
+    var it = _pastClientItems[i];
+    if (!it) return;
+    var contact = pastClientContact(it);
+    var bodyEl = document.getElementById('pc-body-' + i);
+    var subjEl = document.getElementById('pc-subject-' + i);
+    var body = bodyEl ? bodyEl.value.trim() : '';
+    var subject = subjEl ? subjEl.value.trim() : '';
+    if (!body) { alert('Message cannot be empty.'); return; }
+    var btn = document.getElementById('pc-send-' + i);
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+    fetch('/api/chat?mode=compose', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'compose', clientId: it.clientId, channel: it.channel,
+            toPhone: it.channel === 'sms' ? contact.phone : null,
+            toEmail: it.channel === 'email' ? contact.email : null,
+            subject: subject, body: body
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.error) throw new Error(d.error);
+        it.sent = true; it.sentLabel = '✓ Sent'; it.draftBody = body; it.draftSubject = subject;
+        savePastClientsCache();
+        renderPastClients();
+    })
+    .catch(function(e) {
+        alert('Could not send: ' + e.message);
+        if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+    });
+}
+
+function addMissingPastClientToNewLead(email) {
+    closePastClients();
+    showView('new-lead');
+    var el = document.getElementById('email');
+    if (el) { el.value = email; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); }
+}
+
+function closePastClients() {
+    syncPastClientDrafts();
+    savePastClientsCache();
+    var o = document.getElementById('pastclients-overlay');
     if (o) o.remove();
 }
 
