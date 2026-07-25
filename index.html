@@ -2141,6 +2141,7 @@ function closeCallPrep() { var o = document.getElementById('callprep-overlay'); 
 /* ── Suggest action items: scan the whole pipeline in one call ── */
 var _triageItems = [];
 var _triageSavedAt = null;
+var _triageExpandedIndex = null; // only one drafted item shows its full editable box at a time
 var TRIAGE_CACHE_KEY = 'shine_triage_cache_v1';
 
 function saveTriageCache() {
@@ -2265,17 +2266,21 @@ function renderTriage() {
             : '<div style="font-size:11.5px;color:#8a86a0;margin-top:2px;">No email or phone on file.</div>';
 
         var draftBlock = '';
-        if (it.draftBody != null) {
-            var locked = !!it.sent;
+        if (it.sent) {
+            draftBlock = '<div style="margin-top:10px;padding:6px 10px;background:rgba(120,200,140,.08);border:1px solid rgba(120,200,140,.2);border-radius:8px;font-size:12px;color:#6fae82;">' + escHtml(it.sentLabel || '✓ Sent') + '</div>';
+        } else if (it.draftBody != null && _triageExpandedIndex === i) {
             draftBlock = '<div style="margin-top:10px;">' +
-                (it.channel === 'email' ? '<input type="text" id="tr-subject-' + i + '" value="' + escAttr(it.draftSubject || '') + '"' + (locked ? ' disabled' : '') + ' style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12.5px;color:#e8e6ef;margin-bottom:6px;box-sizing:border-box;">' : '') +
-                '<textarea id="tr-body-' + i + '" class="autogrow" rows="4"' + (locked ? ' disabled' : '') + ' style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:12.5px;color:#e8e6ef;box-sizing:border-box;resize:vertical;">' + escHtml(it.draftBody || '') + '</textarea>' +
-                '<div style="text-align:right;margin-top:8px;">' + (
-                    locked
-                        ? '<button disabled style="background:rgba(120,200,140,.1);color:#6fae82;border:1px solid rgba(120,200,140,.25);border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;">' + escHtml(it.sentLabel || '✓ Sent') + '</button>'
-                        : '<button onclick="draftTriageMessage(' + i + ')" style="background:none;color:#8a86a0;border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;margin-right:6px;">&#8635; Redraft</button>' +
-                          '<button id="tr-send-' + i + '" onclick="sendTriageMessage(' + i + ')" style="background:rgba(120,200,140,.16);color:#8fe0a5;border:1px solid rgba(120,200,140,.35);border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;">Send</button>'
-                ) + '</div></div>';
+                (it.channel === 'email' ? '<input type="text" id="tr-subject-' + i + '" value="' + escAttr(it.draftSubject || '') + '" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12.5px;color:#e8e6ef;margin-bottom:6px;box-sizing:border-box;">' : '') +
+                '<textarea id="tr-body-' + i + '" class="autogrow" rows="4" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:12.5px;color:#e8e6ef;box-sizing:border-box;resize:vertical;">' + escHtml(it.draftBody || '') + '</textarea>' +
+                '<div style="text-align:right;margin-top:8px;">' +
+                '<button onclick="collapseTriageDraft(' + i + ')" style="background:none;color:#8a86a0;border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;margin-right:6px;">&#9650; Collapse</button>' +
+                '<button onclick="draftTriageMessage(' + i + ')" style="background:none;color:#8a86a0;border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;margin-right:6px;">&#8635; Redraft</button>' +
+                '<button id="tr-send-' + i + '" onclick="sendTriageMessage(' + i + ')" style="background:rgba(120,200,140,.16);color:#8fe0a5;border:1px solid rgba(120,200,140,.35);border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;">Send</button>' +
+                '</div></div>';
+        } else if (it.draftBody != null) {
+            draftBlock = '<div style="margin-top:10px;">' +
+                '<button onclick="expandTriageDraft(' + i + ')" style="background:var(--surface2);color:#c9c6d6;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12.5px;cursor:pointer;">&#9998; Draft ready, tap to review &amp; send</button>' +
+                '</div>';
         } else if (contact && contact.channel) {
             draftBlock = '<div style="margin-top:10px;">' +
                 '<button id="tr-draft-' + i + '" onclick="draftTriageMessage(' + i + ')" style="background:rgba(140,120,255,.14);color:#c9b8ff;border:1px solid rgba(140,120,255,.3);border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;">&#10024; Draft ' + (contact.channel === 'email' ? 'email' : 'text') + '</button>' +
@@ -2321,6 +2326,7 @@ function draftTriageMessage(i) {
         it.channel = contact.channel;
         it.draftBody = d.draft || '';
         if (it.draftSubject == null) it.draftSubject = contact.channel === 'email' ? 'Following up' : '';
+        _triageExpandedIndex = i; // opening this one collapses whichever other draft was open
         saveTriageCache();
         renderTriage();
     })
@@ -2328,6 +2334,18 @@ function draftTriageMessage(i) {
         alert('Could not draft: ' + e.message);
         if (btn) { btn.disabled = false; btn.textContent = '✨ Draft ' + (contact.channel === 'email' ? 'email' : 'text'); }
     });
+}
+
+function expandTriageDraft(i) {
+    syncTriageDrafts();
+    _triageExpandedIndex = i;
+    renderTriage();
+}
+
+function collapseTriageDraft(i) {
+    syncTriageDrafts();
+    if (_triageExpandedIndex === i) _triageExpandedIndex = null;
+    renderTriage();
 }
 
 function sendTriageMessage(i) {
