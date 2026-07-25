@@ -178,7 +178,12 @@ Rules:
 - My stage show is my strength — always emphasize it. For private parties (birthdays, house/home parties, small private events) do NOT bring up strolling unless the client specifically asks. For cocktail parties mention BOTH strolling and the stage show (suggest the stage show too if the setup allows guests to gather and watch). For weddings and corporate events I can mention strolling too, but only as an optional add-on with the stage show as the headline — never lead with strolling. Only center strolling if they explicitly ask about walk-around/close-up/roving magic
 - Never claim I only do one format (stage show) if asked about strolling — I do both, and which one fits is something we figure out together
 - If client says "yes lets book", "I want to book", "send the contract" — thank them for booking (in a way I haven't already phrased earlier in this thread) and mention I'll send a quick questionnaire to get everything set up, then add [BOOKING_INTENT] at the very end
-- Never make up availability`;
+- Never make up availability
+
+Call/meeting detection (separate from the actual performance date):
+- Today's date is ${new Date().toISOString().slice(0, 10)}. Resolve any relative date the client gives ("tomorrow", "Thursday", "next week") against this.
+- If, across this thread including their latest message, a specific date AND a specific time have been mutually confirmed for a phone call, video call, or meeting to talk further (this is NOT the event/performance date itself), append this marker on its own line at the very end, after any other marker: [CALL_SCHEDULED: YYYY-MM-DD|H:MM AM/PM|short title]
+- Only add it when both a specific date and a specific time are clearly settled by both sides — not when a call is merely proposed or "sometime tomorrow" with no time given. If unsure, leave it out.`;
 
     // Owner's custom response guidance (editable from the dashboard "AI Settings" panel).
     // A single free-text field in app_settings, layered on top of the base voice above.
@@ -233,7 +238,13 @@ Rules:
     const replyText = claudeData.content[0].text;
     const bookingIntent = replyText.includes('[BOOKING_INTENT]');
     const pricingRequested = replyText.includes('[PRICING_REQUESTED]');
-    const cleanReply = replyText.replace('[BOOKING_INTENT]', '').replace('[PRICING_REQUESTED]', '').trim();
+    const callMatch = replyText.match(/\[CALL_SCHEDULED:\s*(\d{4}-\d{2}-\d{2})\s*\|\s*([^\]|]+?)\s*\|\s*([^\]]+?)\s*\]/);
+    const callSuggestion = callMatch ? { date: callMatch[1], time: callMatch[2].trim(), title: callMatch[3].trim() } : null;
+    const cleanReply = replyText
+      .replace('[BOOKING_INTENT]', '')
+      .replace('[PRICING_REQUESTED]', '')
+      .replace(/\[CALL_SCHEDULED:[^\]]*\]/, '')
+      .trim();
 
     // Check global review-mode setting
     let reviewMode = false;
@@ -270,10 +281,13 @@ Rules:
         if (bookingIntent) newStatus = 'booked';
         if ((STATUS_RANK[newStatus] ?? 0) < (STATUS_RANK[client.status] ?? 0)) newStatus = client.status;
 
+        const clientPatch = { status: newStatus, last_activity: new Date().toISOString(), last_channel: 'sms' };
+        if (callSuggestion) clientPatch.calendar_suggestion = callSuggestion;
+
         await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
-          body: JSON.stringify({ status: newStatus, last_activity: new Date().toISOString(), last_channel: 'sms' })
+          body: JSON.stringify(clientPatch)
         });
 
         const messagesRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {

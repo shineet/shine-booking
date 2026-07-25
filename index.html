@@ -642,6 +642,27 @@
     .newlead-banner .nlb-view { background: var(--green); color: #08130d }
     .newlead-banner .nlb-dismiss { background: transparent; color: var(--muted) }
 
+    /* Call reminder banner: context-detected call/meeting times pulled from SMS threads */
+    .callreminder-banner {
+        display: none; flex-direction: column; gap: 4px;
+        background: linear-gradient(90deg, rgba(240,165,0,.20), rgba(240,165,0,.05));
+        border-bottom: 1px solid var(--border);
+        border-left: 3px solid var(--amber);
+        padding: 11px 16px; width: 100%; box-sizing: border-box;
+        flex-shrink: 0; font-size: 13px;
+    }
+    .callreminder-banner.show { display: flex }
+    .callreminder-banner .crb-title { font-weight: 700; color: var(--amber); margin-bottom: 2px; }
+    .callreminder-item { display: flex; align-items: center; gap: 12px; padding: 4px 0; }
+    .callreminder-item .crb-text { flex: 1; color: var(--text) }
+    .callreminder-item .crb-text b { color: var(--amber) }
+    .callreminder-item button {
+        border: none; border-radius: 6px; padding: 7px 14px;
+        font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    }
+    .callreminder-item .crb-add { background: var(--amber); color: #2a1c00 }
+    .callreminder-item .crb-dismiss { background: transparent; color: var(--muted) }
+
     /* New-lead center popup */
     .nl-pop-overlay {
         position: fixed; inset: 0; z-index: 9999;
@@ -1052,6 +1073,12 @@
         <div class="nlb-text" id="newlead-text"></div>
         <button class="nlb-view" onclick="viewNewLeads()">View</button>
         <button class="nlb-dismiss" onclick="dismissNewLeads()">Dismiss</button>
+    </div>
+
+    <!-- Call reminder banner: context-detected call/meeting times to add to calendar -->
+    <div id="callreminder-banner" class="callreminder-banner">
+        <div class="crb-title">&#128222; Calls to add to your calendar</div>
+        <div id="callreminder-list"></div>
     </div>
 
     <!-- New lead center popup -->
@@ -1771,6 +1798,7 @@ function loadLeads() {
         mergeResearchCacheFromDb(clients);
         renderList();
         checkNewLeads();
+        renderCallReminders();
         if (activeClientId) {
             var c = clients.find(function(x) { return x.id === activeClientId; });
             if (c) renderDetail(c);
@@ -1779,6 +1807,91 @@ function loadLeads() {
     .catch(function(e) {
         document.getElementById('lead-list').innerHTML = '<div class="list-empty" style="color:var(--red)">Error: ' + e.message + '</div>';
     });
+}
+
+// ── Call reminders: context-detected call/meeting times from SMS conversations ──
+// api/reply.js scans each inbound SMS reply (with full thread context) for a
+// mutually-confirmed call/meeting time -- e.g. client asks for a call, a time gets
+// fixed in the back-and-forth -- and stores it on clients.calendar_suggestion. This
+// banner surfaces it automatically so Shine can add it with one click instead of
+// having to notice and remember it from inside a text thread.
+function renderCallReminders() {
+    var banner = document.getElementById('callreminder-banner');
+    var list = document.getElementById('callreminder-list');
+    if (!banner || !list) return;
+    var pending = (allClients || []).filter(function(c) { return c.calendar_suggestion && c.calendar_suggestion.date; });
+    if (!pending.length) { banner.classList.remove('show'); list.innerHTML = ''; return; }
+    list.innerHTML = pending.map(function(c) {
+        var s = c.calendar_suggestion;
+        var when = fmtDateLong(s.date) + (s.time ? ' at ' + escHtml(s.time) : '');
+        return '<div class="callreminder-item">' +
+            '<div class="crb-text">&#128222; <b>' + escHtml(c.name || 'Client') + '</b>: ' + escHtml(s.title || 'Call') + ' &mdash; ' + when + '</div>' +
+            '<button class="crb-add" onclick="downloadCallReminderIcs(\'' + esc(c.id) + '\')">&#128197; Add to Calendar</button>' +
+            '<button class="crb-dismiss" onclick="dismissCallReminder(\'' + esc(c.id) + '\')">Dismiss</button>' +
+            '</div>';
+    }).join('');
+    banner.classList.add('show');
+}
+
+function _parseCallReminderTime(timeStr, dateStr) {
+    var startDate = new Date(dateStr + 'T00:00:00');
+    if (!timeStr) { startDate.setHours(12, 0, 0, 0); return startDate; }
+    var cleaned = String(timeStr).trim().toLowerCase();
+    var match = cleaned.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+    var hour = 12, minute = 0;
+    if (match) {
+        hour = parseInt(match[1], 10);
+        minute = match[2] ? parseInt(match[2], 10) : 0;
+        var meridiem = match[3];
+        if (!meridiem) { var m = cleaned.match(/(am|pm)/); if (m) meridiem = m[1]; }
+        if (meridiem === 'pm' && hour < 12) hour += 12;
+        if (meridiem === 'am' && hour === 12) hour = 0;
+    }
+    startDate.setHours(hour, minute, 0, 0);
+    return startDate;
+}
+function _icsDateTimeCR(date) {
+    var pad = function(n) { return String(n).padStart(2, '0'); };
+    return date.getFullYear() + pad(date.getMonth() + 1) + pad(date.getDate()) + 'T' +
+        pad(date.getHours()) + pad(date.getMinutes()) + pad(date.getSeconds());
+}
+function _icsEscCR(str) {
+    return String(str || '').replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
+}
+function downloadCallReminderIcs(clientId) {
+    var c = (allClients || []).find(function(x) { return x.id === clientId; });
+    if (!c || !c.calendar_suggestion || !c.calendar_suggestion.date) { alert('This reminder is missing a date.'); return; }
+    var s = c.calendar_suggestion;
+    var startDate = _parseCallReminderTime(s.time, s.date);
+    var endDate = new Date(startDate.getTime() + 30 * 60000);
+    var title = s.title || ('Call with ' + (c.name || 'client'));
+    var description = 'Call with ' + (c.name || 'client') + (c.phone ? ' (' + c.phone + ')' : '') + ' \u2014 detected automatically from your SMS conversation.';
+    var uid = 'shine-booking-call-' + c.id + '-' + s.date + '@texasmentalist.com';
+    var ics = [
+        'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Shine The Mentalist//Booking App//EN',
+        'BEGIN:VEVENT', 'UID:' + uid, 'DTSTAMP:' + _icsDateTimeCR(new Date()),
+        'DTSTART:' + _icsDateTimeCR(startDate), 'DTEND:' + _icsDateTimeCR(endDate),
+        'SUMMARY:' + _icsEscCR(title), 'DESCRIPTION:' + _icsEscCR(description),
+        'END:VEVENT', 'END:VCALENDAR'
+    ].join('\r\n');
+    var blob = new Blob([ics], { type: 'text/calendar' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'call-reminder.ics';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+}
+function dismissCallReminder(clientId) {
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + clientId, {
+        method: 'PATCH',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calendar_suggestion: null })
+    }).then(function() {
+        var c = (allClients || []).find(function(x) { return x.id === clientId; });
+        if (c) c.calendar_suggestion = null;
+        renderCallReminders();
+    }).catch(function() {});
 }
 
 // ── New-lead alert ──────────────────────────────────────────────────────────
