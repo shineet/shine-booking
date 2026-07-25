@@ -697,6 +697,26 @@
 
 
             ;
+        } else if (eventType.includes('housewarming') || eventType.includes('house warming')) {
+            html += `
+      <div class="field"><label>Type of crowd</label>
+        <div class="radio-group">${
+            radioGroup('q_crowd', ['All adults', 'Family crowd', 'Include kids'])}</div>
+      </div>
+      <div class="field"><label>Name(s) of the host(s)</label><input type="text" id="q_honoree"></div>
+      <div class="field"><label>What's the story behind this home? <span class="hint">(optional — first home, upgrade, move from out of state, etc. — a nice detail I can work into the show)</span></label><input type="text" id="q_home_story" placeholder="e.g. first home together, downsized, moved from Chicago"></div>
+      <div class="field"><label>Where in the home will the show take place?</label><input type="text" id="q_show_space" placeholder="e.g. living room, backyard patio, open kitchen/living area"></div>
+      <div class="field"><label>Any VIPs or special people attending?</label><input type="text" id="q_vips"></div>
+      <div class="field"><label>Anyone who should NOT be involved?</label><input type="text" id="q_exclude"></div>
+      <div class="field"><label>What kind of vibe are you looking for?</label>
+        <div class="radio-group">${
+            radioGroup('q_vibe', ['Clean elegant & classy', 'Family friendly', 'Light adult humor', 'Slightly edgy / flirty'])}</div>
+      </div>
+      <div class="field"><label>Tell me about the host(s) <span class="hint">(personality, hobbies, a funny or embarrassing story, anything most people don't know — I'll use this to personalize the show and a few custom touches)</span></label><textarea id="q_trivia"></textarea></div>
+      ${photoField('q_photo_honoree', 'the host(s)')}
+      <div class="field"><label>Anything else I should know about the space or the crowd?</label><textarea id="q_anything_else"></textarea></div>
+    `
+            ;
         } else {
             // General / private celebration
             html += `
