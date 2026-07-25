@@ -2216,8 +2216,40 @@ function closeTriage() { var o = document.getElementById('triage-overlay'); if (
 
 /* ── Find leads: web-search sweep + per-lead review/send (never auto-sends) ── */
 var _foundLeads = [];
+var _foundLeadsSavedAt = null;
+var FOUNDLEADS_CACHE_KEY = 'shine_foundleads_cache_v1';
 
-function findLeads() {
+function saveFoundLeadsCache() {
+    try {
+        localStorage.setItem(FOUNDLEADS_CACHE_KEY, JSON.stringify({ savedAt: _foundLeadsSavedAt, leads: _foundLeads }));
+    } catch(e) {}
+}
+
+function loadFoundLeadsCache() {
+    try {
+        var raw = localStorage.getItem(FOUNDLEADS_CACHE_KEY);
+        if (!raw) return false;
+        var parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.leads)) return false;
+        _foundLeads = parsed.leads;
+        _foundLeadsSavedAt = parsed.savedAt || null;
+        return true;
+    } catch(e) { return false; }
+}
+
+// Syncs any in-progress edits to subject/body back into _foundLeads before the overlay closes
+// or a fresh search overwrites it, so nothing typed is silently lost.
+function syncFoundLeadsDrafts() {
+    _foundLeads.forEach(function(l, i) {
+        if (l.sent) return;
+        var subjEl = document.getElementById('fl-subject-' + i);
+        var bodyEl = document.getElementById('fl-body-' + i);
+        if (subjEl) l.draftSubject = subjEl.value;
+        if (bodyEl) l.draftBody = bodyEl.value;
+    });
+}
+
+function findLeads(forceRefresh) {
     var old = document.getElementById('findleads-overlay');
     if (old) old.remove();
     var ov = document.createElement('div');
@@ -2228,12 +2260,17 @@ function findLeads() {
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:10px;">' +
         '<div style="font-size:16px;font-weight:700;">&#128301; Find leads</div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
-        '<button onclick="findLeads()" title="Search again" style="background:rgba(120,200,140,.14);color:#8fe0a5;border:1px solid rgba(120,200,140,.3);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;">&#128260; Search again</button>' +
+        '<button onclick="syncFoundLeadsDrafts();findLeads(true)" title="Search again" style="background:rgba(120,200,140,.14);color:#8fe0a5;border:1px solid rgba(120,200,140,.3);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;">&#128260; Search again</button>' +
         '<button onclick="closeFindLeads()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1;">&times;</button></div></div>' +
         '<div style="font-size:11.5px;color:#8a86a0;margin-bottom:14px;">Every draft below is reviewed by you. Nothing sends until you click Send on that specific card.</div>' +
         '<div id="findleads-body"><div style="text-align:center;padding:34px 0;color:#aaa;">Searching event boards, conference calendars, and gig sites for live opportunities.<br><br><span style="color:#8fe0a5;">This can take up to a minute…</span></div></div>' +
         '</div>';
     document.body.appendChild(ov);
+
+    if (!forceRefresh && loadFoundLeadsCache()) {
+        renderFoundLeads();
+        return;
+    }
 
     fetch('/api/pending-replies', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2247,6 +2284,8 @@ function findLeads() {
         if (!res) { b.innerHTML = '<div style="color:var(--red);">That timed out. Tap Search again to retry.</div>'; return; }
         if (res.error) { b.innerHTML = '<div style="color:var(--red);">' + escHtml(res.error) + '</div>'; return; }
         _foundLeads = res.leads || [];
+        _foundLeadsSavedAt = new Date().toISOString();
+        saveFoundLeadsCache();
         renderFoundLeads();
     })
     .catch(function() {
@@ -2255,25 +2294,33 @@ function findLeads() {
     });
 }
 
+function foundLeadsAgeLabel() {
+    if (!_foundLeadsSavedAt) return '';
+    var mins = Math.round((Date.now() - new Date(_foundLeadsSavedAt).getTime()) / 60000);
+    var when = mins < 1 ? 'just now' : mins < 60 ? (mins + 'm ago') : (Math.round(mins / 60) + 'h ago');
+    return '<div style="font-size:11px;color:#8a86a0;margin-bottom:10px;">Showing your last search, ' + when + '. Tap &#128260; Search again for a fresh sweep.</div>';
+}
+
 function renderFoundLeads() {
     var b = document.getElementById('findleads-body');
     if (!b) return;
     if (!_foundLeads.length) { b.innerHTML = '<div style="text-align:center;padding:24px 0;color:#8a86a0;">No live opportunities turned up this sweep. Tap Search again in a bit.</div>'; return; }
-    b.innerHTML = _foundLeads.map(function(l, i) {
+    b.innerHTML = foundLeadsAgeLabel() + _foundLeads.map(function(l, i) {
         var hasEmail = !!l.contactEmail;
         var contactLine = hasEmail
             ? '<div style="font-size:12.5px;color:#e8e6ef;">' + escHtml(l.contactName || 'Contact') + ' &middot; ' + escHtml(l.contactEmail) + '</div>'
             : '<div style="font-size:12.5px;color:#8a86a0;">No public contact email found, note this one manually.</div>';
         var meta = [l.eventType, l.eventWindow, l.location, l.estimatedBudget].filter(Boolean).map(escHtml).join(' &middot; ');
+        var sendBtn = l.sent
+            ? '<button disabled style="background:rgba(120,200,140,.1);color:#6fae82;border:1px solid rgba(120,200,140,.25);border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:default;">' + escHtml(l.sentLabel || '✓ Sent') + '</button>'
+            : '<button id="fl-send-' + i + '" onclick="sendOutreachLead(' + i + ')" style="background:rgba(120,200,140,.16);color:#8fe0a5;border:1px solid rgba(120,200,140,.35);border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;">Send intro email</button>';
         var draftBlock = hasEmail ? (
             '<div style="margin-top:10px;">' +
-            '<input type="text" id="fl-subject-' + i + '" value="' + escAttr(l.draftSubject || '') + '" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12.5px;color:#e8e6ef;margin-bottom:6px;box-sizing:border-box;">' +
-            '<textarea id="fl-body-' + i + '" rows="5" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:12.5px;color:#e8e6ef;box-sizing:border-box;resize:vertical;">' + escHtml(l.draftBody || '') + '</textarea>' +
-            '<div style="text-align:right;margin-top:8px;">' +
-            '<button id="fl-send-' + i + '" onclick="sendOutreachLead(' + i + ')" style="background:rgba(120,200,140,.16);color:#8fe0a5;border:1px solid rgba(120,200,140,.35);border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;">Send intro email</button>' +
-            '</div></div>'
+            '<input type="text" id="fl-subject-' + i + '" value="' + escAttr(l.draftSubject || '') + '"' + (l.sent ? ' disabled' : '') + ' style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12.5px;color:#e8e6ef;margin-bottom:6px;box-sizing:border-box;">' +
+            '<textarea id="fl-body-' + i + '" rows="5"' + (l.sent ? ' disabled' : '') + ' style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:12.5px;color:#e8e6ef;box-sizing:border-box;resize:vertical;">' + escHtml(l.draftBody || '') + '</textarea>' +
+            '<div style="text-align:right;margin-top:8px;">' + sendBtn + '</div></div>'
         ) : '';
-        return '<div id="fl-card-' + i + '" style="border:1px solid var(--border);border-radius:10px;padding:13px 15px;margin-bottom:12px;">' +
+        return '<div id="fl-card-' + i + '" style="border:1px solid var(--border);border-radius:10px;padding:13px 15px;margin-bottom:12px;' + (l.sent ? 'opacity:.55;' : '') + '">' +
             '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
             '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#8fe0a5;font-weight:700;">' + escHtml(l.source || '') + '</div>' +
             '</div>' +
@@ -2307,9 +2354,14 @@ function sendOutreachLead(i) {
     .then(function(r) { return r.json(); })
     .then(function(res) {
         if (res.error) throw new Error(res.error);
+        l.sent = true;
+        l.draftSubject = subject;
+        l.draftBody = body;
+        l.sentLabel = res.reusedExisting ? '✓ Sent (existing lead updated)' : '✓ Sent';
+        saveFoundLeadsCache();
         var card = document.getElementById('fl-card-' + i);
         if (card) card.style.opacity = '.55';
-        if (btn) { btn.textContent = res.reusedExisting ? '✓ Sent (existing lead updated)' : '✓ Sent'; btn.disabled = true; }
+        if (btn) { btn.textContent = l.sentLabel; btn.disabled = true; }
         loadLeads(); // new/updated client now shows in the pipeline
     })
     .catch(function(e) {
@@ -2318,7 +2370,12 @@ function sendOutreachLead(i) {
     });
 }
 
-function closeFindLeads() { var o = document.getElementById('findleads-overlay'); if (o) o.remove(); }
+function closeFindLeads() {
+    syncFoundLeadsDrafts();
+    saveFoundLeadsCache();
+    var o = document.getElementById('findleads-overlay');
+    if (o) o.remove();
+}
 
 function researchError(msg) {
     var b = document.getElementById('research-body');
