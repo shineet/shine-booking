@@ -365,6 +365,12 @@ td { padding: 9px 14px; vertical-align: middle; }
 }
 .fee-highlight .lbl { font-size: 12px; color: var(--muted); }
 .fee-highlight .val { font-size: 24px; font-weight: 700; color: var(--green); }
+.fee-highlight .val-row { display: flex; align-items: center; gap: 10px; }
+.fee-edit-btn {
+  background: none; border: 1px solid #2a4f2e; border-radius: 6px;
+  color: var(--muted); font-size: 12px; padding: 4px 8px; cursor: pointer;
+}
+.fee-edit-btn:hover { color: var(--text); border-color: var(--muted); }
 
 /* Add/edit form */
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -1172,7 +1178,10 @@ function openDetail(bookingId) {
         <div class="lbl">Agreed Fee</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(pkg) || 'Standard'}</div>
       </div>
-      <div class="val">${fee}</div>
+      <div class="val-row">
+        <div class="val">${fee}</div>
+        <button class="fee-edit-btn" onclick="editFee()" title="Manually set the agreed fee (e.g. price agreed over SMS/call, not through the pricing link)">Edit</button>
+      </div>
     </div>
 
     <div class="detail-grid">
@@ -1203,6 +1212,41 @@ function openDetail(bookingId) {
 
   openModal('detail-modal');
   loadConversation(c.id);
+}
+
+// Manually set/correct the agreed fee on the open gig's booking row. Needed
+// because the fee only auto-populates when a price is confirmed through the
+// pricing link (api/select-package.js / api/chat.js mode=pricing) — a price
+// agreed over in-app SMS or a call never touches that flow, so the booking
+// gets created with no fee. This lets Shine fix it directly.
+async function editFee() {
+  const c = activeClient;
+  if (!c || !c.booking_id) { alert('No booking selected.'); return; }
+
+  const current = c.selected_price ? String(Number(c.selected_price)) : '';
+  const input = prompt('Agreed fee ($) — leave blank to clear back to TBD:', current);
+  if (input === null) return; // cancelled
+
+  const trimmed = input.trim();
+  let newFee = null;
+  if (trimmed !== '') {
+    newFee = Number(trimmed.replace(/[^0-9.]/g, ''));
+    if (!Number.isFinite(newFee) || newFee < 0) { alert('Enter a valid, non-negative number.'); return; }
+  }
+
+  try {
+    await sbPatch('bookings', c.booking_id, { fee: newFee });
+    c.selected_price = newFee;
+    const u = upcoming.find(x => x.booking_id === c.booking_id);
+    if (u) u.selected_price = newFee;
+    renderUpcoming();
+    renderKPIs();
+    renderCharts();
+    applyFilters();
+    openDetail(c.booking_id);
+  } catch (e) {
+    alert('Could not save fee: ' + e.message);
+  }
 }
 
 // ── Calendar / Contact downloads (dashboard backup for the auto email on sign) ─
