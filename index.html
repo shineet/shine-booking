@@ -2139,7 +2139,39 @@ function copyCallPrep(btn) {
 function closeCallPrep() { var o = document.getElementById('callprep-overlay'); if (o) o.remove(); }
 
 /* ── Suggest action items: scan the whole pipeline in one call ── */
-function suggestActionItems() {
+var _triageItems = [];
+var _triageSavedAt = null;
+var TRIAGE_CACHE_KEY = 'shine_triage_cache_v1';
+
+function saveTriageCache() {
+    try { localStorage.setItem(TRIAGE_CACHE_KEY, JSON.stringify({ savedAt: _triageSavedAt, items: _triageItems })); } catch(e) {}
+}
+
+function loadTriageCache() {
+    try {
+        var raw = localStorage.getItem(TRIAGE_CACHE_KEY);
+        if (!raw) return false;
+        var parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.items)) return false;
+        _triageItems = parsed.items;
+        _triageSavedAt = parsed.savedAt || null;
+        return true;
+    } catch(e) { return false; }
+}
+
+// Syncs any in-progress edits to subject/body back into _triageItems before the overlay closes
+// or a fresh scan overwrites it, so nothing typed is silently lost.
+function syncTriageDrafts() {
+    _triageItems.forEach(function(it, i) {
+        if (it.sent || it.draftBody == null) return;
+        var subjEl = document.getElementById('tr-subject-' + i);
+        var bodyEl = document.getElementById('tr-body-' + i);
+        if (subjEl) it.draftSubject = subjEl.value;
+        if (bodyEl) it.draftBody = bodyEl.value;
+    });
+}
+
+function suggestActionItems(forceRefresh) {
     var old = document.getElementById('triage-overlay');
     if (old) old.remove();
     var ov = document.createElement('div');
@@ -2150,11 +2182,16 @@ function suggestActionItems() {
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;">' +
         '<div style="font-size:16px;font-weight:700;">&#129517; Suggested actions</div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
-        '<button onclick="suggestActionItems()" title="Re-scan" style="background:rgba(140,120,255,.14);color:#c9b8ff;border:1px solid rgba(140,120,255,.3);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;">&#128260; Re-scan</button>' +
+        '<button onclick="syncTriageDrafts();suggestActionItems(true)" title="Re-scan" style="background:rgba(140,120,255,.14);color:#c9b8ff;border:1px solid rgba(140,120,255,.3);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;">&#128260; Re-scan</button>' +
         '<button onclick="closeTriage()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1;">&times;</button></div></div>' +
         '<div id="triage-body"><div style="text-align:center;padding:34px 0;color:#aaa;">Scanning the pipeline for leads that need attention.<br><br><span style="color:#c9b8ff;">Working on it…</span></div></div>' +
         '</div>';
     document.body.appendChild(ov);
+
+    if (!forceRefresh && loadTriageCache()) {
+        renderTriage();
+        return;
+    }
 
     var now = Date.now();
     var leads = allClients.filter(function(c) { return c.status !== 'lost' && c.status !== 'completed' && c.status !== 'inactive'; }).map(function(c) {
@@ -2180,7 +2217,10 @@ function suggestActionItems() {
         if (!b) return;
         if (!res) { b.innerHTML = '<div style="color:var(--red);">That timed out. Tap Re-scan to try again.</div>'; return; }
         if (res.error) { b.innerHTML = '<div style="color:var(--red);">' + escHtml(res.error) + '</div>'; return; }
-        renderTriage(res.items || []);
+        _triageItems = res.items || [];
+        _triageSavedAt = new Date().toISOString();
+        saveTriageCache();
+        renderTriage();
     })
     .catch(function() {
         var b = document.getElementById('triage-body');
@@ -2188,7 +2228,26 @@ function suggestActionItems() {
     });
 }
 
-function renderTriage(items) {
+function triageAgeLabel() {
+    if (!_triageSavedAt) return '';
+    var mins = Math.round((Date.now() - new Date(_triageSavedAt).getTime()) / 60000);
+    var when = mins < 1 ? 'just now' : mins < 60 ? (mins + 'm ago') : (Math.round(mins / 60) + 'h ago');
+    return '<div style="font-size:11px;color:#8a86a0;margin-bottom:10px;">Showing your last scan, ' + when + '. Tap &#128260; Re-scan for a fresh pass.</div>';
+}
+
+// Picks the real channel to use from the client's actual contact info (last_channel
+// preference first, else whichever of phone/email exists) rather than trusting the AI to guess.
+function triageContact(clientId) {
+    var c = allClients.find(function(x) { return x.id === clientId; });
+    if (!c) return null;
+    var channel = (c.last_channel === 'email' && c.email) ? 'email'
+        : (c.last_channel === 'sms' && c.phone) ? 'sms'
+        : (c.phone ? 'sms' : (c.email ? 'email' : null));
+    return { client: c, email: c.email || null, phone: c.phone || null, channel: channel };
+}
+
+function renderTriage() {
+    var items = _triageItems;
     var b = document.getElementById('triage-body');
     if (!b) return;
     if (!items.length) { b.innerHTML = '<div style="text-align:center;padding:24px 0;color:#8fe0a5;">Nothing needs action right now. Pipeline looks clean. &#10003;</div>'; return; }
@@ -2197,22 +2256,120 @@ function renderTriage(items) {
         medium: 'background:rgba(240,165,0,.14);color:#e0a83c;border:1px solid rgba(240,165,0,.3);',
         low:    'background:rgba(140,120,255,.12);color:#a89bf0;border:1px solid rgba(140,120,255,.25);'
     };
-    b.innerHTML = items.map(function(it) {
-        var c = allClients.find(function(x) { return x.id === it.clientId; });
-        var name = c ? c.name : (it.clientId || 'Unknown');
+    b.innerHTML = triageAgeLabel() + items.map(function(it, i) {
+        var contact = triageContact(it.clientId);
+        var name = contact ? contact.client.name : (it.clientId || 'Unknown');
         var style = urgencyStyle[it.urgency] || urgencyStyle.low;
-        return '<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;cursor:pointer;" onclick="closeTriage();selectLead(\'' + esc(it.clientId) + '\')">' +
+        var contactLine = contact && contact.channel
+            ? '<div style="font-size:11.5px;color:#8a86a0;margin-top:2px;">' + (contact.channel === 'email' ? '&#9993; ' + escHtml(contact.email) : '&#128172; ' + escHtml(contact.phone)) + '</div>'
+            : '<div style="font-size:11.5px;color:#8a86a0;margin-top:2px;">No email or phone on file.</div>';
+
+        var draftBlock = '';
+        if (it.draftBody != null) {
+            var locked = !!it.sent;
+            draftBlock = '<div style="margin-top:10px;">' +
+                (it.channel === 'email' ? '<input type="text" id="tr-subject-' + i + '" value="' + escAttr(it.draftSubject || '') + '"' + (locked ? ' disabled' : '') + ' style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12.5px;color:#e8e6ef;margin-bottom:6px;box-sizing:border-box;">' : '') +
+                '<textarea id="tr-body-' + i + '" rows="4"' + (locked ? ' disabled' : '') + ' style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:12.5px;color:#e8e6ef;box-sizing:border-box;resize:vertical;">' + escHtml(it.draftBody || '') + '</textarea>' +
+                '<div style="text-align:right;margin-top:8px;">' + (
+                    locked
+                        ? '<button disabled style="background:rgba(120,200,140,.1);color:#6fae82;border:1px solid rgba(120,200,140,.25);border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;">' + escHtml(it.sentLabel || '✓ Sent') + '</button>'
+                        : '<button onclick="draftTriageMessage(' + i + ')" style="background:none;color:#8a86a0;border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;margin-right:6px;">&#8635; Redraft</button>' +
+                          '<button id="tr-send-' + i + '" onclick="sendTriageMessage(' + i + ')" style="background:rgba(120,200,140,.16);color:#8fe0a5;border:1px solid rgba(120,200,140,.35);border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;">Send</button>'
+                ) + '</div></div>';
+        } else if (contact && contact.channel) {
+            draftBlock = '<div style="margin-top:10px;">' +
+                '<button id="tr-draft-' + i + '" onclick="draftTriageMessage(' + i + ')" style="background:rgba(140,120,255,.14);color:#c9b8ff;border:1px solid rgba(140,120,255,.3);border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;">&#10024; Draft ' + (contact.channel === 'email' ? 'email' : 'text') + '</button>' +
+                '</div>';
+        }
+
+        return '<div id="tr-card-' + i + '" style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;' + (it.sent ? 'opacity:.6;' : '') + '">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">' +
             '<div style="font-weight:700;font-size:13.5px;">' + escHtml(name) + '</div>' +
             '<span style="' + style + 'border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">' + escHtml(it.urgency || '') + '</span>' +
             '</div>' +
             '<div style="font-size:13px;color:#e8e6ef;margin-bottom:4px;">' + escHtml(it.action || '') + '</div>' +
             '<div style="font-size:11.5px;color:#8a86a0;">' + escHtml(it.reason || '') + '</div>' +
+            contactLine +
+            draftBlock +
+            '<div style="margin-top:8px;"><button onclick="closeTriage();selectLead(\'' + esc(it.clientId) + '\')" style="background:none;border:none;color:#a89bf0;font-size:11.5px;cursor:pointer;padding:0;text-decoration:underline;">View full lead &rarr;</button></div>' +
             '</div>';
     }).join('');
 }
 
-function closeTriage() { var o = document.getElementById('triage-overlay'); if (o) o.remove(); }
+function draftTriageMessage(i) {
+    var it = _triageItems[i];
+    if (!it) return;
+    var contact = triageContact(it.clientId);
+    if (!contact || !contact.channel) return;
+    var c = contact.client;
+    var btn = document.getElementById('tr-draft-' + i);
+    if (btn) { btn.disabled = true; btn.textContent = '✨ Drafting…'; }
+    fetch('/api/pending-replies', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'generate-reply',
+            clientName: c.name, eventType: c.event_type || '', eventDate: c.event_date || '',
+            venue: c.venue || '', guests: c.guests || '', status: c.status || '', notes: c.notes || '',
+            channel: contact.channel,
+            instruction: 'Write this specific follow-up: ' + (it.action || '') + '. Context: ' + (it.reason || '')
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.error) throw new Error(d.error);
+        it.channel = contact.channel;
+        it.draftBody = d.draft || '';
+        if (it.draftSubject == null) it.draftSubject = contact.channel === 'email' ? 'Following up' : '';
+        saveTriageCache();
+        renderTriage();
+    })
+    .catch(function(e) {
+        alert('Could not draft: ' + e.message);
+        if (btn) { btn.disabled = false; btn.textContent = '✨ Draft ' + (contact.channel === 'email' ? 'email' : 'text'); }
+    });
+}
+
+function sendTriageMessage(i) {
+    var it = _triageItems[i];
+    if (!it) return;
+    var contact = triageContact(it.clientId);
+    if (!contact) return;
+    var bodyEl = document.getElementById('tr-body-' + i);
+    var subjEl = document.getElementById('tr-subject-' + i);
+    var body = bodyEl ? bodyEl.value.trim() : '';
+    var subject = subjEl ? subjEl.value.trim() : '';
+    if (!body) { alert('Message cannot be empty.'); return; }
+    var btn = document.getElementById('tr-send-' + i);
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+    fetch('/api/chat?mode=compose', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'compose', clientId: it.clientId, channel: it.channel,
+            toPhone: it.channel === 'sms' ? contact.phone : null,
+            toEmail: it.channel === 'email' ? contact.email : null,
+            subject: subject, body: body
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.error) throw new Error(d.error);
+        it.sent = true; it.sentLabel = '✓ Sent'; it.draftBody = body; it.draftSubject = subject;
+        saveTriageCache();
+        renderTriage();
+        loadLeads(); // last_activity/messages changed, refresh the pipeline behind the modal
+    })
+    .catch(function(e) {
+        alert('Could not send: ' + e.message);
+        if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+    });
+}
+
+function closeTriage() {
+    syncTriageDrafts();
+    saveTriageCache();
+    var o = document.getElementById('triage-overlay');
+    if (o) o.remove();
+}
 
 /* ── Find leads: web-search sweep + per-lead review/send (never auto-sends) ── */
 var _foundLeads = [];
