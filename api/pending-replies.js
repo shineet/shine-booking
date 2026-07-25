@@ -1337,11 +1337,40 @@ Depth over breadth: 3-4 well-verified leads with real contact info actually chec
       const ownEmails = new Set(sessions.map(s => (s.email || '').toLowerCase()).filter(Boolean));
 
       try {
-        const clientsRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?select=id,name,email,phone,event_type,event_date,status`, { headers: sbHeaders });
+        // "Completed" lives in three places depending on when/how the gig was closed out:
+        // legacy clients.status='completed' (pre contact/gig-separation refactor), the live
+        // bookings.status='completed' (the current model), and the gigs table (the permanent
+        // per-performance archive written by "Mark as Done", which has no status of its own).
+        // Merge all three, keyed by client, keeping each client's MOST RECENT completed event
+        // so a repeat client's due reminder is based on their latest show, not their first.
+        const [clientsRes, bookingsRes, gigsRes] = await Promise.all([
+          fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?select=id,name,email,phone,event_type,event_date,status`, { headers: sbHeaders }),
+          fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?status=eq.completed&select=client_id,event_type,event_date`, { headers: sbHeaders }),
+          fetch(`${process.env.SUPABASE_URL}/rest/v1/gigs?client_id=not.is.null&select=client_id,type,date`, { headers: sbHeaders })
+        ]);
         const allClients = await clientsRes.json();
         if (!Array.isArray(allClients)) throw new Error('Could not read clients');
-        const completed = allClients.filter(c => c.status === 'completed' && c.event_date);
+        const completedBookings = await bookingsRes.json();
+        const completedGigs = await gigsRes.json();
         const knownEmails = new Set(allClients.map(c => (c.email || '').toLowerCase()).filter(Boolean));
+
+        const clientsById = {};
+        allClients.forEach(c => { clientsById[c.id] = c; });
+        const bestByClient = {};
+        const considerDate = (clientId, eventType, eventDate) => {
+          if (!clientId || !eventDate) return;
+          const cur = bestByClient[clientId];
+          if (!cur || new Date(eventDate).getTime() > new Date(cur.eventDate).getTime()) {
+            bestByClient[clientId] = { eventType: eventType || '', eventDate };
+          }
+        };
+        allClients.forEach(c => { if (c.status === 'completed') considerDate(c.id, c.event_type, c.event_date); });
+        (Array.isArray(completedBookings) ? completedBookings : []).forEach(b => considerDate(b.client_id, b.event_type, b.event_date));
+        (Array.isArray(completedGigs) ? completedGigs : []).forEach(g => considerDate(g.client_id, g.type, g.date));
+
+        const completed = Object.keys(bestByClient)
+          .map(cid => clientsById[cid] ? { id: cid, name: clientsById[cid].name, email: clientsById[cid].email, phone: clientsById[cid].phone, event_type: bestByClient[cid].eventType, event_date: bestByClient[cid].eventDate } : null)
+          .filter(Boolean);
 
         let lastOutboundByClient = {};
         if (completed.length) {
