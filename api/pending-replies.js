@@ -40,17 +40,28 @@ function isPastEventWindow(eventWindow, todayISO) {
 // existing Resend/Twilio compose path (api/chat.js mode=compose), never through Gmail itself, so
 // logging/dedup stays consistent with every other outbound message in the app.
 const GMAIL_REDIRECT_URI = 'https://shine-booking.vercel.app/api/pending-replies?action=gmail-callback';
+const GMAIL_SLOTS = [1, 2, 3]; // up to three inboxes
 
-async function getGmailRefreshToken() {
-  const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1&select=gmail_refresh_token&limit=1`, {
+async function getAppSettingsRow(select) {
+  const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1&select=${select}&limit=1`, {
     headers: { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` }
   });
   const rows = await r.json();
-  return (Array.isArray(rows) && rows[0] && rows[0].gmail_refresh_token) || null;
+  return (Array.isArray(rows) && rows[0]) || null;
 }
 
-async function getGmailAccessToken() {
-  const refreshToken = await getGmailRefreshToken();
+// Returns [{slot, email, connectedAt}] for every Gmail account currently connected.
+async function getConnectedGmailAccounts() {
+  const row = await getAppSettingsRow(GMAIL_SLOTS.map(s => `gmail${s}_refresh_token,gmail${s}_email,gmail${s}_connected_at`).join(','));
+  if (!row) return [];
+  return GMAIL_SLOTS
+    .filter(s => row[`gmail${s}_refresh_token`])
+    .map(s => ({ slot: s, email: row[`gmail${s}_email`] || null, connectedAt: row[`gmail${s}_connected_at`] || null }));
+}
+
+async function getGmailAccessTokenForSlot(slot) {
+  const row = await getAppSettingsRow(`gmail${slot}_refresh_token`);
+  const refreshToken = row && row[`gmail${slot}_refresh_token`];
   if (!refreshToken) return null;
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -60,8 +71,28 @@ async function getGmailAccessToken() {
     }).toString()
   });
   const tokenData = await tokenRes.json();
-  if (!tokenRes.ok || !tokenData.access_token) { console.error('Gmail token refresh failed:', tokenData); return null; }
+  if (!tokenRes.ok || !tokenData.access_token) { console.error(`Gmail token refresh failed for slot ${slot}:`, tokenData); return null; }
   return tokenData.access_token;
+}
+
+// Returns [{slot, email, accessToken}] for every connected account, skipping any whose token
+// refresh failed (e.g. revoked access) rather than failing the whole scan.
+async function getActiveGmailSessions() {
+  const accounts = await getConnectedGmailAccounts();
+  const sessions = [];
+  for (const acc of accounts) {
+    const accessToken = await getGmailAccessTokenForSlot(acc.slot);
+    if (accessToken) sessions.push({ slot: acc.slot, email: acc.email, accessToken });
+  }
+  return sessions;
+}
+
+async function gmailGetProfile(accessToken) {
+  try {
+    const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', { headers: { Authorization: `Bearer ${accessToken}` } });
+    const data = await r.json();
+    return r.ok ? data.emailAddress : null;
+  } catch(e) { return null; }
 }
 
 async function gmailSearch(accessToken, query, maxResults) {
@@ -285,28 +316,27 @@ export default async function handler(req, res) {
       return;
     }
 
-    // GET ?action=gmail-status -> whether Gmail read access is connected yet
+    // GET ?action=gmail-status -> which of the (up to two) Gmail inboxes are connected
     if (req.method === 'GET' && req.query.action === 'gmail-status') {
-      const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1&select=gmail_refresh_token,gmail_connected_at&limit=1`, {
-        headers: { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` }
-      });
-      const rows = await r.json();
-      const row = Array.isArray(rows) ? rows[0] : null;
-      res.status(200).json({ connected: !!(row && row.gmail_refresh_token), connectedAt: row ? row.gmail_connected_at : null });
+      const accounts = await getConnectedGmailAccounts();
+      res.status(200).json({ accounts, maxAccounts: GMAIL_SLOTS.length });
       return;
     }
 
-    // GET ?action=gmail-authstart -> redirect into Google's OAuth consent screen. Gmail readonly
-    // scope only (never gmail.send -- outbound still goes through Resend/Twilio like everything
-    // else). access_type=offline + prompt=consent forces a refresh_token back every time, since
-    // without it Google only issues one on the very first-ever grant.
+    // GET ?action=gmail-authstart&slot=1|2 -> redirect into Google's OAuth consent screen for a
+    // specific inbox slot (state=slot round-trips through Google so the callback knows which slot
+    // to save into). Gmail readonly scope only (never gmail.send -- outbound still goes through
+    // Resend/Twilio like everything else). access_type=offline + prompt=consent forces a
+    // refresh_token back every time, since without it Google only issues one on the first grant.
     if (req.method === 'GET' && req.query.action === 'gmail-authstart') {
+      const slot = GMAIL_SLOTS.includes(Number(req.query.slot)) ? Number(req.query.slot) : 1;
       const params = new URLSearchParams({
         client_id: process.env.GOOGLE_CLIENT_ID,
         redirect_uri: GMAIL_REDIRECT_URI,
         response_type: 'code',
         access_type: 'offline',
         prompt: 'consent',
+        state: String(slot),
         scope: 'https://www.googleapis.com/auth/gmail.readonly'
       });
       res.writeHead(302, { Location: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` });
@@ -314,10 +344,12 @@ export default async function handler(req, res) {
       return;
     }
 
-    // GET ?action=gmail-callback -> Google redirects here after consent with a one-time code.
-    // Exchange it for tokens and persist the refresh_token (the long-lived one) to app_settings.
+    // GET ?action=gmail-callback -> Google redirects here after consent with a one-time code and
+    // the slot we sent back as `state`. Exchange the code for tokens, look up which address this
+    // actually is (users.getProfile), and persist to that slot's columns in app_settings.
     if (req.method === 'GET' && req.query.action === 'gmail-callback') {
       const code = req.query.code;
+      const slot = GMAIL_SLOTS.includes(Number(req.query.state)) ? Number(req.query.state) : 1;
       if (!code) { res.writeHead(302, { Location: 'https://shine-booking.vercel.app/?gmail=error' }); res.end(); return; }
       try {
         const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -329,10 +361,11 @@ export default async function handler(req, res) {
         });
         const tokenData = await tokenRes.json();
         if (!tokenRes.ok || !tokenData.refresh_token) { console.error('Gmail OAuth exchange failed:', tokenData); res.writeHead(302, { Location: 'https://shine-booking.vercel.app/?gmail=error' }); res.end(); return; }
+        const email = await gmailGetProfile(tokenData.access_token);
         await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
-          body: JSON.stringify({ gmail_refresh_token: tokenData.refresh_token, gmail_connected_at: new Date().toISOString() })
+          body: JSON.stringify({ [`gmail${slot}_refresh_token`]: tokenData.refresh_token, [`gmail${slot}_email`]: email, [`gmail${slot}_connected_at`]: new Date().toISOString() })
         });
         res.writeHead(302, { Location: 'https://shine-booking.vercel.app/?gmail=connected' });
         res.end();
@@ -344,12 +377,13 @@ export default async function handler(req, res) {
       return;
     }
 
-    // POST action=gmail-disconnect -> clear the stored refresh token
+    // POST action=gmail-disconnect { slot } -> clear one inbox's stored refresh token
     if (req.method === 'POST' && req.body.action === 'gmail-disconnect') {
+      const slot = GMAIL_SLOTS.includes(Number(req.body.slot)) ? Number(req.body.slot) : 1;
       await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
-        body: JSON.stringify({ gmail_refresh_token: null, gmail_connected_at: null })
+        body: JSON.stringify({ [`gmail${slot}_refresh_token`]: null, [`gmail${slot}_email`]: null, [`gmail${slot}_connected_at`]: null })
       });
       res.status(200).json({ success: true });
       return;
@@ -1293,11 +1327,14 @@ Depth over breadth: 3-4 well-verified leads with real contact info actually chec
     // database. Drafting happens per-item on demand (action=past-client-draft), same pattern as
     // Suggested Actions; nothing here ever auto-sends.
     if (req.method === 'POST' && req.body.action === 'past-clients-scan') {
-      const accessToken = await getGmailAccessToken();
-      if (!accessToken) { res.status(200).json({ error: 'gmail_not_connected' }); return; }
+      const sessions = await getActiveGmailSessions();
+      if (!sessions.length) { res.status(200).json({ error: 'gmail_not_connected' }); return; }
 
       const todayISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
       const sbHeaders = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+      // Never flag one of Shine's own connected inboxes (or his business domain) as a "missing"
+      // past client in the secondary sweep below.
+      const ownEmails = new Set(sessions.map(s => (s.email || '').toLowerCase()).filter(Boolean));
 
       try {
         const clientsRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?select=id,name,email,phone,event_type,event_date,status`, { headers: sbHeaders });
@@ -1321,42 +1358,49 @@ Depth over breadth: 3-4 well-verified leads with real contact info actually chec
           const due = computeDueReason(c.event_type, c.event_date, todayISO, daysSinceLastContact);
           if (!due) continue;
 
-          let gmailContext = null;
+          // Try each connected inbox in turn -- stop at the first one with real correspondence.
+          let gmailContext = null, gmailFoundIn = null;
           if (c.email) {
-            const msgs = await gmailSearch(accessToken, `to:${c.email} OR from:${c.email}`, 3);
-            if (msgs.length) {
-              const meta = await gmailGetMessageMeta(accessToken, msgs[0].id);
-              if (meta) gmailContext = { subject: meta.subject, snippet: meta.snippet, date: meta.date };
+            for (const s of sessions) {
+              const msgs = await gmailSearch(s.accessToken, `to:${c.email} OR from:${c.email}`, 3);
+              if (msgs.length) {
+                const meta = await gmailGetMessageMeta(s.accessToken, msgs[0].id);
+                if (meta) { gmailContext = { subject: meta.subject, snippet: meta.snippet, date: meta.date }; gmailFoundIn = s.email; break; }
+              }
             }
           }
 
           items.push({
             clientId: c.id, name: c.name, email: c.email || null, phone: c.phone || null,
             eventType: c.event_type || '', eventDate: c.event_date, kind: due.kind, label: due.label,
-            gmailFound: !!gmailContext, gmailContext
+            gmailFound: !!gmailContext, gmailFoundIn, gmailContext
           });
         }
 
         // Secondary sweep: past clients who exist in Gmail but were never logged in this app.
-        // Manual-confirm only, never auto-drafted or auto-added -- an email match alone isn't
-        // proof of who someone is or what event they had.
+        // Runs once per connected inbox, merged and deduped. Manual-confirm only, never
+        // auto-drafted or auto-added -- an email match alone isn't proof of who someone is or
+        // what event they had.
         let possibleMissing = [];
-        try {
-          const sentMsgs = await gmailSearch(accessToken, 'in:sent (invoice OR contract OR "your event" OR "thank you for booking" OR "performance fee") older_than:90d', 10);
-          const seen = new Set();
-          for (const m of sentMsgs.slice(0, 8)) {
-            const meta = await gmailGetMessageMeta(accessToken, m.id);
-            if (!meta) continue;
-            const email = extractEmailAddress(meta.to);
-            if (!email || knownEmails.has(email) || seen.has(email)) continue;
-            if (/texasmentalist\.com|shinethementalist@gmail\.com|2020shine@gmail\.com/i.test(email)) continue;
-            seen.add(email);
-            possibleMissing.push({ email, subject: meta.subject, date: meta.date });
-            if (possibleMissing.length >= 6) break;
-          }
-        } catch(e) { console.error('Gmail missing-client sweep failed:', e.message); }
+        const seen = new Set();
+        for (const s of sessions) {
+          if (possibleMissing.length >= 6) break;
+          try {
+            const sentMsgs = await gmailSearch(s.accessToken, 'in:sent (invoice OR contract OR "your event" OR "thank you for booking" OR "performance fee") older_than:90d', 8);
+            for (const m of sentMsgs.slice(0, 6)) {
+              const meta = await gmailGetMessageMeta(s.accessToken, m.id);
+              if (!meta) continue;
+              const email = extractEmailAddress(meta.to);
+              if (!email || knownEmails.has(email) || seen.has(email) || ownEmails.has(email)) continue;
+              if (/texasmentalist\.com/i.test(email)) continue;
+              seen.add(email);
+              possibleMissing.push({ email, subject: meta.subject, date: meta.date, foundIn: s.email });
+              if (possibleMissing.length >= 6) break;
+            }
+          } catch(e) { console.error(`Gmail missing-client sweep failed for ${s.email}:`, e.message); }
+        }
 
-        res.status(200).json({ success: true, items, possibleMissing });
+        res.status(200).json({ success: true, items, possibleMissing, accounts: sessions.map(s => s.email) });
       } catch(e) {
         console.error('Past clients scan failed:', e.message);
         res.status(200).json({ error: 'Could not run the scan — try again.' });

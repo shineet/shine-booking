@@ -2603,6 +2603,9 @@ function syncPastClientDrafts() {
     });
 }
 
+var _pastClientsAccounts = []; // [{slot,email,connectedAt}], refreshed each time the modal opens
+var _pastClientsMaxAccounts = 3;
+
 function openPastClients() {
     var old = document.getElementById('pastclients-overlay');
     if (old) old.remove();
@@ -2613,45 +2616,59 @@ function openPastClients() {
     ov.innerHTML = '<div style="background:#17161c;border:1px solid var(--border);border-radius:14px;max-width:680px;width:100%;padding:22px 22px 26px;box-shadow:0 20px 60px rgba(0,0,0,.5);">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:10px;">' +
         '<div style="font-size:16px;font-weight:700;">&#128231; Past clients</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;" id="pc-header-actions"></div></div>' +
+        '<button onclick="closePastClients()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1;">&times;</button></div>' +
         '<div style="font-size:11.5px;color:#8a86a0;margin-bottom:14px;">Every draft below is reviewed by you. Nothing sends until you click Send on that specific card.</div>' +
+        '<div id="pc-accounts"></div>' +
         '<div id="pastclients-body"><div style="text-align:center;padding:34px 0;color:#aaa;">Checking Gmail connection…</div></div>' +
         '</div>';
     document.body.appendChild(ov);
+    refreshGmailAccountsPanel();
+}
 
+function refreshGmailAccountsPanel() {
     fetch('/api/pending-replies?action=gmail-status')
     .then(function(r) { return r.json(); })
     .then(function(d) {
-        if (d.connected) { renderPastClientsHeaderActions(); scanPastClients(false); }
-        else { renderGmailConnectScreen(); }
+        _pastClientsAccounts = d.accounts || [];
+        _pastClientsMaxAccounts = d.maxAccounts || 3;
+        renderGmailAccountsPanel();
+        if (_pastClientsAccounts.length) scanPastClients(false);
+        else {
+            var b = document.getElementById('pastclients-body');
+            if (b) b.innerHTML = '<div style="text-align:center;padding:20px 0;color:#8a86a0;font-size:13px;">Connect at least one Gmail inbox above to scan for due outreach.</div>';
+        }
     })
-    .catch(function() { renderGmailConnectScreen(); });
+    .catch(function() {
+        var b = document.getElementById('pastclients-body');
+        if (b) b.innerHTML = '<div style="color:var(--red);">Could not check Gmail connection.</div>';
+    });
 }
 
-function renderGmailConnectScreen() {
-    document.getElementById('pc-header-actions').innerHTML =
-        '<button onclick="closePastClients()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1;">&times;</button>';
-    var b = document.getElementById('pastclients-body');
-    if (!b) return;
-    b.innerHTML = '<div style="text-align:center;padding:20px 10px;">' +
-        '<div style="font-size:13.5px;color:#c9c6d6;margin-bottom:16px;line-height:1.5;">Connect a Gmail inbox (read-only) so this can look up your real correspondence with past clients and confirm they are genuine before drafting a note. Nothing is ever sent from Gmail itself, outbound still goes through your normal email/SMS.</div>' +
-        '<button onclick="window.location.href=\'/api/pending-replies?action=gmail-authstart\'" style="background:rgba(240,165,0,.16);color:#e0a83c;border:1px solid rgba(240,165,0,.35);border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;">Connect Gmail</button>' +
+function renderGmailAccountsPanel() {
+    var el = document.getElementById('pc-accounts');
+    if (!el) return;
+    var bySlot = {};
+    _pastClientsAccounts.forEach(function(a) { bySlot[a.slot] = a; });
+    var rows = '';
+    for (var slot = 1; slot <= _pastClientsMaxAccounts; slot++) {
+        var a = bySlot[slot];
+        rows += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px;">' +
+            (a
+                ? '<div style="color:#8fe0a5;">&#10003; ' + escHtml(a.email || ('Account ' + slot)) + '</div><button onclick="disconnectGmail(' + slot + ')" style="background:none;color:#8a86a0;border:1px solid var(--border);border-radius:7px;padding:3px 9px;font-size:11.5px;cursor:pointer;">Disconnect</button>'
+                : '<div style="color:#8a86a0;">Not connected</div><button onclick="window.location.href=\'/api/pending-replies?action=gmail-authstart&slot=' + slot + '\'" style="background:rgba(240,165,0,.14);color:#e0a83c;border:1px solid rgba(240,165,0,.3);border-radius:7px;padding:3px 9px;font-size:11.5px;cursor:pointer;">Connect Gmail</button>'
+            ) + '</div>';
+    }
+    el.innerHTML = '<div style="border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:14px;">' +
+        '<div style="font-size:11px;color:#8a86a0;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;">Connected inboxes (read-only)</div>' +
+        rows +
+        (_pastClientsAccounts.length ? '<div style="text-align:right;margin-top:8px;"><button onclick="syncPastClientDrafts();scanPastClients(true)" style="background:rgba(240,165,0,.14);color:#e0a83c;border:1px solid rgba(240,165,0,.3);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;">&#128260; Scan again</button></div>' : '') +
         '</div>';
 }
 
-function renderPastClientsHeaderActions() {
-    var el = document.getElementById('pc-header-actions');
-    if (!el) return;
-    el.innerHTML =
-        '<button onclick="syncPastClientDrafts();scanPastClients(true)" title="Scan again" style="background:rgba(240,165,0,.14);color:#e0a83c;border:1px solid rgba(240,165,0,.3);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;">&#128260; Scan again</button>' +
-        '<button onclick="disconnectGmail()" title="Disconnect Gmail" style="background:none;color:#8a86a0;border:1px solid var(--border);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;">Disconnect</button>' +
-        '<button onclick="closePastClients()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1;">&times;</button>';
-}
-
-function disconnectGmail() {
-    if (!confirm('Disconnect Gmail? You can reconnect any time.')) return;
-    fetch('/api/pending-replies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'gmail-disconnect' }) })
-    .then(function() { localStorage.removeItem(PASTCLIENTS_CACHE_KEY); _pastClientItems = []; _pastClientsMissing = []; renderGmailConnectScreen(); })
+function disconnectGmail(slot) {
+    if (!confirm('Disconnect this Gmail account? You can reconnect any time.')) return;
+    fetch('/api/pending-replies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'gmail-disconnect', slot: slot }) })
+    .then(function() { localStorage.removeItem(PASTCLIENTS_CACHE_KEY); _pastClientItems = []; _pastClientsMissing = []; refreshGmailAccountsPanel(); })
     .catch(function(e) { alert('Could not disconnect: ' + e.message); });
 }
 
@@ -2670,7 +2687,7 @@ function scanPastClients(forceRefresh) {
         var body = document.getElementById('pastclients-body');
         if (!body) return;
         if (!res) { body.innerHTML = '<div style="color:var(--red);">That timed out. Tap Scan again to retry.</div>'; return; }
-        if (res.error === 'gmail_not_connected') { renderGmailConnectScreen(); return; }
+        if (res.error === 'gmail_not_connected') { body.innerHTML = '<div style="text-align:center;padding:20px 0;color:#8a86a0;font-size:13px;">Connect at least one Gmail inbox above to scan for due outreach.</div>'; return; }
         if (res.error) { body.innerHTML = '<div style="color:var(--red);">' + escHtml(res.error) + '</div>'; return; }
         _pastClientItems = res.items || [];
         _pastClientsMissing = res.possibleMissing || [];
