@@ -384,7 +384,17 @@ Call/meeting detection (separate from the actual performance date):
         // Client confirmed booking intent — send thank-you + intake questionnaire if we have their email
         if (bookingIntent && client.email) {
           try {
-            const bookingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings`, {
+            // Guard against duplicate bookings: if bookingIntent trips again on a
+            // later message (e.g. client clarifies event details after already
+            // confirming), don't create a second booking row for the same client.
+            const existingRes = await fetch(
+              `${process.env.SUPABASE_URL}/rest/v1/bookings?client_id=eq.${client.id}&status=not.in.(completed,lost,cancelled)&select=id&limit=1`,
+              { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
+            );
+            const existingRows = await existingRes.json();
+            const alreadyHasActiveBooking = Array.isArray(existingRows) && existingRows.length > 0;
+
+            const bookingRes = alreadyHasActiveBooking ? null : await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -403,7 +413,7 @@ Call/meeting detection (separate from the actual performance date):
                 intake_status: 'sent'
               })
             });
-            const bookingRows = await bookingRes.json();
+            const bookingRows = bookingRes ? await bookingRes.json() : null;
             const booking = Array.isArray(bookingRows) ? bookingRows[0] : null;
 
             if (booking) {

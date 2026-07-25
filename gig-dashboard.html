@@ -554,6 +554,7 @@ td { padding: 9px 14px; vertical-align: middle; }
       <button class="secondary" onclick="downloadContactVcf()">👤 Save Contact</button>
       <button class="secondary" onclick="openPaymentReceived()">💰 Mark Payment Received</button>
       <button class="success" id="detail-done-btn" onclick="openMarkDone()">Mark as Done</button>
+      <button class="danger" onclick="deleteBooking()">Delete Gig</button>
     </div>
   </div>
 </div>
@@ -1246,6 +1247,24 @@ async function editFee() {
     openDetail(c.booking_id);
   } catch (e) {
     alert('Could not save fee: ' + e.message);
+  }
+}
+
+// Delete an upcoming pipeline gig (bookings table) — e.g. a duplicate created
+// when a client confirmed booking intent twice over SMS. Distinct from
+// deleteGig(), which deletes from the separate historical revenue log (gigs
+// table). Does not touch the client/contact record, only this specific gig.
+async function deleteBooking() {
+  const c = activeClient;
+  if (!c || !c.booking_id) { alert('No booking selected.'); return; }
+  if (!confirm(`Delete this gig for ${c.name || 'this client'} (${fmtDate(c.event_date) || 'no date'})? This cannot be undone.`)) return;
+
+  try {
+    await sbDelete('bookings', c.booking_id);
+    closeModal('detail-modal');
+    await loadAll();
+  } catch (e) {
+    alert('Could not delete: ' + e.message);
   }
 }
 
