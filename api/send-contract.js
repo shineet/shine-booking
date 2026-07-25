@@ -200,6 +200,7 @@ module.exports = async function handler(req, res) {
     await resend.emails.send({
       from:    'Shine, The Mentalist <shine@texasmentalist.com>',
       to:      [clientEmail],
+      bcc:     ['shinethementalist@gmail.com'],
       subject: `Performance Agreement – ${eventTitle || 'Your Event'} | Shine, The Mentalist`,
       text: `Hi ${firstName},\n\nI'm excited to be performing at ${eventTitle || 'your event'}${eventDate ? ` on ${eventDate}` : ''}!\n\nPlease review and sign the performance agreement:\n${contractUrl}\n\nThis takes just a minute and locks in your date.${invoiceNote}${payLineText}\n\nLooking forward to an unforgettable performance!\n\n– Shine\ntexasmentalist.com`,
       html: `

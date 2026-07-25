@@ -96,6 +96,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             from: 'Shine, The Mentalist <shine@texasmentalist.com>',
             to: email,
+            bcc: ['shinethementalist@gmail.com'],
             subject: 'My show packages & pricing',
             text: emailText
           })

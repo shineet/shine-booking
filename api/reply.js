@@ -414,6 +414,7 @@ Call/meeting detection (separate from the actual performance date):
                 body: JSON.stringify({
                   from: 'Shine, The Mentalist <shine@texasmentalist.com>',
                   to: client.email,
+                  bcc: ['shinethementalist@gmail.com'],
                   subject: 'Thank you for booking! Quick questionnaire inside',
                   text: `Hi ${client.name ? client.name.split(' ')[0] : 'there'},\n\nThank you so much for booking — I'm really looking forward to your event!\n\nTo get everything set up, including your performance agreement, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`
                 })

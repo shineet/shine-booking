@@ -272,6 +272,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           from: 'Shine, The Mentalist <shine@texasmentalist.com>',
           to: booking.client_email,
+          bcc: ['shinethementalist@gmail.com'],
           subject: 'Your signed performance agreement',
           text: `Hi ${booking.client_name},\n\nThank you for signing the performance agreement! A copy is attached for your records.\n\nEverything is all set for your event. Looking forward to it!\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`,
           attachments: [{ filename: 'Performance_Agreement_Signed.pdf', content: pdfBase64 }]
