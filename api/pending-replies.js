@@ -13,6 +13,26 @@ function emailIlikeParam(email) {
   return encodeURIComponent(String(email || '').trim().replace(/[%_\\]/g, function(m) { return '\\' + m; }));
 }
 
+// Best-effort safety net for action=findleads: the model is told today's real date and told to
+// exclude events that have already happened, but web search results (event calendar aggregators
+// especially) routinely surface past events without labeling them as such, and the model can
+// still misjudge a date. This is a second, code-level check so a past event can't slip through
+// even if the prompt instruction alone fails. Only acts when a real date is actually parseable
+// out of the freeform eventWindow text (e.g. "March 28, 2026") -- vague windows like "Q3 2026" or
+// "not specified" are left alone rather than guessed at.
+function isPastEventWindow(eventWindow, todayISO) {
+  if (!eventWindow) return false;
+  const cleaned = String(eventWindow).trim();
+  let d = new Date(cleaned);
+  if (isNaN(d.getTime())) {
+    const m = cleaned.match(/([A-Z][a-z]{2,8}\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})/);
+    if (m) d = new Date(m[1].replace(/(st|nd|rd|th)/, ''));
+  }
+  if (isNaN(d.getTime())) return false;
+  const today = new Date(todayISO + 'T00:00:00');
+  return d.getTime() < today.getTime();
+}
+
 // Real carrier/line-type lookup via Twilio Lookup v2 (line_type_intelligence add-on), used by
 // the research step so the phone-type read is a verified fact instead of an area-code guess.
 // Separate credentials (TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN) from the messaging pair
@@ -941,7 +961,13 @@ Order items most urgent first (high, then medium, then low). Omit any lead that 
     // rule that outreach is always a draft. Contacts are only included if a real, specific,
     // publicly-listed email was found via search, never guessed.
     if (req.method === 'POST' && req.body.action === 'findleads') {
+      const todayISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+      const todayLabel = new Date().toLocaleDateString('en-US', { timeZone: 'America/Chicago', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
       const FINDLEADS_SYSTEM = `You are Shine Thankappan's lead-scout. He is a corporate mentalist and magician based in Austin, TX (texasmentalist.com, +1 737-271-5308, 156 five-star Google reviews). He targets corporate events, conferences, and private events with budgets fitting his floor of $2,500+.
+
+TODAY'S REAL DATE IS ${todayLabel} (${todayISO}). Do not rely on your training data or guess at "current" -- use this exact date as the source of truth for what counts as upcoming.
+
+CRITICAL DATE RULE: only surface events that have NOT happened yet relative to ${todayISO}. Event calendar sites and aggregators frequently keep past events listed on the same page as upcoming ones with no visual distinction, so check every candidate's actual date against today before including it. If an event's date is before ${todayISO}, it is DEAD, discard it immediately and do not spend a lead slot on it, even if everything else about it looks like a great fit. When a listing's date is genuinely ambiguous (no year given, "recurring event", etc), search one step further to confirm the specific upcoming occurrence's date before including it; never assume ambiguous means upcoming.
 
 This is a TWO-PHASE job. Do not skip phase 2.
 
@@ -1023,6 +1049,9 @@ Depth over breadth: 3-4 well-verified leads with real contact info actually chec
       if (!Array.isArray(leads)) { res.status(200).json({ error: 'Could not read the lead search results — try again.' }); return; }
       const stripCite = (s) => typeof s === 'string' ? s.replace(/<\/?cite[^>]*>/gi, '').replace(/[ \t]+\n/g, '\n').trim() : s;
       leads.forEach(l => Object.keys(l).forEach(k => { l[k] = stripCite(l[k]); }));
+      const beforeCount = leads.length;
+      leads = leads.filter(l => !isPastEventWindow(l.eventWindow, todayISO));
+      if (leads.length < beforeCount) console.log(`Find leads: dropped ${beforeCount - leads.length} past-dated lead(s) as a safety net (today=${todayISO})`);
       res.status(200).json({ success: true, leads });
       return;
     }
