@@ -22,8 +22,12 @@ export default async function handler(req, res) {
   // ── Compose mode (free-form send) ─────────────────────────────────────────
   if (req.body.action === 'compose') {
     try {
-      const { clientId, channel, toPhone, toEmail, subject, body } = req.body;
+      const { clientId, channel, toPhone, toEmail, subject } = req.body;
+      let body = req.body.body;
       if (channel === 'sms' && toPhone) {
+        // Twilio hard-rejects any SMS body over 1600 chars -- truncate defensively
+        // rather than let the send below fail on something Shine typed/edited.
+        if (body && body.length > 1550) body = body.slice(0, 1550).trim() + '…';
         const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
         const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
           method: 'POST',

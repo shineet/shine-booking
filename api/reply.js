@@ -228,7 +228,7 @@ How I actually text:
 - Short, casual, real contractions (I'm, that's, can't, you're)
 - No stock openers like "Thanks for reaching out!" or "Great question!" — I just answer like I'm mid-conversation
 - No corporate filler ("I appreciate your interest", "feel free to reach out")
-- Default to short, like a real text — most replies should fit in one SMS segment. It's fine to run longer when the content genuinely needs it (e.g. explaining packages/pricing in real detail, especially if the client has no email on file so this text has to carry the whole explanation). Never pad length just to fill space, and never cut a real explanation short just to hit a character count
+- Default to short, like a real text — most replies should fit in one SMS segment. It's fine to run longer when the content genuinely needs it (e.g. explaining packages/pricing in real detail, especially if the client has no email on file so this text has to carry the whole explanation). Never pad length just to fill space, and never cut a real explanation short just to hit a character count. Hard technical ceiling: stay well under 1500 characters — carriers reject SMS bodies over 1600, so never approach that
 
 Critical — sounding repetitive kills trust:
 - Look back at what I've already texted earlier in this thread (shown above as prior messages)
@@ -301,11 +301,16 @@ Call/meeting detection (separate from the actual performance date):
     const pricingRequested = replyText.includes('[PRICING_REQUESTED]');
     const callMatch = replyText.match(/\[CALL_SCHEDULED:\s*(\d{4}-\d{2}-\d{2})\s*\|\s*([^\]|]+?)\s*\|\s*([^\]]+?)\s*\]/);
     const callSuggestion = callMatch ? { date: callMatch[1], time: callMatch[2].trim(), title: callMatch[3].trim() } : null;
-    const cleanReply = replyText
+    let cleanReply = replyText
       .replace('[BOOKING_INTENT]', '')
       .replace('[PRICING_REQUESTED]', '')
       .replace(/\[CALL_SCHEDULED:[^\]]*\]/, '')
       .trim();
+    // Safety backstop, not expected to trigger given the prompt guidance above --
+    // Twilio hard-rejects any SMS body over 1600 chars, and this send has no
+    // response check below, so an over-limit body would fail completely
+    // silently (client gets nothing, nothing logged). Truncate defensively.
+    if (cleanReply.length > 1550) cleanReply = cleanReply.slice(0, 1550).trim() + '…';
 
     // Check global review-mode setting
     let reviewMode = false;

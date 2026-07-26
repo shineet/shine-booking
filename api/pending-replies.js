@@ -252,7 +252,7 @@ How I actually text:
 - Short, casual, real contractions (I'm, that's, can't, you're)
 - No stock openers like "Thanks for reaching out!" or "Great question!" — I just answer like I'm mid-conversation
 - No corporate filler ("I appreciate your interest", "feel free to reach out")
-- Default to short, like a real text — most replies should fit in one SMS segment. It's fine to run longer when the content genuinely needs it (e.g. explaining packages/pricing in real detail, especially if the client has no email on file so this text has to carry the whole explanation). Never pad length just to fill space, and never cut a real explanation short just to hit a character count
+- Default to short, like a real text — most replies should fit in one SMS segment. It's fine to run longer when the content genuinely needs it (e.g. explaining packages/pricing in real detail, especially if the client has no email on file so this text has to carry the whole explanation). Never pad length just to fill space, and never cut a real explanation short just to hit a character count. Hard technical ceiling: stay well under 1500 characters — carriers reject SMS bodies over 1600, so never approach that
 
 Critical — sounding repetitive kills trust:
 - Look back at what I've already texted earlier in this thread (shown above as prior messages)
@@ -552,7 +552,7 @@ Hours since last contact: ${hoursAgo}`;
 RULES:
 - This is a reply to a client who has already been in contact, NOT a first introduction
 - Warm, direct, natural tone — not salesy
-- Default to short, like a real text, but it's fine to run longer when the content genuinely needs it (e.g. explaining pricing/packages in real detail, or this client has no email on file so the text has to carry the whole thing). Never pad for its own sake
+- Default to short, like a real text, but it's fine to run longer when the content genuinely needs it (e.g. explaining pricing/packages in real detail, or this client has no email on file so the text has to carry the whole thing). Never pad for its own sake. Hard technical ceiling: stay well under 1500 characters — carriers reject SMS bodies over 1600, so never approach that
 - Sign off as: - Shine | +1 (737) 271-5308
 - Return ONLY the message text, no commentary
 
@@ -634,9 +634,14 @@ PRICING:
       const message = Array.isArray(msgRows) ? msgRows[0] : null;
       if (!message) { res.status(404).json({ error: 'Message not found' }); return; }
 
-      const finalText = editedText || message.content;
+      let finalText = editedText || message.content;
 
       if (message.channel === 'sms') {
+        // Safety backstop: Twilio hard-rejects any SMS body over 1600 chars.
+        // Shouldn't happen given the prompt guidance the drafts are written
+        // with, but this send has no response check below, so an over-limit
+        // body would otherwise fail silently.
+        if (finalText.length > 1550) finalText = finalText.slice(0, 1550).trim() + '…';
         const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
         await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
           method: 'POST',
@@ -930,7 +935,7 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
 
       const DRAFT_SYSTEM_SMS_ONLY_TAIL = `
 
-This lead has NO email on file, only a phone number, so SMS is the only way to reach them. Draft ONLY a text message, leave emailSubject and emailBody as empty strings. This is the first message they'll get from you, so the text needs to do the whole job an email would have, not just nudge toward one.
+This lead has NO email on file, only a phone number, so SMS is the only way to reach them. Draft ONLY a text message, leave emailSubject and emailBody as empty strings. This is the first message they'll get from you, so the text needs to do the whole job an email would have, not just nudge toward one. Hard technical ceiling: stay well under 1500 characters even so — carriers reject SMS bodies over 1600.
 
 Because this is a first-touch cold text, be slightly warmer than a normal quick SMS reply, a genuine, personal opening line, not "Hi, saw your inquiry." ${sourceLabel ? `Open by naturally mentioning you saw their event inquiry on ${sourceLabel} (referencing their actual event details, not a generic form) so it's obviously not spam.` : `Open by naturally referencing their actual event details so it's obviously not spam.`} It's fine to run longer than a typical quick nudge if the message needs it, but keep it reading like a real text, not an email crammed into a text box. End with a short sign-off that includes the website, for example "- Shine, texasmentalist.com".
 
