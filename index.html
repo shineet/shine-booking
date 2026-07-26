@@ -1223,7 +1223,7 @@
             <div id="messages-area" style="display:none">
                 <div class="msg-label">SMS message</div>
                 <div class="field"><textarea id="sms-text" class="autogrow" rows="3" oninput="updateCharCount()"></textarea></div>
-                <div class="char-count" id="char-count">0 / 160 characters</div>
+                <div class="char-count" id="char-count">0 characters</div>
                 <div class="msg-label" style="margin-top:16px">Email subject</div>
                 <div class="field"><input type="text" id="email-subject"></div>
                 <div class="msg-label">Email body</div>
@@ -4245,8 +4245,8 @@ function buildPrompt(d) {
 function updateCharCount() {
     var txt = document.getElementById('sms-text').value;
     var el = document.getElementById('char-count');
-    el.textContent = txt.length + ' / 160 characters';
-    el.className = txt.length > 160 ? 'char-count over' : 'char-count';
+    el.textContent = txt.length + ' characters';
+    el.className = 'char-count';
 }
 
 function showStatus(msg, type) {
@@ -4477,8 +4477,8 @@ function onComposeChannelChange() {
 function updateComposeCharCount() {
     var txt = document.getElementById('compose-body').value;
     var el = document.getElementById('compose-char-count');
-    el.textContent = txt.length + ' / 160 characters';
-    el.style.color = txt.length > 160 ? 'var(--red)' : 'var(--muted)';
+    el.textContent = txt.length + ' characters';
+    el.style.color = 'var(--muted)';
 }
 
 function closeComposeModal() {

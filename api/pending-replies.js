@@ -552,7 +552,7 @@ Hours since last contact: ${hoursAgo}`;
 RULES:
 - This is a reply to a client who has already been in contact, NOT a first introduction
 - Warm, direct, natural tone — not salesy
-- Keep it concise — readable in one glance on a phone screen
+- Default to short, like a real text, but it's fine to run longer when the content genuinely needs it (e.g. explaining pricing/packages in real detail, or this client has no email on file so the text has to carry the whole thing). Never pad for its own sake
 - Sign off as: - Shine | +1 (737) 271-5308
 - Return ONLY the message text, no commentary
 
@@ -575,9 +575,9 @@ PRICING:
         notes ? `Notes: ${notes}` : ''
       ].filter(Boolean).join('\n');
 
-      // If composing an email, relax the SMS length/signoff rule.
+      // If composing an email, use the email signoff instead of the SMS one above.
       const channelBlock = channel === 'email'
-        ? '\n\nFORMAT OVERRIDE: This is an EMAIL, not an SMS. Use one or two short paragraphs; sign off as "Shine, The Mentalist" with the phone and website. Ignore the SMS "one glance" length rule above.'
+        ? '\n\nFORMAT OVERRIDE: This is an EMAIL, not an SMS. Use one or two short paragraphs; sign off as "Shine, The Mentalist" with the phone and website.'
         : '';
       // Per-draft steering the owner typed for THIS message.
       const instrBlock = (instruction && String(instruction).trim())
@@ -593,7 +593,7 @@ PRICING:
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 400,
+          max_tokens: 1024,
           system: systemPrompt + (await guidanceSuffix()) + channelBlock + instrBlock,
           messages: [{ role: 'user', content: userPrompt }],
         }),
@@ -747,7 +747,7 @@ PRICING:
           const resp = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-            body: JSON.stringify({ model, max_tokens: channel === 'sms' ? 300 : 1024, system: systemPrompt, messages: msgs })
+            body: JSON.stringify({ model, max_tokens: 1024, system: systemPrompt, messages: msgs })
           });
           const txt = await resp.text();
           let data; try { data = JSON.parse(txt); } catch(e) { return null; }
@@ -1469,7 +1469,7 @@ RULES:
           headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
           body: JSON.stringify({
             model: 'claude-sonnet-4-6', max_tokens: 300,
-            system: systemPrompt + (await guidanceSuffix()) + (channel === 'email' ? '\n\nFORMAT OVERRIDE: this is an EMAIL, one short paragraph is fine, ignore any SMS length instinct.' : '\n\nFORMAT: this is an SMS, keep it under ~300 characters.'),
+            system: systemPrompt + (await guidanceSuffix()) + (channel === 'email' ? '\n\nFORMAT OVERRIDE: this is an EMAIL, one short paragraph is fine, ignore any SMS length instinct.' : '\n\nFORMAT: this is an SMS. Keep it feeling like a real text, not capped at a fixed character count -- write as long as it naturally needs to be for a warm check-in.'),
             messages: [{ role: 'user', content: userPrompt }]
           })
         });

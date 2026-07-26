@@ -43,10 +43,23 @@ export default async function handler(req, res) {
       }
       if (clientId) {
         const now = new Date().toISOString();
+        const clientPatch = { last_activity: now };
+        // A manual send is still real contact -- move the lead off "new" so the
+        // dashboard stops offering "Generate & send first message" for someone
+        // who's already been messaged (that button only checks status === 'new').
+        try {
+          const clientRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}&select=status&limit=1`, {
+            headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` }
+          });
+          const clientRows = await clientRes.json();
+          if (Array.isArray(clientRows) && clientRows[0] && clientRows[0].status === 'new') {
+            clientPatch.status = 'chatting';
+          }
+        } catch (e) { console.error('Compose status-check failed:', e.message); }
         await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
-          body: JSON.stringify({ last_activity: now })
+          body: JSON.stringify(clientPatch)
         });
         await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
           method: 'POST',
