@@ -700,7 +700,7 @@ td { padding: 9px 14px; vertical-align: middle; }
       <div class="form-group"><label>Duration</label><input type="text" id="inv-duration" placeholder="3 hours"></div>
       <div class="form-group"><label>Venue</label><input type="text" id="inv-venue" placeholder="Juniper Lakehouse, Austin, TX"></div>
       <div class="form-group"><label>Guests</label><input type="text" id="inv-guests" placeholder="Approximately 45"></div>
-      <div class="form-group"><label>Deposit %</label><select id="inv-deposit"><option value="50">50%</option><option value="25">25%</option></select></div>
+      <div class="form-group"><label>Deposit %</label><select id="inv-deposit"><option value="50">50%</option><option value="25">25%</option><option value="100">100% (full amount / balance due)</option></select></div>
       <div class="form-group" style="display:flex;align-items:center;gap:6px;padding-top:18px">
         <input type="checkbox" id="inv-surcharge" style="width:auto;margin:0">
         <label for="inv-surcharge" style="margin:0;font-size:12px;cursor:pointer">+3% card fee (client pays it, not you)</label>
@@ -2234,6 +2234,21 @@ function openInvoiceFromCard(btn) {
   // and company comes from notes or event_type context
   // Use name as contact, leave company blank for manual entry if it's a person's name
   var isPersonName = c.name && /^[A-Z][a-z]+ [A-Z]/.test(c.name); // "First Last" pattern
+
+  // If a deposit (or any partial payment) is already on file for this booking, the
+  // invoice should bill the remaining balance, not the full fee again -- surfaced as
+  // an itemized credit line so the client sees exactly what they already paid, rather
+  // than Shine having to hand-edit the line items every time. Full payments need no
+  // invoice at all, but that's already excluded upstream (the card wouldn't be "upcoming").
+  var alreadyPaid = booking ? (Number(booking.payment_amount) || 0) : 0;
+  var showCredit  = alreadyPaid > 0 && !(booking && booking.paid_in_full);
+  var lineItems = feeAmt
+    ? [{ description: 'Performance Fee', details: booking ? (booking.event_title || c.event_type || '') : (c.event_type || ''), amount: feeAmt }]
+    : [{ description: '', details: '', amount: '' }];
+  if (showCredit) {
+    lineItems.push({ description: 'Deposit received', details: booking && booking.paid_at ? ('Paid ' + fmtDate(booking.paid_at.slice(0,10))) : 'Already paid', amount: -alreadyPaid });
+  }
+
   openInvoiceModal({
     bookingId: booking ? (booking.id || '') : '',
     clientId:  c.id || '',
@@ -2249,10 +2264,9 @@ function openInvoiceFromCard(btn) {
     venue:     booking ? (booking.venue_address || c.venue || '') : (c.venue || ''),
     guests:    guests,
     dueDate:   dueDate,
-    lineItems: feeAmt
-      ? [{ description: 'Performance Fee', details: booking ? (booking.event_title || c.event_type || '') : (c.event_type || ''), amount: feeAmt }]
-      : [{ description: '', details: '', amount: '' }],
-    total: feeAmt,
+    lineItems: lineItems,
+    total:     feeAmt - (showCredit ? alreadyPaid : 0),
+    depositPercent: showCredit ? 100 : 50,
   });
 }
 
@@ -2286,6 +2300,7 @@ function openInvoiceModal(prefill) {
   document.getElementById('inv-date').value =
     prefill.invoiceDate || today.toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'});
   document.getElementById('inv-due').value = prefill.dueDate || '';
+  document.getElementById('inv-deposit').value = String(prefill.depositPercent || 50);
 
   invoiceLineItems = prefill.lineItems || [{ description:'', details:'', amount:'' }];
   renderLineItems();

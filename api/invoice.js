@@ -32,9 +32,12 @@ module.exports = async function handler(req, res) {
       const buf        = await buildInvoicePDF(invoiceData);
       const filename   = safeFilename(invoiceData);
       const dep        = invoiceData.depositPercent || 50;
+      const fullPay    = dep >= 100;
       const depAmt     = Math.round((invoiceData.total || 0) * dep / 100).toLocaleString();
       const body       = customMessage ||
-        `Thank you so much for booking ${invoiceData.eventName || 'your event'} — I'm really looking forward to it!\n\nPlease find your invoice attached. A ${dep}% deposit ($${depAmt}) is required to secure your date.`;
+        (fullPay
+          ? `Thank you so much for ${invoiceData.eventName || 'your event'} — I'm really looking forward to it!\n\nPlease find your invoice attached. The amount due is $${depAmt}.`
+          : `Thank you so much for booking ${invoiceData.eventName || 'your event'} — I'm really looking forward to it!\n\nPlease find your invoice attached. A ${dep}% deposit ($${depAmt}) is required to secure your date.`);
 
       // Prefer a stable, never-expiring link (invoice-view.html) over a raw Stripe
       // Checkout URL — the old approach baked a one-time link straight into the email
@@ -259,8 +262,9 @@ function buildInvoicePDF(data) {
       doc.rect(50,y,512,rh).strokeColor('#e5e7eb').lineWidth(0.5).stroke();
       doc.font('Helvetica-Bold').fontSize(10).fillColor(DARK).text(item.description||'',58,y+8,{width:140});
       doc.font('Helvetica').fontSize(10).fillColor(DARK).text(item.details||'',210,y+8,{width:240});
+      var itemAmt = Number(item.amount||0);
       doc.font('Helvetica').fontSize(10).fillColor(DARK)
-         .text('$'+Number(item.amount||0).toLocaleString(),468,y+8,{align:'right',width:86});
+         .text((itemAmt<0?'-$':'$')+Math.abs(itemAmt).toLocaleString(),468,y+8,{align:'right',width:86});
       y += rh;
     });
 
