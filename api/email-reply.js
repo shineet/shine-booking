@@ -96,6 +96,26 @@ function htmlToText(html) {
     .trim();
 }
 
+// My own inboxes -- if one of these shows up in a Cc header (e.g. I BCC/CC myself on
+// something), don't echo it back as a Cc on the reply.
+const SELF_EMAILS = ['shine@texasmentalist.com', 'shinethementalist@gmail.com', '2020shine@gmail.com'];
+
+// Pull the Cc header straight out of the raw MIME source (handles RFC 2822 header
+// folding, where a long Cc line continues on indented following lines) so replies can
+// go out to everyone the client copied, not just the original sender. Returns a
+// comma-joined address list, or null if there's no Cc / nothing left after filtering.
+function extractCcFromRaw(rawEmail, excludeEmail) {
+  if (!rawEmail) return null;
+  const m = rawEmail.match(/^cc:[ \t]*((?:.*\r?\n[ \t]+.*)*.*)/im);
+  if (!m) return null;
+  const exclude = String(excludeEmail || '').toLowerCase();
+  const addrs = (m[1].match(/[^\s<>,"]+@[^\s<>,"]+/g) || [])
+    .map(a => a.trim().toLowerCase())
+    .filter(a => !SELF_EMAILS.includes(a) && a !== exclude);
+  const unique = [...new Set(addrs)];
+  return unique.length ? unique.join(',') : null;
+}
+
 // Decode an already-extracted body that may itself be an encoded blob.
 function normalizeBody(body) {
   let b = String(body || '');
@@ -562,6 +582,10 @@ export default async function handler(req, res) {
     const fromEmail = from.match(/<(.+)>/)?.[1] || from;
     const fromNameMatch = from.match(/^"?([^"<]+)"?\s*<.+>$/);
     const fromName = fromNameMatch ? fromNameMatch[1].trim() : '';
+    // Anyone the client copied on their inbound email (e.g. Natalie cc'ing Leo) --
+    // carried through to the outbound draft so a reply goes to everyone, not just
+    // the original sender.
+    const ccAddresses = extractCcFromRaw(rawEmail, fromEmail);
 
     // Look up client in Supabase — failure safe
     let client = null;
@@ -808,6 +832,7 @@ Only include this block once. Do not mention this block or its contents in the v
         body: JSON.stringify({
           from: 'Shine, The Mentalist <shine@texasmentalist.com>',
           to: fromEmail,
+          ...(ccAddresses ? { cc: ccAddresses.split(',') } : {}),
           subject: replySubject,
           text: cleanReply
         })
@@ -836,8 +861,8 @@ Only include this block once. Do not mention this block or its contents in the v
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
           body: JSON.stringify([
-            { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null },
-            { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject }
+            { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, cc_address: ccAddresses },
+            { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject, cc_address: ccAddresses }
           ])
         });
         if (!messagesRes.ok) {
@@ -957,8 +982,8 @@ Only include this block once. Do not mention this block or its contents in the v
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
             body: JSON.stringify([
-              { client_id: newClient.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null },
-              { client_id: newClient.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject }
+              { client_id: newClient.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, cc_address: ccAddresses },
+              { client_id: newClient.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject, cc_address: ccAddresses }
             ])
           });
           if (!messagesRes.ok) {

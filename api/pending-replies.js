@@ -445,6 +445,7 @@ export default async function handler(req, res) {
           draft: m.content,
           createdAt: m.created_at,
           subject: m.email_subject || null,
+          cc: m.cc_address || null,
           incoming: inb ? inb.content : null,
           incomingAt: inb ? inb.created_at : null
         };
@@ -649,12 +650,14 @@ PRICING:
           body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: normalizePhone(message.to_address), Body: finalText }).toString()
         });
       } else if (message.channel === 'email') {
+        const ccList = message.cc_address ? message.cc_address.split(',').map(s => s.trim()).filter(Boolean) : null;
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
           body: JSON.stringify({
             from: 'Shine, The Mentalist <shine@texasmentalist.com>',
             to: message.to_address,
+            ...(ccList && ccList.length ? { cc: ccList } : {}),
             subject: message.email_subject || 'Following up',
             text: finalText
           })

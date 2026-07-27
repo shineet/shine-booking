@@ -717,6 +717,7 @@
     .pending-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px }
     .pending-client { font-size: 13px; font-weight: 600 }
     .pending-channel { font-size: 11px; color: var(--muted); text-transform: uppercase }
+    .pending-cc { font-size: 11.5px; color: var(--muted); margin: -2px 0 8px }
 
     .pending-draft {
         width: 100%;
@@ -3423,11 +3424,15 @@ function loadPendingReplies() {
                 ? '<div class="pending-label">&#128172; They wrote' + (p.subject ? ' &middot; ' + escHtml(p.subject) : '') + '</div>' +
                   '<div class="pending-incoming">' + escHtml(p.incoming) + '</div>'
                 : '';
+            var ccBlock = p.cc
+                ? '<div class="pending-cc">Reply will also Cc: ' + escHtml(p.cc.split(',').join(', ')) + '</div>'
+                : '';
             var enterHandler = 'if(event.key===\'Enter\'){event.preventDefault();regeneratePendingReply(\'' + p.id + '\');}';
             return '<div class="pending-card" id="pending-' + p.id + '">' +
                 '<div class="pending-header"><div class="pending-client">' + escHtml(p.clientName) + '</div>' +
                 '<div class="pending-channel">' + ch + ' · ' + getTimeAgo(p.createdAt) + '</div></div>' +
                 incomingBlock +
+                ccBlock +
                 '<div class="pending-label">&#10024; Your draft reply</div>' +
                 '<textarea class="pending-draft autogrow" id="pending-draft-' + p.id + '">' + escHtml(p.draft) + '</textarea>' +
                 '<div class="pending-instruction">' +
