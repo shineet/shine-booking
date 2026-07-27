@@ -3975,6 +3975,9 @@ function saveEditedClient() {
     if (!currentClientId) return;
     var btn = document.getElementById('edit-save-btn');
     btn.disabled = true; btn.textContent = 'Saving...';
+    var newEventType = document.getElementById('edit-event_type').value||null;
+    var newEventDate = document.getElementById('edit-event_date').value||null;
+    var newVenue = document.getElementById('edit-venue').value.trim()||null;
     fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + currentClientId, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=minimal' },
@@ -3982,10 +3985,10 @@ function saveEditedClient() {
             name: document.getElementById('edit-name').value.trim(),
             phone: document.getElementById('edit-phone').value.trim()||null,
             email: document.getElementById('edit-email').value.trim()||null,
-            event_type: document.getElementById('edit-event_type').value||null,
-            event_date: document.getElementById('edit-event_date').value||null,
+            event_type: newEventType,
+            event_date: newEventDate,
             guests: document.getElementById('edit-guests').value.trim()||null,
-            venue: document.getElementById('edit-venue').value.trim()||null,
+            venue: newVenue,
             lead_source: composeSource('edit-lead_source', 'edit_other_source_name'),
             status: document.getElementById('edit-status').value||'new',
             notes: document.getElementById('edit-notes').value.trim()||null,
@@ -3994,6 +3997,20 @@ function saveEditedClient() {
     })
     .then(function(r) {
         if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
+        // The Gig Dashboard reads its own copy of event_date/event_type/venue off the
+        // linked bookings row, not the client -- keep it in sync so a reschedule here
+        // (e.g. client texts a new date and Shine updates it) doesn't leave the gig
+        // card showing the old date. venue_address is the bookings-table name for venue.
+        var c = allClients.find(function(x) { return x.id === currentClientId; });
+        if (c && c.booking_id) {
+            return fetch(SUPABASE_URL + '/rest/v1/bookings?id=eq.' + c.booking_id, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=minimal' },
+                body: JSON.stringify({ event_type: newEventType, event_date: newEventDate, venue_address: newVenue })
+            }).catch(function(e) { console.error('Booking sync after edit failed:', e.message); });
+        }
+    })
+    .then(function() {
         closeEditModal();
         loadLeads();
     })
