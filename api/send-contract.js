@@ -105,8 +105,18 @@ module.exports = async function handler(req, res) {
       // elsewhere, stale reference) -- self-heal by creating a fresh booking below
       // instead of silently sending a contract link to a dead booking ID.
       if (!Array.isArray(updRows) || !updRows[0]) {
-        console.error(`send-contract: booking_id ${resolvedBookingId} no longer exists -- creating a new booking`);
+        console.error(`send-contract: booking_id ${resolvedBookingId} no longer exists -- checking for a concurrent fix before creating a new one`);
+        // Same race guard as intake.js: if another in-flight request (e.g. Resend
+        // intake) already relinked this client to a fresh booking, reuse it instead
+        // of creating a second orphaned duplicate.
+        const staleBookingId = resolvedBookingId;
         resolvedBookingId = null;
+        if (safeClientId) {
+          const recheckRes = await fetch(`${SB_URL}/rest/v1/clients?id=eq.${safeClientId}&select=booking_id&limit=1`, { headers: SB_HDR });
+          const recheckRows = await recheckRes.json().catch(() => []);
+          const latestBookingId = Array.isArray(recheckRows) && recheckRows[0] ? recheckRows[0].booking_id : null;
+          if (latestBookingId && latestBookingId !== staleBookingId) resolvedBookingId = latestBookingId;
+        }
       }
       // Also update selected_price on client so dashboard card shows fee
       if (resolvedBookingId && safeClientId && fee) {

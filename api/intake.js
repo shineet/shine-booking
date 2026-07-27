@@ -103,15 +103,39 @@ export default async function handler(req, res) {
         // dangling reference from an earlier failed flow) -- self-heal by creating a fresh
         // booking and re-linking the client, instead of hard-failing every future send.
         if (!booking) {
-          console.error(`intake send: client ${clientId}'s booking_id ${existingBookingId} no longer exists -- creating a new booking and relinking`);
-          booking = await insertNewBooking();
-          if (!booking) throw new Error('Failed to create booking record');
+          console.error(`intake send: client ${clientId}'s booking_id ${existingBookingId} no longer exists -- checking for a concurrent fix before creating a new one`);
+          // Guard against a race: "Resend intake" and "Copy link" both hit this same
+          // self-heal path, so clicking both in quick succession (while the booking_id
+          // is still dangling) used to create two separate replacement bookings -- only
+          // one could win the client relink below, leaving the other as an orphaned
+          // duplicate. Re-check the client's booking_id right before creating; if another
+          // in-flight request already relinked it, reuse that booking instead.
+          let booking2 = null;
           if (clientId) {
-            await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
-              body: JSON.stringify({ booking_id: booking.id })
+            const recheckRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}&select=booking_id&limit=1`, {
+              headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` }
             });
+            const recheckRows = await recheckRes.json();
+            const latestBookingId = Array.isArray(recheckRows) && recheckRows[0] ? recheckRows[0].booking_id : null;
+            if (latestBookingId && latestBookingId !== existingBookingId) {
+              const reRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${latestBookingId}&limit=1`, {
+                headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` }
+              });
+              const reRows = await reRes.json();
+              booking2 = Array.isArray(reRows) ? reRows[0] : null;
+            }
+          }
+          booking = booking2;
+          if (!booking) {
+            booking = await insertNewBooking();
+            if (!booking) throw new Error('Failed to create booking record');
+            if (clientId) {
+              await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+                body: JSON.stringify({ booking_id: booking.id })
+              });
+            }
           }
         }
       } else {
