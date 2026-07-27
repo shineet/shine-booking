@@ -87,7 +87,7 @@ module.exports = async function handler(req, res) {
 
     if (resolvedBookingId) {
       // Update existing booking with latest event details
-      await fetch(`${SB_URL}/rest/v1/bookings?id=eq.${resolvedBookingId}`, {
+      const updRes = await fetch(`${SB_URL}/rest/v1/bookings?id=eq.${resolvedBookingId}`, {
         method: 'PATCH',
         headers: SB_HDR,
         body: JSON.stringify({
@@ -100,16 +100,27 @@ module.exports = async function handler(req, res) {
           contract_status: 'sent',
         }),
       });
+      const updRows = await updRes.json().catch(() => []);
+      // client/planner's booking_id pointed at a row that no longer exists (deleted
+      // elsewhere, stale reference) -- self-heal by creating a fresh booking below
+      // instead of silently sending a contract link to a dead booking ID.
+      if (!Array.isArray(updRows) || !updRows[0]) {
+        console.error(`send-contract: booking_id ${resolvedBookingId} no longer exists -- creating a new booking`);
+        resolvedBookingId = null;
+      }
       // Also update selected_price on client so dashboard card shows fee
-      if (safeClientId && fee) {
+      if (resolvedBookingId && safeClientId && fee) {
         await fetch(`${SB_URL}/rest/v1/clients?id=eq.${safeClientId}`, {
           method: 'PATCH',
           headers: SB_HDR,
           body: JSON.stringify({ selected_price: fee, last_activity: new Date().toISOString() }),
         });
       }
-    } else {
-      // Create new booking record for planners / direct clients
+    }
+
+    if (!resolvedBookingId) {
+      // Create new booking record for planners / direct clients (also reached
+      // when the existing booking_id above turned out to be dangling)
       const bRes = await fetch(`${SB_URL}/rest/v1/bookings`, {
         method: 'POST',
         headers: SB_HDR,

@@ -1261,6 +1261,17 @@ async function deleteBooking() {
 
   try {
     await sbDelete('bookings', c.booking_id);
+    // The client record's booking_id pointed at this row -- clear it so nothing
+    // (resend intake, contract, etc.) is left holding a dangling reference to a
+    // booking that no longer exists. Only clear it if it still matches (don't
+    // clobber a booking_id that's since been relinked elsewhere).
+    if (c.id) {
+      try {
+        await fetch(`${SB_URL}/rest/v1/clients?id=eq.${c.id}&booking_id=eq.${c.booking_id}`, {
+          method: 'PATCH', headers: SB_HEADERS, body: JSON.stringify({ booking_id: null })
+        });
+      } catch (e) { console.error('Clearing client.booking_id after delete failed:', e.message); }
+    }
     closeModal('detail-modal');
     await loadAll();
   } catch (e) {
