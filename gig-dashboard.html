@@ -1257,6 +1257,22 @@ async function editFee() {
 async function deleteBooking() {
   const c = activeClient;
   if (!c || !c.booking_id) { alert('No booking selected.'); return; }
+
+  // Guard against silently destroying a real payment record: a booking with money
+  // against it (deposit or full payment, Stripe or manual) must not be deleted
+  // without the owner explicitly seeing that first -- this is exactly how Jacquie's
+  // recorded deposit got wiped when a duplicate gig was cleaned up.
+  const b = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings;
+  if (b && (b.deposit_paid || b.paid_in_full || Number(b.payment_amount) > 0)) {
+    const amt = Number(b.payment_amount) || 0;
+    const warned = confirm(
+      `⚠ This gig has a payment on record${amt ? ` ($${amt.toLocaleString()}${b.paid_in_full ? ', paid in full' : ' deposit'})` : ''}.\n\n` +
+      `Deleting it will permanently erase that payment record too -- the money was still charged, the app just won't know about it anymore.\n\n` +
+      `Only continue if you're deleting a genuine duplicate and will re-record the payment (Mark Payment Received) on the gig you keep.\n\nDelete anyway?`
+    );
+    if (!warned) return;
+  }
+
   if (!confirm(`Delete this gig for ${c.name || 'this client'} (${fmtDate(c.event_date) || 'no date'})? This cannot be undone.`)) return;
 
   try {
