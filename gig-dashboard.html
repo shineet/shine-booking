@@ -2235,19 +2235,16 @@ function openInvoiceFromCard(btn) {
   // Use name as contact, leave company blank for manual entry if it's a person's name
   var isPersonName = c.name && /^[A-Z][a-z]+ [A-Z]/.test(c.name); // "First Last" pattern
 
-  // If a deposit (or any partial payment) is already on file for this booking, the
-  // invoice should bill the remaining balance, not the full fee again -- surfaced as
-  // an itemized credit line so the client sees exactly what they already paid, rather
-  // than Shine having to hand-edit the line items every time. Full payments need no
-  // invoice at all, but that's already excluded upstream (the card wouldn't be "upcoming").
-  var alreadyPaid = booking ? (Number(booking.payment_amount) || 0) : 0;
-  var showCredit  = alreadyPaid > 0 && !(booking && booking.paid_in_full);
+  // NOTE: total is always the GROSS fee here, never pre-reduced by any deposit
+  // already paid. invoice-view.html independently re-fetches the live booking
+  // record and computes the remaining balance itself (fee - payment_amount) to
+  // decide what to actually charge -- if total were already net of the deposit,
+  // that page would subtract the deposit a second time (a real bug this once
+  // caused: Jacquie's $300 fee minus a $75 deposit showed "$150 remaining"
+  // instead of $225). The gross fee is the only total that's safe to pass here.
   var lineItems = feeAmt
     ? [{ description: 'Performance Fee', details: booking ? (booking.event_title || c.event_type || '') : (c.event_type || ''), amount: feeAmt }]
     : [{ description: '', details: '', amount: '' }];
-  if (showCredit) {
-    lineItems.push({ description: 'Deposit received', details: booking && booking.paid_at ? ('Paid ' + fmtDate(booking.paid_at.slice(0,10))) : 'Already paid', amount: -alreadyPaid });
-  }
 
   openInvoiceModal({
     bookingId: booking ? (booking.id || '') : '',
@@ -2265,8 +2262,8 @@ function openInvoiceFromCard(btn) {
     guests:    guests,
     dueDate:   dueDate,
     lineItems: lineItems,
-    total:     feeAmt - (showCredit ? alreadyPaid : 0),
-    depositPercent: showCredit ? 100 : 50,
+    total:     feeAmt,
+    depositPercent: 50,
   });
 }
 
