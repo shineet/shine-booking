@@ -136,6 +136,34 @@ export default async function handler(req, res) {
             last_activity: new Date().toISOString()
           })
         });
+
+        // Log the actual message that went out so it shows up in the conversation
+        // thread -- this was missing entirely before, which is exactly why a real,
+        // successfully-sent pricing text looked like it never happened and got
+        // sent again manually as a duplicate.
+        if (sent) {
+          try {
+            await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': process.env.SUPABASE_SECRET_KEY,
+                'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+              },
+              body: JSON.stringify([{
+                client_id: clientId,
+                channel,
+                direction: 'outbound',
+                content: channel === 'email' ? emailText : message,
+                status: 'sent',
+                to_address: channel === 'email' ? email : phone,
+                email_subject: channel === 'email' ? 'My show packages & pricing' : null
+              }])
+            });
+          } catch (logErr) {
+            console.error('Pricing message log failed:', logErr.message);
+          }
+        }
       }
       res.status(200).json({ sent, channel, pricingLink });
     } catch(e) {

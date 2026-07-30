@@ -857,12 +857,16 @@ Only include this block once. Do not mention this block or its contents in the v
           body: JSON.stringify({ status: newStatus, last_activity: new Date().toISOString(), last_channel: 'email' })
         });
 
+        // Staggered timestamps -- see reply.js for why a same-batch insert
+        // otherwise leaves the inbound/outbound pair's order undefined.
+        const inboundTs = new Date();
+        const outboundTs = new Date(inboundTs.getTime() + 500);
         const messagesRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
           body: JSON.stringify([
-            { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, cc_address: ccAddresses },
-            { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject, cc_address: ccAddresses }
+            { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, cc_address: ccAddresses, created_at: inboundTs.toISOString() },
+            { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject, cc_address: ccAddresses, created_at: outboundTs.toISOString() }
           ])
         });
         if (!messagesRes.ok) {
@@ -978,12 +982,16 @@ Only include this block once. Do not mention this block or its contents in the v
         const newClient = Array.isArray(newClientRows) ? newClientRows[0] : null;
 
         if (newClient) {
+          // Staggered timestamps -- see reply.js for why a same-batch insert
+          // otherwise leaves the inbound/outbound pair's order undefined.
+          const inboundTs2 = new Date();
+          const outboundTs2 = new Date(inboundTs2.getTime() + 500);
           const messagesRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
             body: JSON.stringify([
-              { client_id: newClient.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, cc_address: ccAddresses },
-              { client_id: newClient.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject, cc_address: ccAddresses }
+              { client_id: newClient.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, cc_address: ccAddresses, created_at: inboundTs2.toISOString() },
+              { client_id: newClient.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject, cc_address: ccAddresses, created_at: outboundTs2.toISOString() }
             ])
           });
           if (!messagesRes.ok) {

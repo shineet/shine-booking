@@ -391,12 +391,20 @@ Call/meeting detection (separate from the actual performance date):
           body: JSON.stringify(clientPatch)
         });
 
+        // Explicit, staggered created_at timestamps -- inserting both rows in one
+        // batch means Postgres's now() is fixed for the whole statement, so both
+        // would otherwise get the IDENTICAL timestamp. With no secondary sort key
+        // in the dashboard's query (order=created_at.asc only), a tie's relative
+        // order is undefined -- which is exactly how Joe's reply ended up
+        // rendered ABOVE the AI's response that was actually written to answer it.
+        const inboundTs = new Date();
+        const outboundTs = new Date(inboundTs.getTime() + 500);
         const messagesRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
           body: JSON.stringify([
-            { client_id: client.id, channel: 'sms', direction: 'inbound', content: Body, status: 'received', to_address: null },
-            { client_id: client.id, channel: 'sms', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: From }
+            { client_id: client.id, channel: 'sms', direction: 'inbound', content: Body, status: 'received', to_address: null, created_at: inboundTs.toISOString() },
+            { client_id: client.id, channel: 'sms', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: From, created_at: outboundTs.toISOString() }
           ])
         });
         if (!messagesRes.ok) {
