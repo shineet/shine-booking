@@ -608,6 +608,19 @@
     .pkg-banner-icon { font-size: 18px }
     .pkg-banner-text { font-size: 13px; color: var(--green); font-weight: 600 }
 
+    .linked-contacts-box { margin-bottom: 16px }
+    .linked-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 13px;
+        margin-bottom: 6px
+    }
+
     /* ── Pending replies banner ── */
     .pending-banner {
         background: var(--surface);
@@ -1257,6 +1270,7 @@
     <div class="modal">
         <h2>Send pricing</h2>
         <p id="modal-client-name">Choose which packages to send</p>
+        <div id="pricing-sendto"></div>
         <div class="format-toggle">
             <button class="format-toggle-btn active" id="format-btn-stage" onclick="switchFormat('stage')">Stage Show</button>
             <button class="format-toggle-btn" id="format-btn-strolling" onclick="switchFormat('strolling')">Strolling</button>
@@ -1357,6 +1371,7 @@
     <div class="modal">
         <h2>Send contract</h2>
         <p id="contract-modal-client-name">Fill in the event details</p>
+        <div id="contract-sendto"></div>
         <div class="field"><label>Event title</label><input type="text" id="ct-title" placeholder="e.g. Sarah's 30th Birthday"></div>
         <div class="field"><label>Venue address</label><input type="text" id="ct-address" placeholder="Full address"></div>
         <div class="field"><label>Client / Company address <span style="font-weight:400;color:var(--muted)">(optional — for planners &amp; DMCs; leave blank for direct clients)</span></label><input type="text" id="ct-client-address" placeholder="e.g. 123 Business St, Austin TX"></div>
@@ -1490,6 +1505,7 @@
     <div class="modal">
         <h2>Send intake questionnaire</h2>
         <p id="intake-modal-name" style="color:var(--muted);font-size:13px;margin-bottom:14px"></p>
+        <div id="intake-sendto"></div>
         <div class="modal-actions" style="flex-direction:column;gap:8px;align-items:stretch">
             <button class="modal-send" id="intake-email-btn" onclick="sendIntake('email')">📧 Send by Email</button>
             <button class="modal-send" id="intake-sms-btn" onclick="sendIntake('sms')">💬 Send by SMS</button>
@@ -1548,6 +1564,22 @@
             <button class="modal-cancel" onclick="closeComposeModal()">Cancel</button>
             <button class="modal-cancel" id="compose-imessage-btn" style="display:none" onclick="openComposeInMessages()">Open in Messages</button>
             <button class="modal-send" id="compose-send-btn" onclick="sendCompose()">Send</button>
+        </div>
+    </div>
+</div>
+
+<!-- Link contact modal -->
+<div class="modal-overlay" id="link-modal">
+    <div class="modal">
+        <h2>Link contact</h2>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:14px">Search for another lead (e.g. an assistant, admin, or planner) to link to this one. Linked contacts can be sent documents that belong to this client's booking.</p>
+        <div class="field">
+            <label>Search</label>
+            <input type="text" id="link-search" placeholder="Name, phone, or email" oninput="searchLinkCandidates()">
+        </div>
+        <div id="link-results"></div>
+        <div class="modal-actions">
+            <button class="modal-cancel" onclick="closeLinkModal()">Cancel</button>
         </div>
     </div>
 </div>
@@ -1735,6 +1767,95 @@ function isNoReply(client) {
 // Shine can tell inbound leads apart from ones he initiated himself.
 function isColdOutreach(client) {
     return !!(client.lead_source && client.lead_source.indexOf('Cold outreach') === 0);
+}
+
+/* ── Linked contacts ──────────────────────────────────────────────────────
+   A "linked contact" is a separate client record (e.g. an assistant, admin,
+   or planner who reaches out on the real client's behalf) whose
+   linked_client_id points at the primary client's id. This lets Shine send
+   documents (contract/pricing/intake) that belong to the primary client's
+   booking, addressed to the linked contact instead -- without merging the
+   two records or losing either conversation history. */
+
+function getSendToOptions(primaryId) {
+    var primary = allClients.find(function(x) { return x.id === primaryId; });
+    if (!primary) return [];
+    var linked = allClients.filter(function(x) { return x.linked_client_id === primaryId; });
+    return [primary].concat(linked);
+}
+
+// Renders a "Send to" dropdown into containerId if there's more than one
+// option (the primary + at least one linked contact); otherwise leaves the
+// container empty so ordinary single-contact sends stay uncluttered.
+// onSelect receives the chosen linked contact ({id,name,email,phone}), or
+// null when the primary itself is selected (the normal case).
+function renderSendToSelector(containerId, primaryId, onSelect) {
+    var el = document.getElementById(containerId);
+    if (!el) return;
+    var options = getSendToOptions(primaryId);
+    if (options.length <= 1) { el.innerHTML = ''; return; }
+    var selectId = containerId + '-select';
+    el.innerHTML = '<label style="display:block;color:var(--muted);font-size:12px;margin-bottom:6px">Send to</label>' +
+        '<select id="' + selectId + '" style="width:100%;margin-bottom:12px"></select>';
+    var sel = document.getElementById(selectId);
+    options.forEach(function(o, i) {
+        var opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = (o.name || o.email || o.phone || 'Unknown') + (o.id === primaryId ? '' : ' (linked contact)');
+        sel.appendChild(opt);
+    });
+    sel.addEventListener('change', function() {
+        var picked = options[sel.selectedIndex];
+        onSelect(picked.id === primaryId ? null : picked);
+    });
+}
+
+var linkModalClientId = null;
+function openLinkModal(clientId) {
+    linkModalClientId = clientId;
+    document.getElementById('link-search').value = '';
+    document.getElementById('link-results').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0">Type a name, phone, or email to search…</div>';
+    document.getElementById('link-modal').classList.add('show');
+    document.getElementById('link-search').focus();
+}
+function closeLinkModal() { document.getElementById('link-modal').classList.remove('show'); linkModalClientId = null; }
+function searchLinkCandidates() {
+    var q = document.getElementById('link-search').value.trim().toLowerCase();
+    var results = document.getElementById('link-results');
+    if (!q) { results.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0">Type a name, phone, or email to search…</div>'; return; }
+    var matches = allClients.filter(function(x) {
+        if (x.id === linkModalClientId) return false;
+        var hay = ((x.name||'') + ' ' + (x.phone||'') + ' ' + (x.email||'')).toLowerCase();
+        return hay.indexOf(q) !== -1;
+    }).slice(0, 8);
+    if (!matches.length) { results.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0">No matches.</div>'; return; }
+    results.innerHTML = matches.map(function(x) {
+        return '<div class="link-result-row" onclick="confirmLinkContact(\'' + esc(x.id) + '\')" style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer">' +
+            '<div style="font-weight:600">' + escHtml(x.name || 'Unknown') + '</div>' +
+            '<div style="color:var(--muted);font-size:12px">' + escHtml([x.phone, x.email].filter(Boolean).join(' · ')) + '</div></div>';
+    }).join('');
+}
+function confirmLinkContact(otherClientId) {
+    if (!linkModalClientId) return;
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + linkModalClientId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
+        body: JSON.stringify({ linked_client_id: otherClientId })
+    })
+    .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
+    .then(function() { closeLinkModal(); loadLeads(); })
+    .catch(function(e) { alert('Could not link: ' + e.message); });
+}
+function unlinkContact(clientId) {
+    if (!confirm('Unlink this contact?')) return;
+    fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + clientId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
+        body: JSON.stringify({ linked_client_id: null })
+    })
+    .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
+    .then(function() { loadLeads(); })
+    .catch(function(e) { alert('Could not unlink: ' + e.message); });
 }
 
 function matchesFilter(client) {
@@ -3221,8 +3342,29 @@ function renderDetail(c) {
         actions += '<button class="d-btn blue" data-rid="' + esc(c.id) + '" data-rname="' + esc(c.name) + '" data-remail="' + esc(c.email||'') + '" data-rphone="' + esc(c.phone||'') + '" onclick="openComposeModal(this.dataset.rid,this.dataset.rname,this.dataset.remail,this.dataset.rphone)">✉️ Send message</button>';
     var isPlanner = c.contact_type === 'planner';
     actions += '<button class="d-btn ghost" onclick="toggleContactType(\'' + esc(c.id) + '\',\'' + (isPlanner ? 'client' : 'planner') + '\')">Mark as ' + (isPlanner ? 'direct client' : 'planner') + '</button>';
+    actions += '<button class="d-btn ghost" onclick="openLinkModal(\'' + esc(c.id) + '\')">🔗 Link contact</button>';
     actions += '<button class="d-btn ghost" onclick="openEditModal(\'' + esc(c.id) + '\')">Edit</button>';
     actions += '<button class="d-btn danger" onclick="deleteClient(\'' + esc(c.id) + '\',\'' + esc(c.name) + '\')">Delete</button>';
+
+    /* Linked contacts */
+    var linkedHtml = '';
+    if (c.linked_client_id) {
+        var primaryContact = allClients.find(function(x) { return x.id === c.linked_client_id; });
+        if (primaryContact) {
+            linkedHtml += '<div class="linked-row"><span>Linked to: <b onclick="selectLead(\'' + esc(primaryContact.id) + '\')" style="cursor:pointer;text-decoration:underline">' + escHtml(primaryContact.name || 'Unknown') + '</b></span>' +
+                '<button class="d-btn ghost" style="padding:2px 8px;font-size:12px" onclick="unlinkContact(\'' + esc(c.id) + '\')">Unlink</button></div>';
+        }
+    }
+    var linkedContacts = allClients.filter(function(x) { return x.linked_client_id === c.id; });
+    if (linkedContacts.length) {
+        linkedHtml += linkedContacts.map(function(x) {
+            return '<div class="linked-row"><span>Linked contact: <b onclick="selectLead(\'' + esc(x.id) + '\')" style="cursor:pointer;text-decoration:underline">' + escHtml(x.name || 'Unknown') + '</b></span>' +
+                '<button class="d-btn ghost" style="padding:2px 8px;font-size:12px" onclick="unlinkContact(\'' + esc(x.id) + '\')">Unlink</button></div>';
+        }).join('');
+    }
+    if (linkedHtml) {
+        linkedHtml = '<div class="detail-section-label">Linked contacts</div><div class="linked-contacts-box">' + linkedHtml + '</div>';
+    }
 
     /* Package banner */
     var pkgHtml = '';
@@ -3260,6 +3402,7 @@ function renderDetail(c) {
         '</div></div>' +
         pkgHtml +
         '<div class="detail-actions">' + actions + '</div>' +
+        linkedHtml +
         (fields.length ? '<div class="detail-section-label">Details</div><div class="detail-grid">' + fieldsHtml + '</div>' : '') +
         '<div id="answers-inline"></div>' +
         '<div class="convo-section">' +
@@ -3629,9 +3772,10 @@ var currentFormat = 'stage';
 
 function openPricingModal(id, name, phone, email, lastChannel, eventType) {
     currentClientId = id;
-    modalClient = { id: id, name: name, phone: phone, email: email, lastChannel: lastChannel, eventType: eventType };
+    modalClient = { id: id, name: name, phone: phone, email: email, lastChannel: lastChannel, eventType: eventType, sendToOverride: null };
     selectedPricingOption = null;
     document.getElementById('modal-client-name').textContent = 'Sending to ' + name;
+    renderSendToSelector('pricing-sendto', id, function(picked) { modalClient.sendToOverride = picked; });
     document.querySelectorAll('.pricing-option').forEach(function(o) { o.classList.remove('selected'); });
     document.querySelectorAll('.custom-price-inputs').forEach(function(el) { el.classList.remove('show'); });
     document.getElementById('modal-send-btn').disabled = true;
@@ -3715,9 +3859,10 @@ function sendPricing() {
     var btn = document.getElementById('modal-send-btn');
     btn.disabled = true; btn.textContent = 'Sending...';
     var link = buildPricingLink();
+    var recipient = modalClient.sendToOverride || modalClient;
     fetch('/api/chat?mode=pricing', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: currentClientId, clientName: modalClient.name, phone: modalClient.phone, email: modalClient.email, lastChannel: modalClient.lastChannel, pricingLink: link })
+        body: JSON.stringify({ clientId: currentClientId, clientName: recipient.name, phone: recipient.phone, email: recipient.email, lastChannel: modalClient.lastChannel, pricingLink: link })
     })
     .then(function(r) { return r.json(); })
     .then(function(d) { if (d.error) throw new Error(d.error); closeModal(); loadLeads(); })
@@ -3727,12 +3872,13 @@ function sendPricing() {
 
 function openPricingInMessages() {
     if (!selectedPricingOption || !currentClientId) return;
-    if (!modalClient.phone) { alert('This client has no phone number on file.'); return; }
+    var recipient = modalClient.sendToOverride || modalClient;
+    if (!recipient.phone) { alert('This contact has no phone number on file.'); return; }
 
     var link = buildPricingLink();
     var message = 'Hi! Here are my show packages and pricing: ' + link + ' — Shine, The Mentalist';
     var clientIdForUpdate = currentClientId;
-    var phoneDigits = modalClient.phone.replace(/[^\d+]/g, '');
+    var phoneDigits = recipient.phone.replace(/[^\d+]/g, '');
 
     var btn = document.getElementById('modal-imessage-btn');
     btn.disabled = true; btn.textContent = 'Opening...';
@@ -3824,28 +3970,30 @@ function sendIntakeForm(id, name, email, eventType, price) {
     var c = allClients.find(function(x) { return x.id === id; });
     var phone = c ? c.phone : null;
     if (!email && !phone) { alert('No email or phone on file — cannot send intake form.'); return; }
-    intakeClient = { id: id, name: name, email: email || '', phone: phone || '', eventType: eventType, price: price };
+    intakeClient = { id: id, name: name, email: email || '', phone: phone || '', eventType: eventType, price: price, sendToOverride: null };
     document.getElementById('intake-modal-name').textContent = 'For ' + name;
+    renderSendToSelector('intake-sendto', id, function(picked) { intakeClient.sendToOverride = picked; });
     document.getElementById('intake-modal').classList.add('show');
 }
 function closeIntakeModal() { document.getElementById('intake-modal').classList.remove('show'); }
 function sendIntake(channel) {
-    if (channel === 'sms' && !intakeClient.phone) { alert('No phone on file for this client. Use Email, or add a phone via Edit.'); return; }
-    if (channel === 'email' && !intakeClient.email) { alert('No email on file for this client. Use SMS, or add an email via Edit.'); return; }
+    var recipient = intakeClient.sendToOverride || intakeClient;
+    if (channel === 'sms' && !recipient.phone) { alert('No phone on file for this contact. Use Email, or add a phone via Edit.'); return; }
+    if (channel === 'email' && !recipient.email) { alert('No email on file for this contact. Use SMS, or add an email via Edit.'); return; }
     var btn = channel === 'email' ? document.getElementById('intake-email-btn') : (channel === 'sms' ? document.getElementById('intake-sms-btn') : null);
     var orig = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
     fetch('/api/intake', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send', clientId: intakeClient.id, clientName: intakeClient.name, clientEmail: intakeClient.email || null, clientPhone: intakeClient.phone || null, eventType: intakeClient.eventType, fee: intakeClient.price || null, channel: channel })
+        body: JSON.stringify({ action: 'send', clientId: intakeClient.id, clientName: recipient.name, clientEmail: recipient.email || null, clientPhone: recipient.phone || null, eventType: intakeClient.eventType, fee: intakeClient.price || null, channel: channel })
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
         if (d.error) throw new Error(d.error);
         closeIntakeModal();
         loadLeads();
-        if (channel === 'link') { openCopyLinkModal(d.intakeLink, intakeClient.name); }
-        else { alert('Intake form sent by ' + (channel === 'sms' ? 'SMS' : 'email') + ' to ' + intakeClient.name + '.'); }
+        if (channel === 'link') { openCopyLinkModal(d.intakeLink, recipient.name); }
+        else { alert('Intake form sent by ' + (channel === 'sms' ? 'SMS' : 'email') + ' to ' + recipient.name + '.'); }
     })
     .catch(function(e) { alert('Error: ' + e.message); })
     .finally(function() { if (btn) { btn.disabled = false; btn.textContent = orig; } });
@@ -3855,8 +4003,9 @@ function sendIntake(channel) {
 var contractClient = {};
 
 function openContractModal(id, name, email, bookingId, phone) {
-    contractClient = { id: id, name: name, email: email, bookingId: bookingId, phone: phone || '' };
+    contractClient = { id: id, name: name, email: email, bookingId: bookingId, phone: phone || '', sendToOverride: null };
     document.getElementById('contract-modal-client-name').textContent = 'Sending to ' + name;
+    renderSendToSelector('contract-sendto', id, function(picked) { contractClient.sendToOverride = picked; });
     if (bookingId) {
         fetch(SUPABASE_URL + '/rest/v1/bookings?id=eq.' + bookingId + '&select=*', {
             headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
@@ -3925,21 +4074,22 @@ function sendContract(channel) {
     var duration      = document.getElementById('ct-duration').value.trim();
     var fee           = document.getElementById('ct-fee').value;
     if (!title || !address || !date || !start || !duration || !fee) { alert('Please fill in all contract fields.'); return; }
-    if (channel === 'sms' && !contractClient.phone) { alert('No phone number on file for this client. Use Email, or add a phone via Edit.'); return; }
-    if (channel === 'email' && !contractClient.email) { alert('No email on file for this client. Use SMS, or add an email via Edit.'); return; }
+    var recipient = contractClient.sendToOverride || contractClient;
+    if (channel === 'sms' && !recipient.phone) { alert('No phone number on file for this contact. Use Email, or add a phone via Edit.'); return; }
+    if (channel === 'email' && !recipient.email) { alert('No email on file for this contact. Use SMS, or add an email via Edit.'); return; }
     var btn = document.getElementById(channel === 'sms' ? 'contract-sms-btn' : 'contract-send-btn');
     var orig = btn.textContent;
     btn.disabled = true; btn.textContent = 'Sending...';
     var attachInvoice = document.getElementById('ct-attach-invoice') && document.getElementById('ct-attach-invoice').checked;
     var dep = parseInt(document.getElementById('ct-deposit').value, 10) || 50;
-    var payload = { clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, clientPhone: contractClient.phone||null, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee), depositPercent: dep, channel: channel };
+    var payload = { clientId: contractClient.id, clientName: recipient.name, clientEmail: recipient.email, clientPhone: recipient.phone||null, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee), depositPercent: dep, channel: channel };
     if (attachInvoice && channel === 'email') { payload.invoiceData = buildCIInvoiceData(); }
     fetch('/api/send-contract', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     })
     .then(function(r) { return r.json(); })
-    .then(function(d) { if (d.error) throw new Error(d.error); closeContractModal(); loadLeads(); alert('Contract sent by ' + (channel === 'sms' ? 'SMS' : 'email') + ' to ' + contractClient.name + '.'); })
+    .then(function(d) { if (d.error) throw new Error(d.error); closeContractModal(); loadLeads(); alert('Contract sent by ' + (channel === 'sms' ? 'SMS' : 'email') + ' to ' + recipient.name + '.'); })
     .catch(function(e) { alert('Error: ' + e.message); })
     .finally(function() { btn.disabled = false; btn.textContent = orig; });
 }
@@ -4599,7 +4749,7 @@ function openNoReplySettings() {
 }
 
 /* ── Modal backdrop clicks ── */
-[['pricing-modal', closeModal], ['contract-modal', closeContractModal], ['edit-modal', closeEditModal], ['copy-link-modal', closeCopyLinkModal], ['compose-modal', closeComposeModal]].forEach(function(pair) {
+[['pricing-modal', closeModal], ['contract-modal', closeContractModal], ['edit-modal', closeEditModal], ['copy-link-modal', closeCopyLinkModal], ['compose-modal', closeComposeModal], ['link-modal', closeLinkModal]].forEach(function(pair) {
     document.getElementById(pair[0]).addEventListener('click', function(e) { if (e.target === this) pair[1](); });
 });
 
