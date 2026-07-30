@@ -178,10 +178,45 @@ export default async function handler(req, res) {
             last_channel: 'sms', last_activity: new Date().toISOString()
           }])
         });
-        const created = await createRes.json();
-        client = Array.isArray(created) ? (created[0] || null) : null;
+        // Read as text first, not straight to .json() -- a rejected insert (RLS,
+        // missing column, unique-constraint conflict, etc.) comes back as an error
+        // OBJECT, not an array. The old code did `Array.isArray(created)` on
+        // whatever .json() returned with no status check at all, so a rejection
+        // silently produced client=null with zero errors thrown or logged anywhere
+        // -- exactly how Joe P.'s first text vanished with no trace.
+        const createdText = await createRes.text();
+        if (!createRes.ok) {
+          console.error('Auto-create inbound client failed:', createRes.status, createdText);
+        } else {
+          let created = null;
+          try { created = JSON.parse(createdText); } catch { /* leave null, logged below */ }
+          client = Array.isArray(created) ? (created[0] || null) : null;
+          if (!client) console.error('Auto-create inbound client: unexpected response body:', createdText);
+        }
       } catch(e) {
         console.error('Auto-create inbound client failed:', e.message);
+      }
+
+      // Last-resort safety net: even if the insert above failed for a reason we
+      // can't fully diagnose here, Shine should never again just have to notice
+      // a lead is missing on his own -- email him immediately so he can add it
+      // manually right away, same as he did for Joe P., instead of finding out
+      // by accident later.
+      if (!client) {
+        try {
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+            body: JSON.stringify({
+              from: 'Shine Booking Assistant <shine@texasmentalist.com>',
+              to: 'shinethementalist@gmail.com',
+              subject: `⚠️ New lead from ${From} could not be saved automatically`,
+              text: `A text came in from ${From} but the app could not save it as a lead automatically (a technical issue on our end, not something they did). Please add them manually in the dashboard so the conversation gets tracked.\n\nTheir message:\n"${Body}"\n\nshine-booking.vercel.app`
+            })
+          });
+        } catch(alertErr) {
+          console.error('Cold-inbound failure alert email failed:', alertErr.message);
+        }
       }
     }
 
