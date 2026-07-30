@@ -338,23 +338,33 @@ Rules:
       }
 
       if (clientId) {
-        // Save outbound message to messages table
-        await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': process.env.SUPABASE_SECRET_KEY,
-            'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
-          },
-          body: JSON.stringify({
-
-            client_id: clientId,
-            channel: 'sms',
-            direction: 'outbound',
-            content: smsMessage,
-            status: smsSent ? 'sent' : 'failed'
-          })
-        });
+        // Save whichever outbound message(s) actually went out -- previously this
+        // only ever logged an SMS row even when the send was email-only (or both),
+        // so the email content/subject was invisible in the conversation thread.
+        const firstContactLogRows = [];
+        if (toPhone) {
+          firstContactLogRows.push({
+            client_id: clientId, channel: 'sms', direction: 'outbound',
+            content: smsMessage, status: smsSent ? 'sent' : 'failed', to_address: normalizePhone(toPhone)
+          });
+        }
+        if (toEmail) {
+          firstContactLogRows.push({
+            client_id: clientId, channel: 'email', direction: 'outbound',
+            content: emailBody, status: emailSent ? 'sent' : 'failed', to_address: toEmail, email_subject: emailSubject
+          });
+        }
+        if (firstContactLogRows.length) {
+          await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': process.env.SUPABASE_SECRET_KEY,
+              'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+            },
+            body: JSON.stringify(firstContactLogRows)
+          });
+        }
       }
     }
 

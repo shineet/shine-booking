@@ -266,6 +266,7 @@ export default async function handler(req, res) {
 
     // Email signed PDF to client
     if (booking.client_email) {
+      const signedEmailText = `Hi ${booking.client_name},\n\nThank you for signing the performance agreement! A copy is attached for your records.\n\nEverything is all set for your event. Looking forward to it!\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`;
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
@@ -274,10 +275,25 @@ export default async function handler(req, res) {
           to: booking.client_email,
           bcc: ['shinethementalist@gmail.com'],
           subject: 'Your signed performance agreement',
-          text: `Hi ${booking.client_name},\n\nThank you for signing the performance agreement! A copy is attached for your records.\n\nEverything is all set for your event. Looking forward to it!\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`,
+          text: signedEmailText,
           attachments: [{ filename: 'Performance_Agreement_Signed.pdf', content: pdfBase64 }]
         })
       });
+      if (booking.client_id) {
+        try {
+          await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+            body: JSON.stringify({
+              client_id: booking.client_id, channel: 'email', direction: 'outbound',
+              content: signedEmailText, status: 'sent', to_address: booking.client_email,
+              email_subject: 'Your signed performance agreement'
+            })
+          });
+        } catch (logErr) {
+          console.error('Signed contract email log failed:', logErr.message);
+        }
+      }
     }
 
     // Build calendar event for this booking

@@ -153,6 +153,7 @@ export default async function handler(req, res) {
           const firstName = finalClientName ? finalClientName.split(' ')[0] : 'there';
 
           if (intakeChannel === 'email') {
+            const intakeEmailText = `Hi ${firstName},\n\nThank you so much for booking — I'm really looking forward to your event!\n\nTo get everything set up, including your performance agreement, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`;
             await fetch('https://api.resend.com/emails', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
@@ -161,10 +162,22 @@ export default async function handler(req, res) {
                 to: finalClientEmail,
                 bcc: ['shinethementalist@gmail.com'],
                 subject: 'Thank you for booking! Quick questionnaire inside',
-                text: `Hi ${firstName},\n\nThank you so much for booking — I'm really looking forward to your event!\n\nTo get everything set up, including your performance agreement, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`
+                text: intakeEmailText
               })
             });
+            try {
+              await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+                body: JSON.stringify({
+                  client_id: finalClientId, channel: 'email', direction: 'outbound',
+                  content: intakeEmailText, status: 'sent', to_address: finalClientEmail,
+                  email_subject: 'Thank you for booking! Quick questionnaire inside'
+                })
+              });
+            } catch (logErr) { console.error('Package-select intake email log failed:', logErr.message); }
           } else if (intakeChannel === 'sms') {
+            const intakeSmsBody = `Hi ${firstName}, thank you so much for booking! Here's a quick 2-minute questionnaire so I can personalize your show and get your performance agreement ready: ${intakeLink}`;
             const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
             const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
             await fetch(twilioUrl, {
@@ -173,9 +186,19 @@ export default async function handler(req, res) {
               body: new URLSearchParams({
                 From: process.env.TWILIO_FROM,
                 To: finalClientPhone,
-                Body: `Hi ${firstName}, thank you so much for booking! Here's a quick 2-minute questionnaire so I can personalize your show and get your performance agreement ready: ${intakeLink}`
+                Body: intakeSmsBody
               }).toString()
             });
+            try {
+              await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+                body: JSON.stringify({
+                  client_id: finalClientId, channel: 'sms', direction: 'outbound',
+                  content: intakeSmsBody, status: 'sent', to_address: finalClientPhone
+                })
+              });
+            } catch (logErr) { console.error('Package-select intake SMS log failed:', logErr.message); }
           }
 
           await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${finalClientId}`, {

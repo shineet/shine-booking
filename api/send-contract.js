@@ -249,6 +249,26 @@ module.exports = async function handler(req, res) {
       attachments,
     });
 
+    if (safeClientId) {
+      const contractEmailText = `Hi ${firstName},\n\nI'm excited to be performing at ${eventTitle || 'your event'}${eventDate ? ` on ${eventDate}` : ''}!\n\nPlease review and sign the performance agreement:\n${contractUrl}\n\nThis takes just a minute and locks in your date.${invoiceNote}${payLineText}\n\nLooking forward to an unforgettable performance!\n\n– Shine\ntexasmentalist.com`;
+      try {
+        await fetch(`${SB_URL}/rest/v1/messages`, {
+          method: 'POST', headers: SB_HDR,
+          body: JSON.stringify({
+            client_id: safeClientId, channel: 'email', direction: 'outbound',
+            content: contractEmailText, status: 'sent', to_address: clientEmail,
+            email_subject: `Performance Agreement – ${eventTitle || 'Your Event'} | Shine, The Mentalist`
+          })
+        });
+        await fetch(`${SB_URL}/rest/v1/clients?id=eq.${safeClientId}`, {
+          method: 'PATCH', headers: SB_HDR,
+          body: JSON.stringify({ status: 'contract_sent', last_activity: new Date().toISOString() })
+        });
+      } catch (logErr) {
+        console.error('Contract email log failed:', logErr.message);
+      }
+    }
+
     return res.status(200).json({
       success:         true,
       contractLink,

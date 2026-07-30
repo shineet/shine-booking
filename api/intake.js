@@ -152,6 +152,8 @@ export default async function handler(req, res) {
       const wantSms   = channel === 'sms'   || (!channel && clientPhone);
       const wantEmail = channel === 'email' || (!channel && clientEmail);
 
+      const sentLogRows = [];
+
       if (wantSms && clientPhone) {
         const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
         await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
@@ -159,8 +161,10 @@ export default async function handler(req, res) {
           headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: normalizePhone(clientPhone), Body: intakeMessage }).toString()
         });
+        if (clientId) sentLogRows.push({ client_id: clientId, channel: 'sms', direction: 'outbound', content: intakeMessage, status: 'sent', to_address: normalizePhone(clientPhone) });
       }
 
+      const intakeEmailText = `Hi ${firstName},\n\nSo excited to be part of your event! To get everything set up — including your performance agreement — could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`;
       if (wantEmail && clientEmail) {
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
@@ -170,9 +174,24 @@ export default async function handler(req, res) {
             to:   clientEmail,
             bcc:  ['shinethementalist@gmail.com'],
             subject: 'Quick questionnaire for your upcoming show',
-            text: `Hi ${firstName},\n\nSo excited to be part of your event! To get everything set up — including your performance agreement — could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`
+            text: intakeEmailText
           })
         });
+        if (clientId) sentLogRows.push({ client_id: clientId, channel: 'email', direction: 'outbound', content: intakeEmailText, status: 'sent', to_address: clientEmail, email_subject: 'Quick questionnaire for your upcoming show' });
+      }
+
+      // Log whatever actually went out so it shows in the conversation thread --
+      // this send previously wasn't logged at all, same gap as the pricing modal.
+      if (sentLogRows.length) {
+        try {
+          await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+            body: JSON.stringify(sentLogRows)
+          });
+        } catch (logErr) {
+          console.error('Intake message log failed:', logErr.message);
+        }
       }
 
       // Update client status

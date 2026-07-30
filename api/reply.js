@@ -466,6 +466,7 @@ Call/meeting detection (separate from the actual performance date):
 
             if (booking) {
               const intakeLink = `https://shine-booking.vercel.app/intake.html?bid=${booking.id}`;
+              const intakeEmailText = `Hi ${client.name ? client.name.split(' ')[0] : 'there'},\n\nThank you so much for booking — I'm really looking forward to your event!\n\nTo get everything set up, including your performance agreement, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`;
               await fetch('https://api.resend.com/emails', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
@@ -474,9 +475,21 @@ Call/meeting detection (separate from the actual performance date):
                   to: client.email,
                   bcc: ['shinethementalist@gmail.com'],
                   subject: 'Thank you for booking! Quick questionnaire inside',
-                  text: `Hi ${client.name ? client.name.split(' ')[0] : 'there'},\n\nThank you so much for booking — I'm really looking forward to your event!\n\nTo get everything set up, including your performance agreement, could you fill out this short questionnaire?\n\n${intakeLink}\n\nIt only takes a couple of minutes and helps me personalize the show for you and your guests.\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`
+                  text: intakeEmailText
                 })
               });
+
+              try {
+                await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+                  body: JSON.stringify({
+                    client_id: client.id, channel: 'email', direction: 'outbound',
+                    content: intakeEmailText, status: 'sent', to_address: client.email,
+                    email_subject: 'Thank you for booking! Quick questionnaire inside'
+                  })
+                });
+              } catch (logErr) { console.error('SMS-reply intake email log failed:', logErr.message); }
 
               await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
                 method: 'PATCH',
