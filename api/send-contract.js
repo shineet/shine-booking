@@ -212,22 +212,22 @@ module.exports = async function handler(req, res) {
       : `<p>I've also attached your invoice. A <strong>${dep}% deposit</strong> is required to secure the date — payment details are on page 2.</p>`);
     const altNotePlain  = pm === 'corporate' ? 'Prefer to pay by check instead? Details are in the attached invoice.' : 'Prefer check, Venmo, PayPal, or Zelle? Those details are in the attached invoice.';
 
-    // Optional Stripe "Pay deposit online" button — fully guarded; any failure just
-    // omits it and the contract email sends normally. Only applies when there's an
-    // actual deposit to pay online (dep === 0 means full payment, handled separately).
+    // Optional Stripe "Pay online" button — fully guarded; any failure just omits it
+    // and the contract email sends normally. dep === 0 means full payment is due (no
+    // deposit), so the link and label cover the full fee instead of a % of it.
     let payBtnHtml = '', payLineText = '';
-    if (dep > 0) {
-      try {
-        const payTotal   = (invoiceData && invoiceData.total) ? invoiceData.total : Number(fee || 0);
-        const depDollars = Math.round(payTotal * dep / 100);
-        const payUrl     = await createStripeDepositLink(depDollars, `Deposit (${dep}%) — ${eventTitle || 'event'}`, clientEmail, resolvedBookingId);
-        if (payUrl) {
-          const altNote = hasInvoice ? `<div style="font-size:15px;color:#374151;font-weight:600;margin-top:10px">${altNotePlain}</div>` : '';
-          payBtnHtml  = `<div style="text-align:center;margin:24px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:13px 30px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:bold;display:inline-block">💳 Pay ${dep}% Deposit Online ($${depDollars.toLocaleString()})</a>${altNote}</div>`;
-          payLineText = `\n\nPrefer to pay the deposit by card? ${payUrl}` + (hasInvoice ? `\n\n${altNotePlain}` : '');
-        }
-      } catch (e) { console.error('contract pay-link embed skipped:', e.message); }
-    }
+    try {
+      const payTotal      = (invoiceData && invoiceData.total) ? invoiceData.total : Number(fee || 0);
+      const amountDollars = dep === 0 ? Math.round(payTotal) : Math.round(payTotal * dep / 100);
+      const stripeLabel   = dep === 0 ? `Full payment — ${eventTitle || 'event'}` : `Deposit (${dep}%) — ${eventTitle || 'event'}`;
+      const payUrl        = await createStripeDepositLink(amountDollars, stripeLabel, clientEmail, resolvedBookingId);
+      if (payUrl) {
+        const btnLabel = dep === 0 ? `💳 Pay Online ($${amountDollars.toLocaleString()})` : `💳 Pay ${dep}% Deposit Online ($${amountDollars.toLocaleString()})`;
+        const altNote  = hasInvoice ? `<div style="font-size:15px;color:#374151;font-weight:600;margin-top:10px">${altNotePlain}</div>` : '';
+        payBtnHtml  = `<div style="text-align:center;margin:24px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:13px 30px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:bold;display:inline-block">${btnLabel}</a>${altNote}</div>`;
+        payLineText = `\n\nPrefer to pay ${dep === 0 ? '' : 'the deposit '}online by card? ${payUrl}` + (hasInvoice ? `\n\n${altNotePlain}` : '');
+      }
+    } catch (e) { console.error('contract pay-link embed skipped:', e.message); }
 
     // ── 4. Send email ────────────────────────────────────────────────────────
     const firstName = (clientName || 'there').split(' ')[0];
