@@ -369,34 +369,46 @@ function buildInvoicePDF(data) {
     doc.addPage();
     doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Payment Methods',50,60);
     var isCorporatePay = data.paymentMode === 'corporate';
+    var REMIT_ADDRESS = '230 Carrack Dr\nRound Rock, TX 78681';
+    var remit = data.remitAddress || REMIT_ADDRESS;
+    var py = 85;
+    doc.font('Helvetica').fontSize(11).fillColor(DARK).text('Check payable to: Shine Thankappan', 50, py);
+    py += 17;
+    doc.font('Helvetica').fontSize(9).fillColor(DARK).text('Mail check to:', 50, py); py += 11;
+    String(remit).split('\n').forEach(function (ln) { doc.font('Helvetica').fontSize(9).fillColor(DARK).text(ln, 50, py); py += 11; });
+    py += 8;
     if (isCorporatePay) {
-      doc.font('Helvetica').fontSize(11).fillColor(DARK)
-         .text('Check payable to: Shine Thankappan',50,85)
-         .text('Online payment (card): a secure payment link will be provided separately',50,102,{width:460});
+      doc.font('Helvetica').fontSize(11).fillColor(DARK).text('Online payment (card): a secure payment link will be provided separately', 50, py, {width:460});
+      py += 17;
     } else {
-      doc.font('Helvetica').fontSize(11).fillColor(DARK)
-         .text('Zelle: 2020shine@gmail.com',50,85)
-         .text('Check payable to: Shine Thankappan',50,136).text('Cash also accepted',50,153);
+      doc.font('Helvetica').fontSize(11).fillColor(DARK).text('Zelle: 2020shine@gmail.com', 50, py); py += 17;
+      doc.font('Helvetica').fontSize(11).fillColor(DARK).text('Cash also accepted', 50, py); py += 17;
       // Venmo/PayPal as clickable links (amount due pre-filled) rather than showing
       // the handle/email as plain text. No deposit means the full total is due.
       var depAmtRaw = dep === 0 ? Math.round(data.total||0) : Math.round((data.total||0)*dep/100);
       var venmoUrl  = 'https://venmo.com/Shine-Thankappan?txn=pay&amount=' + depAmtRaw + '&note=' + encodeURIComponent((dep === 0 ? 'Payment — ' : 'Deposit — ') + (data.eventName || 'event'));
       var paypalUrl = 'https://paypal.me/ShineT/' + depAmtRaw;
-      doc.font('Helvetica-Bold').fillColor('#1a7f5a').text('Venmo (tap to pay)',50,102);
-      doc.link(50,102,200,14,venmoUrl);
-      doc.font('Helvetica-Bold').fillColor('#1a7f5a').text('PayPal (tap to pay)',50,119);
-      doc.link(50,119,200,14,paypalUrl);
+      doc.font('Helvetica-Bold').fillColor('#1a7f5a').text('Venmo (tap to pay)', 50, py);
+      doc.link(50, py, 200, 14, venmoUrl); py += 17;
+      doc.font('Helvetica-Bold').fillColor('#1a7f5a').text('PayPal (tap to pay)', 50, py);
+      doc.link(50, py, 200, 14, paypalUrl); py += 17;
     }
-    doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Payment Terms',50,185);
+    py += 10;
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Payment Terms', 50, py); py += 20;
     if (dep === 0) {
-      doc.font('Helvetica').fontSize(11).fillColor(DARK).text('Full payment due before the event.',50,205).text('Cancellation policy per agreement.',50,222);
+      doc.font('Helvetica').fontSize(11).fillColor(DARK).text('Full payment due before the event.', 50, py); py += 17;
+      doc.font('Helvetica').fontSize(11).fillColor(DARK).text('Cancellation policy per agreement.', 50, py); py += 17;
     } else {
-      doc.font('Helvetica').fontSize(11).fillColor(DARK).text(`${dep}% deposit due upon booking.`,50,205).text('Balance due on day of performance.',50,222).text('Cancellation policy per agreement.',50,239);
+      doc.font('Helvetica').fontSize(11).fillColor(DARK).text(`${dep}% deposit due upon booking.`, 50, py); py += 17;
+      doc.font('Helvetica').fontSize(11).fillColor(DARK).text('Balance due on day of performance.', 50, py); py += 17;
+      doc.font('Helvetica').fontSize(11).fillColor(DARK).text('Cancellation policy per agreement.', 50, py); py += 17;
     }
-    doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Questions?',50,270);
-    doc.font('Helvetica').fontSize(11).fillColor(DARK).text('texasmentalist.com',50,290).text('shine@texasmentalist.com',50,307);
-    doc.font('Helvetica').fontSize(10).fillColor(GRAY).text('Thank you for choosing Shine, The Mentalist — looking forward to an unforgettable evening!',50,340,{align:'center',width:512});
-    doc.moveTo(50,360).lineTo(562,360).lineWidth(1).strokeColor(GOLD).stroke();
+    py += 10;
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Questions?', 50, py); py += 20;
+    doc.font('Helvetica').fontSize(11).fillColor(DARK).text('texasmentalist.com', 50, py); py += 17;
+    doc.font('Helvetica').fontSize(11).fillColor(DARK).text('shine@texasmentalist.com', 50, py); py += 30;
+    doc.font('Helvetica').fontSize(10).fillColor(GRAY).text('Thank you for choosing Shine, The Mentalist — looking forward to an unforgettable evening!', 50, py, {align:'center',width:512}); py += 20;
+    doc.moveTo(50, py).lineTo(562, py).lineWidth(1).strokeColor(GOLD).stroke();
     doc.end();
   });
 }
