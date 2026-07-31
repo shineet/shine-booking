@@ -62,7 +62,9 @@ module.exports = async function handler(req, res) {
         if (payUrl) {
           const amtNote = sc ? ` (includes a ${sc}% card processing fee)` : '';
           const label = invoiceData.bookingId ? '📄 View Invoice &amp; Pay Online' : `💳 Pay ${dep}% Deposit Online ($${depDollars.toLocaleString()})`;
-          const altNote = 'Prefer check, Venmo, PayPal, or Zelle? Those details are in the attached invoice.';
+          const altNote = invoiceData.paymentMode === 'corporate'
+            ? 'Prefer to pay by check instead? Details are in the attached invoice.'
+            : 'Prefer check, Venmo, PayPal, or Zelle? Those details are in the attached invoice.';
           payBtnHtml = `<p style="margin:20px 0 4px">If you'd like to pay online, just click below:</p><div style="text-align:center;margin:12px 0 28px"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:bold;display:inline-block">${label}</a>${sc ? `<div style="font-size:11px;color:#6b7280;margin-top:6px">Includes a ${sc}% card processing fee</div>` : ''}<div style="font-size:15px;color:#374151;font-weight:600;margin-top:10px">${altNote}</div></div>`;
           payLineText = `\n\nIf you'd like to pay online, just click below:\n${payUrl}${amtNote}\n\n${altNote}`;
         }
@@ -301,7 +303,11 @@ function buildInvoicePDF(data) {
     });
 
     // Col 1 — Payment Methods. Lead with the check details an AP department needs
-    // (exactly what to write on the cheque), then the digital options.
+    // (exactly what to write on the cheque), then the digital options -- unless
+    // paymentMode is 'corporate', in which case personal P2P apps (Zelle/Venmo/
+    // PayPal) are dropped entirely: check + a card/online link is what corporate
+    // AP departments expect and can actually process.
+    var isCorporatePay = data.paymentMode === 'corporate';
     var REMIT_ADDRESS = '230 Carrack Dr\nRound Rock, TX 78681';  // remit-to mailing address printed as "Mail check to:"
     var remit = data.remitAddress || REMIT_ADDRESS;
     doc.font('Helvetica-Bold').fontSize(9).fillColor(DARK).text('Pay by check', col1, 88);
@@ -314,26 +320,30 @@ function buildInvoicePDF(data) {
       String(remit).split('\n').forEach(function (ln) { doc.font('Helvetica').fontSize(9).fillColor(DARK).text(ln, col1, yc); yc += 11; });
     }
     yc += 4;
-    doc.font('Helvetica').fontSize(8).fillColor(GRAY).text('Also: Zelle 2020shine@gmail.com  |  Cash', col1, yc, { width: colW });
-    yc += 12;
 
-    // Venmo/PayPal as clickable links (they're manual, no-fee-to-Shine transfers,
-    // so they link to the plain deposit amount, not the Stripe-surcharge-inflated
-    // one below). Zelle/Cash have no equivalent deep-link format, so stay as text.
     var depAmtRaw = Math.round((data.total || 0) * dep / 100);
     var payDue = fullPay ? Math.round(data.total || 0) : depAmtRaw;
-    var venmoUrl  = 'https://venmo.com/Shine-Thankappan?txn=pay&amount=' + payDue + '&note=' + encodeURIComponent('Deposit — ' + (data.eventName || 'event'));
-    var paypalUrl = 'https://paypal.me/ShineT/' + payDue;
-    var venmoText = 'Venmo (tap to pay)';
-    var venmoH = doc.heightOfString(venmoText, { width: colW, fontSize: 8 });
-    doc.font('Helvetica-Bold').fontSize(8).fillColor('#1a7f5a').text(venmoText, col1, yc, { width: colW });
-    doc.link(col1, yc, colW, venmoH, venmoUrl);
-    yc += venmoH + 2;
-    var paypalText = 'PayPal (tap to pay)';
-    var paypalH = doc.heightOfString(paypalText, { width: colW, fontSize: 8 });
-    doc.font('Helvetica-Bold').fontSize(8).fillColor('#1a7f5a').text(paypalText, col1, yc, { width: colW });
-    doc.link(col1, yc, colW, paypalH, paypalUrl);
-    yc += paypalH + 2;
+
+    if (!isCorporatePay) {
+      doc.font('Helvetica').fontSize(8).fillColor(GRAY).text('Also: Zelle 2020shine@gmail.com  |  Cash', col1, yc, { width: colW });
+      yc += 12;
+
+      // Venmo/PayPal as clickable links (they're manual, no-fee-to-Shine transfers,
+      // so they link to the plain deposit amount, not the Stripe-surcharge-inflated
+      // one below). Zelle/Cash have no equivalent deep-link format, so stay as text.
+      var venmoUrl  = 'https://venmo.com/Shine-Thankappan?txn=pay&amount=' + payDue + '&note=' + encodeURIComponent('Deposit — ' + (data.eventName || 'event'));
+      var paypalUrl = 'https://paypal.me/ShineT/' + payDue;
+      var venmoText = 'Venmo (tap to pay)';
+      var venmoH = doc.heightOfString(venmoText, { width: colW, fontSize: 8 });
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#1a7f5a').text(venmoText, col1, yc, { width: colW });
+      doc.link(col1, yc, colW, venmoH, venmoUrl);
+      yc += venmoH + 2;
+      var paypalText = 'PayPal (tap to pay)';
+      var paypalH = doc.heightOfString(paypalText, { width: colW, fontSize: 8 });
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#1a7f5a').text(paypalText, col1, yc, { width: colW });
+      doc.link(col1, yc, colW, paypalH, paypalUrl);
+      yc += paypalH + 2;
+    }
 
     // Clickable "pay by card online" link — only when this PDF is tied to a real
     // booking (invoice-view.html needs a bookingId to look up live payment status).
@@ -344,6 +354,8 @@ function buildInvoicePDF(data) {
       var payUrl = 'https://shine-booking.vercel.app/invoice-view.html?bid=' + encodeURIComponent(data.bookingId) + '&d=' + encodeURIComponent(JSON.stringify(data));
       doc.font('Helvetica-Bold').fontSize(8).fillColor('#1a7f5a').text('Pay by card online (view invoice)', col1, yc, { width: colW });
       doc.link(col1, yc, colW, 11, payUrl);
+    } else if (isCorporatePay) {
+      doc.font('Helvetica').fontSize(8).fillColor(GRAY).text('Online payment: a secure payment link will be provided separately.', col1, yc, { width: colW });
     }
 
     // Col 2 — Payment Terms (full payment vs deposit + balance)
