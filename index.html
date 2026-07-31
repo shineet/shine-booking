@@ -1374,7 +1374,8 @@
         <div id="contract-sendto"></div>
         <div class="field"><label>Event title</label><input type="text" id="ct-title" placeholder="e.g. Sarah's 30th Birthday"></div>
         <div class="field"><label>Venue address</label><input type="text" id="ct-address" placeholder="Full address"></div>
-        <div class="field"><label>Client / Company address <span style="font-weight:400;color:var(--muted)">(optional — for planners &amp; DMCs; leave blank for direct clients)</span></label><input type="text" id="ct-client-address" placeholder="e.g. 123 Business St, Austin TX"></div>
+        <div class="field"><label>Organization / School name <span style="font-weight:400;color:var(--muted)">(optional — makes the school/company the contracting Client, with the contact named as authorized representative; leave blank for direct individual clients)</span></label><input type="text" id="ct-org-name" placeholder="e.g. Dahlstrom Middle School"></div>
+        <div class="field"><label>Organization mailing address <span style="font-weight:400;color:var(--muted)">(optional — only if different from the venue address above, e.g. a DMC billed elsewhere)</span></label><input type="text" id="ct-client-address" placeholder="e.g. 123 Business St, Austin TX"></div>
         <div class="two-col">
             <div class="price-field"><label>Event date</label><input type="date" id="ct-date"></div>
             <div class="price-field"><label>Start time</label><input type="time" id="ct-start"></div>
@@ -4043,12 +4044,15 @@ function previewContract() {
         alert('No contract exists yet for this client. Send it once (or Get link) to generate it, then Preview.');
         return;
     }
-    window.open('/contract.html?bid=' + encodeURIComponent(contractClient.bookingId) + '&dep=' + getCtDeposit() + '&pm=' + getCtPaymentMode(), '_blank');
+    var orgName = document.getElementById('ct-org-name').value.trim();
+    var caddr   = document.getElementById('ct-client-address').value.trim();
+    window.open('/contract.html?bid=' + encodeURIComponent(contractClient.bookingId) + '&dep=' + getCtDeposit() + '&pm=' + getCtPaymentMode() + (orgName ? '&org=' + encodeURIComponent(orgName) : '') + (caddr ? '&caddr=' + encodeURIComponent(caddr) : ''), '_blank');
 }
 
 function getContractLinkManually() {
     var title         = document.getElementById('ct-title').value.trim();
     var address       = document.getElementById('ct-address').value.trim();
+    var orgName       = document.getElementById('ct-org-name').value.trim();
     var clientAddress = document.getElementById('ct-client-address').value.trim();
     var date          = document.getElementById('ct-date').value;
     var start         = document.getElementById('ct-start').value;
@@ -4059,7 +4063,7 @@ function getContractLinkManually() {
     btn.disabled = true; btn.textContent = 'Generating...';
     fetch('/api/send-contract', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee), depositPercent: getCtDeposit(), paymentMode: getCtPaymentMode(), sendEmail: false })
+        body: JSON.stringify({ clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientOrgName: orgName||null, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee), depositPercent: getCtDeposit(), paymentMode: getCtPaymentMode(), sendEmail: false })
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
@@ -4076,6 +4080,7 @@ function sendContract(channel) {
     channel = channel || 'email';
     var title         = document.getElementById('ct-title').value.trim();
     var address       = document.getElementById('ct-address').value.trim();
+    var orgName       = document.getElementById('ct-org-name').value.trim();
     var clientAddress = document.getElementById('ct-client-address').value.trim();
     var date          = document.getElementById('ct-date').value;
     var start         = document.getElementById('ct-start').value;
@@ -4090,7 +4095,7 @@ function sendContract(channel) {
     btn.disabled = true; btn.textContent = 'Sending...';
     var attachInvoice = document.getElementById('ct-attach-invoice') && document.getElementById('ct-attach-invoice').checked;
     var dep = getCtDeposit();
-    var payload = { clientId: contractClient.id, clientName: recipient.name, clientEmail: recipient.email, clientPhone: recipient.phone||null, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee), depositPercent: dep, paymentMode: getCtPaymentMode(), channel: channel };
+    var payload = { clientId: contractClient.id, clientName: recipient.name, clientEmail: recipient.email, clientPhone: recipient.phone||null, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientOrgName: orgName||null, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee), depositPercent: dep, paymentMode: getCtPaymentMode(), channel: channel };
     if (attachInvoice && channel === 'email') { payload.invoiceData = buildCIInvoiceData(); }
     fetch('/api/send-contract', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -4822,8 +4827,8 @@ function updateCITotal() {
 function buildCIInvoiceData() {
     var today = new Date();
     return {
-        clientCompany:  document.getElementById('ci-company').value || contractClient.name,
-        contactName:    document.getElementById('ci-contact').value,
+        clientCompany:  document.getElementById('ci-company').value || document.getElementById('ct-org-name').value.trim() || contractClient.name,
+        contactName:    document.getElementById('ci-contact').value || contractClient.name,
         clientName:     contractClient.name,
         clientPhone:    contractClient.phone || '',
         clientCity:     (function() {

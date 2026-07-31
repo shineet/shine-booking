@@ -274,6 +274,11 @@
     function getClientAddress() {
         return new URLSearchParams(window.location.search).get('caddr') || '';
     }
+    // When set, the Client party is the named organization (school/company),
+    // represented by the contact person, rather than the contact personally.
+    function getOrgName() {
+        return new URLSearchParams(window.location.search).get('org') || '';
+    }
     function getDeposit() {
         var raw = new URLSearchParams(window.location.search).get('dep');
         if (raw === null || raw === '') return 50;
@@ -388,8 +393,15 @@
     }
 
     function renderContract(d) {
+        const orgName   = getOrgName();
         const clientAddr = getClientAddress();
-        const locationText = clientAddr || d.venueAddress;
+        // When an organization/school name is given, that entity is the contracting
+        // Client (with the contact named as authorized representative) -- not the
+        // individual personally. Otherwise the contact is the Client, as before.
+        const clientClause = orgName
+          ? `${orgName} ("Client"), represented by ${d.clientName}${clientAddr ? `, located at ${clientAddr}` : ''}`
+          : `${d.clientName} ("Client")`;
+        const venueNamed = orgName ? `${orgName}, ${d.venueAddress}` : d.venueAddress;
         const html = `
     <div class="contract-card">
       <h2>PERFORMANCE AGREEMENT</h2>
@@ -397,12 +409,12 @@
       <p>This Performance Agreement ("Agreement") is entered into on ${
 
 
-        d.todayDate} by and between Shine, The Mentalist ("Performer"), and ${d.clientName} ("Client"), located at ${locationText}.</p>
+        d.todayDate} by and between Shine, The Mentalist ("Performer"), and ${clientClause}, for a performance to be held at ${venueNamed}.</p>
 
       <h3>1. Performance Details</h3>
       <p>Performer shall present a professional Magic &amp; Mentalism performance for the event titled "${
 
-        d.eventTitle}" at ${d.venueAddress} on ${d.eventDate}, beginning at approximately ${d.startTime}, for a total performance length of up to ${d.duration}.</p>
+        d.eventTitle}" at ${venueNamed} on ${d.eventDate}, beginning at approximately ${d.startTime}, for a total performance length of up to ${d.duration}.</p>
 
       <h3>2. Compensation</h3>
       <p>The total performance fee shall be $${

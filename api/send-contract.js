@@ -56,7 +56,8 @@ module.exports = async function handler(req, res) {
     bookingId,       // may be null for direct/planner clients
     eventTitle,
     venueAddress,
-    clientAddress,
+    clientOrgName,   // optional — school/company name; makes the org the contracting Client, with clientName as authorized rep
+    clientAddress,   // optional — org's mailing/billing address, only when it differs from the venue
     eventDate,
     startTime,
     duration,
@@ -166,7 +167,9 @@ module.exports = async function handler(req, res) {
     }
 
     // ── 2. Build contract signing URL ────────────────────────────────────────
-    const contractUrl  = `https://shine-booking.vercel.app/contract.html?bid=${resolvedBookingId}&dep=${dep}&pm=${pm}`;
+    const orgParam   = clientOrgName  && String(clientOrgName).trim()  ? `&org=${encodeURIComponent(String(clientOrgName).trim())}`  : '';
+    const caddrParam = clientAddress && String(clientAddress).trim() ? `&caddr=${encodeURIComponent(String(clientAddress).trim())}` : '';
+    const contractUrl  = `https://shine-booking.vercel.app/contract.html?bid=${resolvedBookingId}&dep=${dep}&pm=${pm}${orgParam}${caddrParam}`;
     const contractLink = contractUrl; // alias returned to caller
 
     // Link-only request (grab the link, no send)
