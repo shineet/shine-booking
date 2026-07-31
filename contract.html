@@ -502,7 +502,10 @@
                 bookingId: getBookingId(),
                 printedName: printedName,
                 signatureData: signatureData,
-                depositPercent: getDeposit()
+                depositPercent: getDeposit(),
+                paymentMode: getPaymentMode(),
+                clientOrgName: getOrgName(),
+                clientAddress: getClientAddress()
             })
         })
         .then(r => r.json())

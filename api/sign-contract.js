@@ -128,8 +128,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   try {
-    const { bookingId, printedName, signatureData, depositPercent } = req.body;
-    const dep = (Number(depositPercent) > 0 && Number(depositPercent) <= 100) ? Math.round(Number(depositPercent)) : 50;
+    const { bookingId, printedName, signatureData, depositPercent, paymentMode, clientOrgName, clientAddress } = req.body;
     if (!bookingId || !printedName || !signatureData) {
       res.status(400).json({ error: 'Missing required fields' });
       return;
@@ -153,6 +152,22 @@ export default async function handler(req, res) {
       ? new Date(booking.event_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
       : 'TBD';
     const todayDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    // Prefer values from the page the client actually saw and signed (submitted in
+    // the request) over the saved booking record, which may be stale or unset for
+    // contracts sent before these fields started persisting. Must match contract.html's
+    // rendering exactly -- this PDF is the executed record of what was agreed to.
+    const dep = (depositPercent !== undefined && depositPercent !== null && Number(depositPercent) >= 0 && Number(depositPercent) <= 100)
+      ? Math.round(Number(depositPercent))
+      : ((booking.deposit_percent !== null && booking.deposit_percent !== undefined) ? Math.round(Number(booking.deposit_percent)) : 50);
+    const pm = (paymentMode === 'corporate' || paymentMode === 'standard') ? paymentMode : (booking.payment_mode === 'corporate' ? 'corporate' : 'standard');
+    const orgName    = (clientOrgName && String(clientOrgName).trim()) ? String(clientOrgName).trim() : (booking.client_org_name || '');
+    const orgAddress = (clientAddress && String(clientAddress).trim()) ? String(clientAddress).trim() : (booking.client_org_address || '');
+    const clientClause = orgName
+      ? `${orgName} ("Client"), represented by ${booking.client_name}${orgAddress ? `, located at ${orgAddress}` : ''}`
+      : `${booking.client_name} ("Client")`;
+    const venueNamed = orgName ? `${orgName}, ${booking.venue_address}` : booking.venue_address;
+    const REMIT_ADDRESS = '230 Carrack Dr, Round Rock, TX 78681';
 
     // Build PDF
     const pdfDoc = await PDFDocument.create();
@@ -200,21 +215,33 @@ export default async function handler(req, res) {
     drawParagraph('PERFORMANCE AGREEMENT', { bold: true, size: 16 });
     y -= 6;
 
-    drawParagraph(`This Performance Agreement ("Agreement") is entered into on ${todayDate} by and between MindGames, represented by Shine, The Mentalist ("Performer"), and ${booking.client_name} ("Client"), located at ${booking.venue_address}.`);
+    drawParagraph(`This Performance Agreement ("Agreement") is entered into on ${todayDate} by and between MindGames, represented by Shine, The Mentalist ("Performer"), and ${clientClause}, for a performance to be held at ${venueNamed}.`);
 
     drawHeading('1. PERFORMANCE DETAILS');
-    drawParagraph(`Performer shall present a professional Magic & Mentalism performance for the event titled "${booking.event_title}" at ${booking.venue_address} on ${eventDateFormatted}, beginning at approximately ${booking.start_time}, for a total performance length of up to ${booking.duration}.`);
+    drawParagraph(`Performer shall present a professional Magic & Mentalism performance for the event titled "${booking.event_title}" at ${venueNamed} on ${eventDateFormatted}, beginning at approximately ${booking.start_time}, for a total performance length of up to ${booking.duration}.`);
 
     drawHeading('2. COMPENSATION');
     drawParagraph(`The total performance fee shall be $${booking.fee}.`);
-    drawParagraph(`A non-refundable deposit of ${dep}% is required to secure the event date. The remaining balance shall be paid no later than the day of the performance prior to the start time.`);
-    drawParagraph('Payment may be made via cash, Zelle (2020shine@gmail.com), Venmo, PayPal, check payable to Shine Thankappan, or other mutually agreed method. Venmo/PayPal handles will be provided at time of payment.');
+    if (dep === 0) {
+      drawParagraph('The full performance fee is due prior to the event. No deposit is required.');
+    } else {
+      drawParagraph(`A non-refundable deposit of ${dep}% is required to secure the event date. The remaining balance shall be paid no later than the day of the performance prior to the start time.`);
+    }
+    if (pm === 'corporate') {
+      drawParagraph(`Payment may be made by check payable to Shine Thankappan, mailed to ${REMIT_ADDRESS}, or by online payment. Payment details are provided in the invoice.`);
+    } else {
+      drawParagraph(`Payment may be made via cash, Zelle (2020shine@gmail.com), Venmo, PayPal, or check payable to Shine Thankappan (mailed to ${REMIT_ADDRESS}), or other mutually agreed method. Venmo/PayPal handles will be provided at time of payment.`);
+    }
 
     drawHeading('3. EVENT DETAILS');
     drawParagraph('Client agrees to provide adequate and safe performance space, suitable lighting, access to electrical power if required, reasonable audience control, and a safe environment.');
 
     drawHeading('4. CANCELLATION & RESCHEDULING');
-    drawParagraph('If cancellation occurs 10 or more days prior to the event date, no additional fee will be charged beyond the deposit. If cancellation occurs fewer than 5 days prior to the event date, 100% of the agreed performance fee shall be due.');
+    if (dep === 0) {
+      drawParagraph('As full payment is collected in advance, it is non-refundable once paid. If cancellation occurs 10 or more days prior to the event date, Performer will make reasonable efforts to reschedule at no additional charge, though the fee already paid will not be refunded. If cancellation occurs fewer than 5 days prior to the event date, no refund or rescheduling credit shall be issued.');
+    } else {
+      drawParagraph('If cancellation occurs 10 or more days prior to the event date, no additional fee will be charged beyond the deposit. If cancellation occurs fewer than 5 days prior to the event date, 100% of the agreed performance fee shall be due.');
+    }
 
     drawHeading('5. FORCE MAJEURE');
     drawParagraph('Neither party shall be liable for failure to perform due to events beyond reasonable control, including acts of God, government restrictions, natural disasters, illness, or unforeseen emergencies.');
