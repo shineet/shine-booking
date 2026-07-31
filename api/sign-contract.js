@@ -161,8 +161,13 @@ export default async function handler(req, res) {
       ? Math.round(Number(depositPercent))
       : ((booking.deposit_percent !== null && booking.deposit_percent !== undefined) ? Math.round(Number(booking.deposit_percent)) : 50);
     const pm = (paymentMode === 'corporate' || paymentMode === 'standard') ? paymentMode : (booking.payment_mode === 'corporate' ? 'corporate' : 'standard');
-    const orgName    = (clientOrgName && String(clientOrgName).trim()) ? String(clientOrgName).trim() : (booking.client_org_name || '');
-    const orgAddress = (clientAddress && String(clientAddress).trim()) ? String(clientAddress).trim() : (booking.client_org_address || '');
+    // Sourced only from what was submitted at signing (which mirrors the org/caddr
+    // URL params the signing page actually rendered) -- never from the DB. The DB
+    // row can be edited after a link was already sent (e.g. reopening the contract
+    // modal for an unrelated change), so falling back to it risks pulling in a
+    // value the client never saw on the page they read and agreed to.
+    const orgName    = (clientOrgName && String(clientOrgName).trim()) ? String(clientOrgName).trim() : '';
+    const orgAddress = (clientAddress && String(clientAddress).trim()) ? String(clientAddress).trim() : '';
     const clientClause = orgName
       ? `${orgName} ("Client"), represented by ${booking.client_name}${orgAddress ? `, located at ${orgAddress}` : ''}`
       : `${booking.client_name} ("Client")`;
@@ -215,7 +220,7 @@ export default async function handler(req, res) {
     drawParagraph('PERFORMANCE AGREEMENT', { bold: true, size: 16 });
     y -= 6;
 
-    drawParagraph(`This Performance Agreement ("Agreement") is entered into on ${todayDate} by and between MindGames, represented by Shine, The Mentalist ("Performer"), and ${clientClause}, for a performance to be held at ${venueNamed}.`);
+    drawParagraph(`This Performance Agreement ("Agreement") is entered into on ${todayDate} by and between Shine, The Mentalist ("Performer"), and ${clientClause}, for a performance to be held at ${venueNamed}.`);
 
     drawHeading('1. PERFORMANCE DETAILS');
     drawParagraph(`Performer shall present a professional Magic & Mentalism performance for the event titled "${booking.event_title}" at ${venueNamed} on ${eventDateFormatted}, beginning at approximately ${booking.start_time}, for a total performance length of up to ${booking.duration}.`);
@@ -280,7 +285,7 @@ export default async function handler(req, res) {
     page.drawText(`Date: ${todayDate}`, { x: marginX, y, size: 11, font });
     y -= 26;
 
-    page.drawText('MindGames Signature:', { x: marginX, y, size: 11, font: fontBold });
+    page.drawText('Performer Signature:', { x: marginX, y, size: 11, font: fontBold });
     y -= 16;
     page.drawText('Shine, The Mentalist', { x: marginX, y, size: 11, font });
     y -= 14;
