@@ -65,10 +65,12 @@ module.exports = async function handler(req, res) {
     sendEmail,       // false = just create the booking + return the link (for manual SMS), don't email
     channel,         // 'email' (default) or 'sms' — how to send the link through the app
     clientPhone,     // required when channel === 'sms'
-    depositPercent,  // 25 / 50 / etc. — deposit shown on the contract (default 50)
+    depositPercent,  // 25 / 50 / etc. — deposit shown on the contract (default 50; 0 = no deposit, full payment due)
+    paymentMode,     // 'standard' (cash/Zelle/Venmo/PayPal/check) or 'corporate' (check + online payment only)
   } = req.body;
 
-  const dep = (Number(depositPercent) > 0 && Number(depositPercent) <= 100) ? Math.round(Number(depositPercent)) : 50;
+  const dep = (Number(depositPercent) >= 0 && Number(depositPercent) <= 100) ? Math.round(Number(depositPercent)) : 50;
+  const pm  = paymentMode === 'corporate' ? 'corporate' : 'standard';
   const normPhone = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length === 10 ? '+1' + d : (d.length === 11 && d[0] === '1' ? '+' + d : (String(p || '').startsWith('+') ? p : '+' + d)); };
 
   // Coerce empty strings to null so Supabase UUID columns don't reject them
@@ -164,7 +166,7 @@ module.exports = async function handler(req, res) {
     }
 
     // ── 2. Build contract signing URL ────────────────────────────────────────
-    const contractUrl  = `https://shine-booking.vercel.app/contract.html?bid=${resolvedBookingId}&dep=${dep}`;
+    const contractUrl  = `https://shine-booking.vercel.app/contract.html?bid=${resolvedBookingId}&dep=${dep}&pm=${pm}`;
     const contractLink = contractUrl; // alias returned to caller
 
     // Link-only request (grab the link, no send)
@@ -199,22 +201,30 @@ module.exports = async function handler(req, res) {
     }
 
     const hasInvoice    = attachments.length > 0;
-    const invoiceNote   = hasInvoice ? `\n\nI've also attached your invoice. A ${dep}% deposit is required to secure the date — payment details are on page 2.` : '';
-    const htmlInvNote   = hasInvoice ? `<p>I've also attached your invoice. A <strong>${dep}% deposit</strong> is required to secure the date — payment details are on page 2.</p>` : '';
+    const invoiceNote   = !hasInvoice ? '' : (dep === 0
+      ? `\n\nI've also attached your invoice. Full payment is due before the event — payment details are on page 2.`
+      : `\n\nI've also attached your invoice. A ${dep}% deposit is required to secure the date — payment details are on page 2.`);
+    const htmlInvNote   = !hasInvoice ? '' : (dep === 0
+      ? `<p>I've also attached your invoice. <strong>Full payment</strong> is due before the event — payment details are on page 2.</p>`
+      : `<p>I've also attached your invoice. A <strong>${dep}% deposit</strong> is required to secure the date — payment details are on page 2.</p>`);
+    const altNotePlain  = pm === 'corporate' ? 'Prefer to pay by check instead? Details are in the attached invoice.' : 'Prefer check, Venmo, PayPal, or Zelle? Those details are in the attached invoice.';
 
     // Optional Stripe "Pay deposit online" button — fully guarded; any failure just
-    // omits it and the contract email sends normally.
+    // omits it and the contract email sends normally. Only applies when there's an
+    // actual deposit to pay online (dep === 0 means full payment, handled separately).
     let payBtnHtml = '', payLineText = '';
-    try {
-      const payTotal   = (invoiceData && invoiceData.total) ? invoiceData.total : Number(fee || 0);
-      const depDollars = Math.round(payTotal * dep / 100);
-      const payUrl     = await createStripeDepositLink(depDollars, `Deposit (${dep}%) — ${eventTitle || 'event'}`, clientEmail, resolvedBookingId);
-      if (payUrl) {
-        const altNote = hasInvoice ? '<div style="font-size:15px;color:#374151;font-weight:600;margin-top:10px">Prefer check, Venmo, PayPal, or Zelle? Those details are in the attached invoice.</div>' : '';
-        payBtnHtml  = `<div style="text-align:center;margin:24px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:13px 30px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:bold;display:inline-block">💳 Pay ${dep}% Deposit Online ($${depDollars.toLocaleString()})</a>${altNote}</div>`;
-        payLineText = `\n\nPrefer to pay the deposit by card? ${payUrl}` + (hasInvoice ? '\n\nPrefer check, Venmo, PayPal, or Zelle instead? Those details are in the attached invoice.' : '');
-      }
-    } catch (e) { console.error('contract pay-link embed skipped:', e.message); }
+    if (dep > 0) {
+      try {
+        const payTotal   = (invoiceData && invoiceData.total) ? invoiceData.total : Number(fee || 0);
+        const depDollars = Math.round(payTotal * dep / 100);
+        const payUrl     = await createStripeDepositLink(depDollars, `Deposit (${dep}%) — ${eventTitle || 'event'}`, clientEmail, resolvedBookingId);
+        if (payUrl) {
+          const altNote = hasInvoice ? `<div style="font-size:15px;color:#374151;font-weight:600;margin-top:10px">${altNotePlain}</div>` : '';
+          payBtnHtml  = `<div style="text-align:center;margin:24px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:13px 30px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:bold;display:inline-block">💳 Pay ${dep}% Deposit Online ($${depDollars.toLocaleString()})</a>${altNote}</div>`;
+          payLineText = `\n\nPrefer to pay the deposit by card? ${payUrl}` + (hasInvoice ? `\n\n${altNotePlain}` : '');
+        }
+      } catch (e) { console.error('contract pay-link embed skipped:', e.message); }
+    }
 
     // ── 4. Send email ────────────────────────────────────────────────────────
     const firstName = (clientName || 'there').split(' ')[0];
@@ -345,27 +355,41 @@ function buildInvoicePDF(data) {
     doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('TOTAL',350,y+8);
     doc.font('Helvetica-Bold').fontSize(13).fillColor(GOLD).text('$'+Number(data.total||0).toLocaleString(),468,y+8,{align:'right',width:86});
     y += 28;
-    const dep = data.depositPercent||50;
-    doc.font('Helvetica').fontSize(8.5).fillColor(GRAY).text(`* A ${dep}% deposit ($${Math.round((data.total||0)*dep/100).toLocaleString()}) is required to secure the date. Remaining balance due on or before ${data.eventDate||''}.`,50,y+8,{width:512});
+    const dep = (Number(data.depositPercent) >= 0 && Number(data.depositPercent) <= 100) ? Number(data.depositPercent) : 50;
+    const depositNote = dep === 0
+      ? `* Full payment ($${Number(data.total||0).toLocaleString()}) is due before the event.`
+      : `* A ${dep}% deposit ($${Math.round((data.total||0)*dep/100).toLocaleString()}) is required to secure the date. Remaining balance due on or before ${data.eventDate||''}.`;
+    doc.font('Helvetica').fontSize(8.5).fillColor(GRAY).text(depositNote,50,y+8,{width:512});
     y += 30;
     doc.moveTo(50,y+10).lineTo(562,y+10).lineWidth(1).strokeColor(GOLD).stroke();
 
     doc.addPage();
     doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Payment Methods',50,60);
-    doc.font('Helvetica').fontSize(11).fillColor(DARK)
-       .text('Zelle: 2020shine@gmail.com',50,85)
-       .text('Check payable to: Shine Thankappan',50,136).text('Cash also accepted',50,153);
-    // Venmo/PayPal as clickable links (deposit amount pre-filled) rather than
-    // showing the handle/email as plain text.
-    var depAmtRaw = Math.round((data.total||0)*dep/100);
-    var venmoUrl  = 'https://venmo.com/Shine-Thankappan?txn=pay&amount=' + depAmtRaw + '&note=' + encodeURIComponent('Deposit — ' + (data.eventName || 'event'));
-    var paypalUrl = 'https://paypal.me/ShineT/' + depAmtRaw;
-    doc.font('Helvetica-Bold').fillColor('#1a7f5a').text('Venmo (tap to pay)',50,102);
-    doc.link(50,102,200,14,venmoUrl);
-    doc.font('Helvetica-Bold').fillColor('#1a7f5a').text('PayPal (tap to pay)',50,119);
-    doc.link(50,119,200,14,paypalUrl);
+    var isCorporatePay = data.paymentMode === 'corporate';
+    if (isCorporatePay) {
+      doc.font('Helvetica').fontSize(11).fillColor(DARK)
+         .text('Check payable to: Shine Thankappan',50,85)
+         .text('Online payment (card): a secure payment link will be provided separately',50,102,{width:460});
+    } else {
+      doc.font('Helvetica').fontSize(11).fillColor(DARK)
+         .text('Zelle: 2020shine@gmail.com',50,85)
+         .text('Check payable to: Shine Thankappan',50,136).text('Cash also accepted',50,153);
+      // Venmo/PayPal as clickable links (amount due pre-filled) rather than showing
+      // the handle/email as plain text. No deposit means the full total is due.
+      var depAmtRaw = dep === 0 ? Math.round(data.total||0) : Math.round((data.total||0)*dep/100);
+      var venmoUrl  = 'https://venmo.com/Shine-Thankappan?txn=pay&amount=' + depAmtRaw + '&note=' + encodeURIComponent((dep === 0 ? 'Payment — ' : 'Deposit — ') + (data.eventName || 'event'));
+      var paypalUrl = 'https://paypal.me/ShineT/' + depAmtRaw;
+      doc.font('Helvetica-Bold').fillColor('#1a7f5a').text('Venmo (tap to pay)',50,102);
+      doc.link(50,102,200,14,venmoUrl);
+      doc.font('Helvetica-Bold').fillColor('#1a7f5a').text('PayPal (tap to pay)',50,119);
+      doc.link(50,119,200,14,paypalUrl);
+    }
     doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Payment Terms',50,185);
-    doc.font('Helvetica').fontSize(11).fillColor(DARK).text(`${dep}% deposit due upon booking.`,50,205).text('Balance due on day of performance.',50,222).text('Cancellation policy per agreement.',50,239);
+    if (dep === 0) {
+      doc.font('Helvetica').fontSize(11).fillColor(DARK).text('Full payment due before the event.',50,205).text('Cancellation policy per agreement.',50,222);
+    } else {
+      doc.font('Helvetica').fontSize(11).fillColor(DARK).text(`${dep}% deposit due upon booking.`,50,205).text('Balance due on day of performance.',50,222).text('Cancellation policy per agreement.',50,239);
+    }
     doc.font('Helvetica-Bold').fontSize(13).fillColor(DARK).text('Questions?',50,270);
     doc.font('Helvetica').fontSize(11).fillColor(DARK).text('texasmentalist.com',50,290).text('shine@texasmentalist.com',50,307);
     doc.font('Helvetica').fontSize(10).fillColor(GRAY).text('Thank you for choosing Shine, The Mentalist — looking forward to an unforgettable evening!',50,340,{align:'center',width:512});

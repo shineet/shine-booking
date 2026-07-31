@@ -1384,8 +1384,8 @@
             <div class="price-field"><label>Fee ($)</label><input type="number" id="ct-fee"></div>
         </div>
         <div class="two-col" style="margin-top:12px">
-            <div class="price-field"><label>Deposit required</label><select id="ct-deposit"><option value="50">50% deposit</option><option value="25">25% deposit</option></select></div>
-            <div class="price-field"></div>
+            <div class="price-field"><label>Deposit required</label><select id="ct-deposit"><option value="50">50% deposit</option><option value="25">25% deposit</option><option value="0">No deposit — full payment due</option></select></div>
+            <div class="price-field"><label>Payment methods</label><select id="ct-paymethod"><option value="standard">Standard (cash, Zelle, Venmo, PayPal, check)</option><option value="corporate">Corporate (check + online payment only)</option></select></div>
         </div>
         <!-- Invoice option -->
         <div style="background:rgba(184,150,12,0.08);border:1px solid rgba(184,150,12,0.3);border-radius:8px;padding:12px;margin-bottom:14px">
@@ -4002,6 +4002,15 @@ function sendIntake(channel) {
 /* ── Contract ── */
 var contractClient = {};
 
+function getCtDeposit() {
+    var v = parseInt(document.getElementById('ct-deposit').value, 10);
+    return (v >= 0 && v <= 100) ? v : 50;
+}
+function getCtPaymentMode() {
+    var el = document.getElementById('ct-paymethod');
+    return (el && el.value === 'corporate') ? 'corporate' : 'standard';
+}
+
 function openContractModal(id, name, email, bookingId, phone) {
     contractClient = { id: id, name: name, email: email, bookingId: bookingId, phone: phone || '', sendToOverride: null };
     document.getElementById('contract-modal-client-name').textContent = 'Sending to ' + name;
@@ -4034,8 +4043,7 @@ function previewContract() {
         alert('No contract exists yet for this client. Send it once (or Get link) to generate it, then Preview.');
         return;
     }
-    var dep = parseInt(document.getElementById('ct-deposit').value, 10) || 50;
-    window.open('/contract.html?bid=' + encodeURIComponent(contractClient.bookingId) + '&dep=' + dep, '_blank');
+    window.open('/contract.html?bid=' + encodeURIComponent(contractClient.bookingId) + '&dep=' + getCtDeposit() + '&pm=' + getCtPaymentMode(), '_blank');
 }
 
 function getContractLinkManually() {
@@ -4051,7 +4059,7 @@ function getContractLinkManually() {
     btn.disabled = true; btn.textContent = 'Generating...';
     fetch('/api/send-contract', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee), depositPercent: parseInt(document.getElementById('ct-deposit').value,10)||50, sendEmail: false })
+        body: JSON.stringify({ clientId: contractClient.id, clientName: contractClient.name, clientEmail: contractClient.email, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee), depositPercent: getCtDeposit(), paymentMode: getCtPaymentMode(), sendEmail: false })
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
@@ -4081,8 +4089,8 @@ function sendContract(channel) {
     var orig = btn.textContent;
     btn.disabled = true; btn.textContent = 'Sending...';
     var attachInvoice = document.getElementById('ct-attach-invoice') && document.getElementById('ct-attach-invoice').checked;
-    var dep = parseInt(document.getElementById('ct-deposit').value, 10) || 50;
-    var payload = { clientId: contractClient.id, clientName: recipient.name, clientEmail: recipient.email, clientPhone: recipient.phone||null, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee), depositPercent: dep, channel: channel };
+    var dep = getCtDeposit();
+    var payload = { clientId: contractClient.id, clientName: recipient.name, clientEmail: recipient.email, clientPhone: recipient.phone||null, bookingId: contractClient.bookingId||null, eventTitle: title, venueAddress: address, clientAddress: clientAddress||null, eventDate: date, startTime: start, duration: duration, fee: parseFloat(fee), depositPercent: dep, paymentMode: getCtPaymentMode(), channel: channel };
     if (attachInvoice && channel === 'email') { payload.invoiceData = buildCIInvoiceData(); }
     fetch('/api/send-contract', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -4837,7 +4845,8 @@ function buildCIInvoiceData() {
         eventTime:      document.getElementById('ct-start').value,
         duration:       document.getElementById('ct-duration').value,
         venue:          document.getElementById('ct-address').value,
-        depositPercent: 50,
+        depositPercent: getCtDeposit(),
+        paymentMode:    getCtPaymentMode(),
         lineItems:      ciLineItems.filter(function(i){ return i.description || i.amount; }),
         total:          ciLineItems.reduce(function(s,i){ return s+(parseFloat(i.amount)||0); }, 0),
     };
