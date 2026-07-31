@@ -4016,6 +4016,24 @@ function openContractModal(id, name, email, bookingId, phone) {
     contractClient = { id: id, name: name, email: email, bookingId: bookingId, phone: phone || '', sendToOverride: null };
     document.getElementById('contract-modal-client-name').textContent = 'Sending to ' + name;
     renderSendToSelector('contract-sendto', id, function(picked) { contractClient.sendToOverride = picked; });
+
+    // Reset fields that aren't otherwise cleared between opens (org name, org
+    // address, deposit, payment method, invoice sub-fields) -- without this, values
+    // typed for one lead would leak into the modal for the next lead opened.
+    document.getElementById('ct-org-name').value = '';
+    document.getElementById('ct-client-address').value = '';
+    document.getElementById('ct-deposit').value = '50';
+    document.getElementById('ct-paymethod').value = 'standard';
+    document.getElementById('ct-attach-invoice').checked = false;
+    document.getElementById('ct-invoice-fields').style.display = 'none';
+    document.getElementById('contract-dl-invoice-btn').style.display = 'none';
+    document.getElementById('ci-company').value = '';
+    document.getElementById('ci-contact').value = '';
+    document.getElementById('ci-number').value = '';
+    document.getElementById('ci-due').value = '';
+    ciLineItems = [];
+    renderCILineItems();
+
     if (bookingId) {
         fetch(SUPABASE_URL + '/rest/v1/bookings?id=eq.' + bookingId + '&select=*', {
             headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
@@ -4029,6 +4047,23 @@ function openContractModal(id, name, email, bookingId, phone) {
             if (b.fee)           document.getElementById('ct-fee').value = b.fee;
             if (b.venue_address) document.getElementById('ct-address').value = b.venue_address;
             if (b.event_title)   document.getElementById('ct-title').value = b.event_title;
+            if (b.client_org_name)    document.getElementById('ct-org-name').value = b.client_org_name;
+            if (b.client_org_address) document.getElementById('ct-client-address').value = b.client_org_address;
+            if (b.deposit_percent !== null && b.deposit_percent !== undefined) document.getElementById('ct-deposit').value = String(b.deposit_percent);
+            if (b.payment_mode) document.getElementById('ct-paymethod').value = b.payment_mode;
+            if (b.invoice_company || b.invoice_contact || b.invoice_number || b.invoice_due_date || (b.invoice_line_items && b.invoice_line_items.length)) {
+                document.getElementById('ct-attach-invoice').checked = true;
+                document.getElementById('ct-invoice-fields').style.display = 'block';
+                document.getElementById('contract-dl-invoice-btn').style.display = 'inline-block';
+                if (b.invoice_company)  document.getElementById('ci-company').value = b.invoice_company;
+                if (b.invoice_contact)  document.getElementById('ci-contact').value = b.invoice_contact;
+                if (b.invoice_number)   document.getElementById('ci-number').value = b.invoice_number;
+                if (b.invoice_due_date) document.getElementById('ci-due').value = b.invoice_due_date;
+                if (b.invoice_line_items && b.invoice_line_items.length) {
+                    ciLineItems = b.invoice_line_items;
+                    renderCILineItems();
+                }
+            }
         })
         .catch(function() {});
     }

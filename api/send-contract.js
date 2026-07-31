@@ -84,6 +84,24 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: sendEmail === false ? 'Missing clientName' : 'Missing clientEmail or clientName' });
   }
 
+  // Persisted so the Send Contract modal can prefill these on reopen (e.g. for a
+  // resend) instead of Shine having to retype them every time. Invoice fields are
+  // only included when an invoice was actually attached this send, so sending
+  // without one doesn't wipe out previously-saved invoice details.
+  const persistFields = {
+    client_org_name:    clientOrgName  && String(clientOrgName).trim()  ? String(clientOrgName).trim()  : null,
+    client_org_address: clientAddress && String(clientAddress).trim() ? String(clientAddress).trim() : null,
+    deposit_percent:    dep,
+    payment_mode:       pm,
+  };
+  if (invoiceData) {
+    persistFields.invoice_company    = invoiceData.clientCompany || null;
+    persistFields.invoice_contact    = invoiceData.contactName || null;
+    persistFields.invoice_number     = invoiceData.invoiceNumber || null;
+    persistFields.invoice_due_date   = invoiceData.dueDate || null;
+    persistFields.invoice_line_items = invoiceData.lineItems || null;
+  }
+
   try {
     // ── 1. Upsert booking record ─────────────────────────────────────────────
     let resolvedBookingId = safeBookingId;
@@ -93,7 +111,7 @@ module.exports = async function handler(req, res) {
       const updRes = await fetch(`${SB_URL}/rest/v1/bookings?id=eq.${resolvedBookingId}`, {
         method: 'PATCH',
         headers: SB_HDR,
-        body: JSON.stringify({
+        body: JSON.stringify(Object.assign({
           event_title:   eventTitle   || null,
           venue_address: venueAddress || null,
           event_date:    eventDate    || null,
@@ -101,7 +119,7 @@ module.exports = async function handler(req, res) {
           duration:      duration     || null,
           fee:           fee          || null,
           contract_status: 'sent',
-        }),
+        }, persistFields)),
       });
       const updRows = await updRes.json().catch(() => []);
       // client/planner's booking_id pointed at a row that no longer exists (deleted
@@ -137,7 +155,7 @@ module.exports = async function handler(req, res) {
       const bRes = await fetch(`${SB_URL}/rest/v1/bookings`, {
         method: 'POST',
         headers: SB_HDR,
-        body: JSON.stringify({
+        body: JSON.stringify(Object.assign({
           client_id:     safeClientId,
           client_name:   clientName,
           client_email:  clientEmail,
@@ -149,7 +167,7 @@ module.exports = async function handler(req, res) {
           fee:           fee          || null,
           contract_status: 'sent',
           intake_status:   'completed',
-        }),
+        }, persistFields)),
       });
       const bRows = await bRes.json();
       const booking = Array.isArray(bRows) ? bRows[0] : bRows;
