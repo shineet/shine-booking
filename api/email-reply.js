@@ -131,6 +131,32 @@ function normalizeBody(body) {
   return b;
 }
 
+// Strip the quoted-previous-message chain that most mail clients append below a
+// reply -- "On <date>, <name> wrote: ...", ">"-quoted lines, Outlook-style forwarded
+// header blocks, and a trailing signature block. Without this, every reply in a
+// back-and-forth thread re-includes the entire prior conversation, which is what was
+// showing up as "junk" in the dashboard's conversation view. Applied to the just-sent
+// message specifically, so this only trims what the client's OWN mail client tacked on,
+// not anything real -- reasonably conservative pattern matching, same as the mirrored
+// cleanMessageForDisplay() in index.html which also cleans up rows stored before this
+// existed.
+function stripQuotedReply(text) {
+  if (!text) return '';
+  let s = String(text);
+  // Cut quoted-reply chains: "On <date>, <name> wrote:" and everything after
+  s = s.replace(/\r?\n?On\s.{5,120}?\swrote:\s*[\s\S]*$/i, '');
+  // Cut "-----Original Message-----" and everything after
+  s = s.replace(/-{2,}\s*Original Message\s*-{2,}[\s\S]*$/i, '');
+  // Cut an Outlook-style forwarded header block ("From: ... Sent: ... To: ...") and everything after
+  s = s.replace(/\r?\n?From:\s*.+\r?\nSent:\s*.+\r?\nTo:\s*.+[\s\S]*$/i, '');
+  // Drop ">"-quoted lines entirely
+  s = s.split(/\r?\n/).filter(line => !/^\s*>/.test(line)).join('\n');
+  // Cut a standard "-- " signature delimiter and everything after
+  s = s.replace(/\r?\n--\s?\r?\n[\s\S]*$/, '');
+  // Collapse excess blank lines left behind by the cuts above
+  return s.replace(/\n{3,}/g, '\n\n').trim();
+}
+
 // Last-resort safety net for the OUTER catch-all: if anything throws anywhere
 // in the main handler (before or after the Claude call — decoding, a Supabase
 // lookup, whatever), this still finds-or-creates a client and saves the raw
@@ -148,7 +174,7 @@ async function emergencySaveInbound(reqBody, reasonLabel) {
     const fromEmail = from.match(/<(.+)>/)?.[1] || from;
     const fromNameMatch = from.match(/^"?([^"<]+)"?\s*<.+>$/);
     const fromName = fromNameMatch ? fromNameMatch[1].trim() : '';
-    const emailBody = normalizeBody(reqBody?.body || '') || extractPlainText(rawEmail) || htmlToText(extractHtmlPart(rawEmail)) || '(could not extract email body)';
+    const emailBody = stripQuotedReply(normalizeBody(reqBody?.body || '') || extractPlainText(rawEmail) || htmlToText(extractHtmlPart(rawEmail)) || '(could not extract email body)');
 
     const supaHdrs = { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
 
@@ -233,7 +259,7 @@ export default async function handler(req, res) {
           });
           const emailData = await emailRes.json();
           const rawText = emailData.text || (emailData.html || '').replace(/<[^>]+>/g, '').trim();
-          if (rawText) emailBody = rawText.substring(0, 4000);
+          if (rawText) emailBody = stripQuotedReply(rawText).substring(0, 4000);
         } catch(e) {
           console.error('Failed to fetch email content from Resend:', e.message);
         }
@@ -535,6 +561,11 @@ export default async function handler(req, res) {
       if (headerEnd > -1) emailBody = normalizeBody(rawEmail.substring(headerEnd).trim().substring(0, 1000));
     }
     if (!emailBody) emailBody = `Client sent an email with subject: ${subject}`;
+    // Strip the quoted-previous-message chain the client's mail client tacked on
+    // (reply history, ">"-quotes, signature block) before it ever reaches storage --
+    // this was showing up as "junk" in the dashboard's conversation view, and bloating
+    // the Claude prompt below with the entire thread history on every reply.
+    emailBody = stripQuotedReply(emailBody);
     // Cap length defensively — long reply threads can carry the full quoted history,
     // which can blow up the prompt size and the response we get back from Claude.
     if (emailBody.length > 4000) {
