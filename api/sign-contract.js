@@ -266,8 +266,8 @@ export default async function handler(req, res) {
     drawHeading('10. ENTIRE AGREEMENT');
     drawParagraph('This Agreement constitutes the entire understanding between the parties and supersedes all prior discussions. Any modifications must be in writing and signed by both parties.');
 
-    // Signature section
-    if (y < 220) { page = pdfDoc.addPage([612, 792]); y = 740; }
+    // Signature section -- needs room for two signature images now (client + performer)
+    if (y < 320) { page = pdfDoc.addPage([612, 792]); y = 740; }
     y -= 10;
     drawHeading('SIGNATURES');
 
@@ -286,7 +286,20 @@ export default async function handler(req, res) {
     y -= 26;
 
     page.drawText('Performer Signature:', { x: marginX, y, size: 11, font: fontBold });
-    y -= 16;
+    y -= 14;
+    // Embedded only here, after the client's signature above -- both signatures
+    // land in the same PDF-build pass, which only runs once the client signs.
+    // Guarded: a fetch failure just skips the image rather than blocking signing.
+    try {
+      const perfSigRes = await fetch('https://shine-booking.vercel.app/icons/shine-signature.png');
+      if (perfSigRes.ok) {
+        const perfSigBytes = Buffer.from(await perfSigRes.arrayBuffer());
+        const perfSigImage = await pdfDoc.embedPng(perfSigBytes);
+        const perfSigDims = perfSigImage.scale(0.35);
+        page.drawImage(perfSigImage, { x: marginX, y: y - perfSigDims.height, width: perfSigDims.width, height: perfSigDims.height });
+        y -= perfSigDims.height + 8;
+      }
+    } catch (e) { console.error('performer signature embed skipped:', e.message); }
     page.drawText('Shine, The Mentalist', { x: marginX, y, size: 11, font });
     y -= 14;
     page.drawText('Professional Mentalist', { x: marginX, y, size: 11, font });
