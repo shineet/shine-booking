@@ -262,7 +262,10 @@ async function sendWeeklySummary(req, res) {
     });
 
     const sentences = bookings.map(formatShowSentence);
-    const smsText = `Your week ahead (${bookings.length} show${bookings.length > 1 ? 's' : ''}):\n${sentences.join('\n')}`;
+    // Tagged so it's unmistakable at a glance in the same thread as forwarded client texts
+    // (this and the client-forward path in reply.js share one Twilio number, by design --
+    // Shine chose to keep it on Twilio rather than a second number or a carrier gateway).
+    const smsText = `WEEKLY PREP (${bookings.length} show${bookings.length > 1 ? 's' : ''} this week):\n${sentences.join('\n')}`;
 
     const twRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
       method: 'POST',
