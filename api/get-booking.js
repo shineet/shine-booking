@@ -175,6 +175,49 @@ async function sendReminders(req, res) {
 // sender, kept in sync with that hardcoded value rather than a new env var.
 const SHINE_PHONE = '+16128657681';
 
+// Like parseStartHour, but also accepts a bare 24-hour "H:MM"/"HH:MM" value with no am/pm
+// suffix (the format normalizeTime() elsewhere in this file writes, and what some bookings
+// -- e.g. Jacquie's, "20:30" -- are actually stored as). parseStartHour alone returns null
+// for those since it requires an am/pm marker somewhere in the string.
+function parseAnyHour(timeStr) {
+  if (!timeStr) return null;
+  const bare = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (bare) {
+    const h = parseInt(bare[1], 10);
+    return (h >= 0 && h <= 23) ? h : null;
+  }
+  return parseStartHour(timeStr);
+}
+
+// Human-readable time for the weekly summary sentence. Converts a bare 24-hour value
+// ("20:30") to "8:30 PM"; anything already free text ("8 PM", "2-3 PM") is passed through
+// as-is since it's presumably already readable.
+function formatTimeLabel(timeStr) {
+  if (!timeStr) return null;
+  const raw = String(timeStr).trim();
+  const bare = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (!bare) return raw;
+  const hour = parseInt(bare[1], 10);
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  const meridiem = hour < 12 ? 'AM' : 'PM';
+  return `${displayHour}:${bare[2]} ${meridiem}`;
+}
+
+// One full sentence per show, with whatever detail is actually on file -- type, venue, fee
+// are each optional clauses so a sparsely-filled booking (like Jacquie's) still reads clean.
+function formatShowSentence(b) {
+  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'long' }).format(new Date(b.event_date + 'T12:00:00Z'));
+  const monthDay = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'long', day: 'numeric' }).format(new Date(b.event_date + 'T12:00:00Z'));
+  const time = formatTimeLabel(b.start_time);
+  const label = b.event_title || b.client_name || 'Untitled event';
+  const typePrefix = b.event_type ? `${b.event_type} for ` : '';
+  const timePart = time ? ` at ${time}` : '';
+  const venuePart = b.venue_address ? ` at ${b.venue_address}` : '';
+  const feeNum = Number(b.fee);
+  const feePart = (b.fee !== null && b.fee !== undefined && b.fee !== '' && !isNaN(feeNum)) ? `, fee $${feeNum.toLocaleString()}` : '';
+  return `${weekday}, ${monthDay}${timePart}: ${typePrefix}${label}${venuePart}${feePart}.`;
+}
+
 // Fired by a third Vercel Cron job (see vercel.json), Monday mornings. Texts Shine himself
 // a heads-up of the active gigs on the calendar Mon-Sun that week, so he has a prep reminder
 // at the top of the week -- separate from the per-client day-before reminders above. Sends
@@ -211,23 +254,15 @@ async function sendWeeklySummary(req, res) {
 
     bookings.sort((a, b) => {
       if (a.event_date !== b.event_date) return a.event_date < b.event_date ? -1 : 1;
-      const ah = parseStartHour(a.start_time), bh = parseStartHour(b.start_time);
+      const ah = parseAnyHour(a.start_time), bh = parseAnyHour(b.start_time);
       if (ah === null && bh === null) return 0;
       if (ah === null) return 1;
       if (bh === null) return -1;
       return ah - bh;
     });
 
-    const weekdayFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short' });
-    const lines = bookings.map(b => {
-      const [, m, d] = b.event_date.split('-');
-      const weekday = weekdayFmt.format(new Date(b.event_date + 'T12:00:00Z'));
-      const time = b.start_time ? `, ${b.start_time}` : '';
-      const label = b.event_title || b.client_name || 'Untitled event';
-      return `${weekday} ${parseInt(m, 10)}/${parseInt(d, 10)}${time} - ${label}`;
-    });
-
-    const smsText = `Your week ahead (${bookings.length} show${bookings.length > 1 ? 's' : ''}):\n${lines.join('\n')}`;
+    const sentences = bookings.map(formatShowSentence);
+    const smsText = `Your week ahead (${bookings.length} show${bookings.length > 1 ? 's' : ''}):\n${sentences.join('\n')}`;
 
     const twRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
       method: 'POST',
