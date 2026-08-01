@@ -39,6 +39,11 @@ function parseStartHour(timeStr) {
 
 const REMINDER_SUBJECT = 'Show day reminder';
 
+// Same definition of "active gig" as gig-dashboard.html's upcoming-list filter --
+// a booking counts if it has an event date and hasn't been marked done/dead, regardless
+// of whether a contract was ever sent (Shine often books without one).
+const DONE_STATUSES = ['completed', 'lost', 'cancelled'];
+
 // Fired by two Vercel Cron jobs (see vercel.json): a 9am Central "morning" run that
 // reminds clients whose show is TODAY and isn't early (>= noon, or unparseable time --
 // defaulting unknown times to this bucket means they still get a same-day heads-up
@@ -58,11 +63,12 @@ async function sendReminders(req, res) {
   const results = { run, targetDate, sent: [], skipped: [], errors: [] };
 
   try {
-    const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?event_date=eq.${targetDate}&contract_status=eq.signed&select=*`, {
+    const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?event_date=eq.${targetDate}&select=*`, {
       headers: SB_HDR(),
     });
-    const bookings = await bRes.json();
-    if (!Array.isArray(bookings)) throw new Error('Unexpected bookings response');
+    const allBookings = await bRes.json();
+    if (!Array.isArray(allBookings)) throw new Error('Unexpected bookings response');
+    const bookings = allBookings.filter(b => !DONE_STATUSES.includes(String(b.status || '').toLowerCase()));
 
     for (const booking of bookings) {
       const hour = parseStartHour(booking.start_time);
