@@ -164,6 +164,11 @@ async function sendReminders(req, res) {
       }
     }
 
+    // Piggybacked on this same daily cron (morning run only, so it fires once/day) rather
+    // than a separate schedule -- texts Shine himself if any active gig falls in the next
+    // 2 calendar days, a closer-in heads-up than the Monday weekly summary.
+    results.headsUp = run === 'morning' ? await sendUpcomingHeadsUp() : { sent: false, reason: 'evening run, heads-up already handled by morning' };
+
     res.status(200).json(results);
   } catch (e) {
     console.error('send-reminders error:', e);
@@ -218,6 +223,48 @@ function formatShowSentence(b) {
   return `${weekday}, ${monthDay}${timePart}: ${typePrefix}${label}${venuePart}${feePart}.`;
 }
 
+// Shared by both personal-digest sends below (Monday weekly summary + the daily 2-day
+// heads-up) -- fetches active gigs with event_date in [rangeStart, rangeEnd], sentence-
+// formats them, and texts Shine. Tagged so it's unmistakable at a glance in the same
+// thread as forwarded client texts (this and the client-forward path in reply.js share
+// one Twilio number, by design -- Shine chose to keep it on Twilio rather than a second
+// number or a carrier gateway). Never throws; callers get a { sent: false, ... } result.
+async function sendShineDigest(rangeStart, rangeEnd, tag) {
+  const bRes = await fetch(
+    `${process.env.SUPABASE_URL}/rest/v1/bookings?event_date=gte.${rangeStart}&event_date=lte.${rangeEnd}&select=*`,
+    { headers: SB_HDR() }
+  );
+  const allBookings = await bRes.json();
+  if (!Array.isArray(allBookings)) return { sent: false, error: 'Unexpected bookings response' };
+  const bookings = allBookings.filter(b => !DONE_STATUSES.includes(String(b.status || '').toLowerCase()));
+
+  if (!bookings.length) return { sent: false, count: 0, reason: 'no active gigs in range' };
+
+  bookings.sort((a, b) => {
+    if (a.event_date !== b.event_date) return a.event_date < b.event_date ? -1 : 1;
+    const ah = parseAnyHour(a.start_time), bh = parseAnyHour(b.start_time);
+    if (ah === null && bh === null) return 0;
+    if (ah === null) return 1;
+    if (bh === null) return -1;
+    return ah - bh;
+  });
+
+  const sentences = bookings.map(formatShowSentence);
+  const smsText = `${tag} (${bookings.length} show${bookings.length > 1 ? 's' : ''}):\n${sentences.join('\n')}`;
+
+  const twRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
+    method: 'POST',
+    headers: { Authorization: 'Basic ' + Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: SHINE_PHONE, Body: smsText }).toString(),
+  });
+
+  if (!twRes.ok) {
+    const twErr = await twRes.text();
+    return { sent: false, count: bookings.length, twilioError: twErr };
+  }
+  return { sent: true, count: bookings.length };
+}
+
 // Fired by a third Vercel Cron job (see vercel.json), Monday mornings. Texts Shine himself
 // a heads-up of the active gigs on the calendar Mon-Sun that week, so he has a prep reminder
 // at the top of the week -- separate from the per-client day-before reminders above. Sends
@@ -239,50 +286,29 @@ async function sendWeeklySummary(req, res) {
     const weekStart = centralDateString(-daysSinceMonday);
     const weekEnd = centralDateString(-daysSinceMonday + 6);
 
-    const bRes = await fetch(
-      `${process.env.SUPABASE_URL}/rest/v1/bookings?event_date=gte.${weekStart}&event_date=lte.${weekEnd}&select=*`,
-      { headers: SB_HDR() }
-    );
-    const allBookings = await bRes.json();
-    if (!Array.isArray(allBookings)) throw new Error('Unexpected bookings response');
-    const bookings = allBookings.filter(b => !DONE_STATUSES.includes(String(b.status || '').toLowerCase()));
-
-    if (!bookings.length) {
-      res.status(200).json({ weekStart, weekEnd, count: 0, sent: false, reason: 'no active gigs this week' });
-      return;
-    }
-
-    bookings.sort((a, b) => {
-      if (a.event_date !== b.event_date) return a.event_date < b.event_date ? -1 : 1;
-      const ah = parseAnyHour(a.start_time), bh = parseAnyHour(b.start_time);
-      if (ah === null && bh === null) return 0;
-      if (ah === null) return 1;
-      if (bh === null) return -1;
-      return ah - bh;
-    });
-
-    const sentences = bookings.map(formatShowSentence);
-    // Tagged so it's unmistakable at a glance in the same thread as forwarded client texts
-    // (this and the client-forward path in reply.js share one Twilio number, by design --
-    // Shine chose to keep it on Twilio rather than a second number or a carrier gateway).
-    const smsText = `WEEKLY PREP (${bookings.length} show${bookings.length > 1 ? 's' : ''} this week):\n${sentences.join('\n')}`;
-
-    const twRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
-      method: 'POST',
-      headers: { Authorization: 'Basic ' + Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: SHINE_PHONE, Body: smsText }).toString(),
-    });
-
-    if (!twRes.ok) {
-      const twErr = await twRes.text();
-      res.status(200).json({ weekStart, weekEnd, count: bookings.length, sent: false, twilioError: twErr });
-      return;
-    }
-
-    res.status(200).json({ weekStart, weekEnd, count: bookings.length, sent: true });
+    const result = await sendShineDigest(weekStart, weekEnd, 'WEEKLY PREP');
+    res.status(200).json({ weekStart, weekEnd, ...result });
   } catch (e) {
     console.error('send-weekly-summary error:', e);
     res.status(500).json({ error: e.message });
+  }
+}
+
+// Called from sendReminders' morning run (not a separate cron -- Shine asked for this to
+// ride the existing daily job). Texts Shine himself if any active gig falls in the next 2
+// calendar days (tomorrow or the day after), a closer-in nudge than the Monday weekly
+// summary. No dedup: if a show stays inside this 2-day window across two consecutive
+// mornings, he'll get pinged both days -- treated as a feature (a reminder that gets more
+// insistent as the date nears), not a bug. Revisit if that turns out to be annoying.
+async function sendUpcomingHeadsUp() {
+  try {
+    const rangeStart = centralDateString(1);
+    const rangeEnd = centralDateString(2);
+    const result = await sendShineDigest(rangeStart, rangeEnd, 'HEADS UP: next 2 days');
+    return { rangeStart, rangeEnd, ...result };
+  } catch (e) {
+    console.error('send-upcoming-heads-up error:', e);
+    return { sent: false, error: e.message };
   }
 }
 
