@@ -691,6 +691,7 @@ Rules:
 - Never claim I only do one format — I do both stage shows and strolling, and which one fits is something we figure out together based on their event
 - If client says "yes lets book", "I want to book", "send the contract" — thank them for booking (in a way I haven't already phrased earlier in this thread) and mention I'll send a quick questionnaire to get everything set up, then add [BOOKING_INTENT] at the very end
 - Never make up availability
+- If their email is just a closing acknowledgment that doesn't call for a response — "sounds good", "see you then", "great, thanks!", "ok", confirming something already settled with nothing new asked or added — don't write a reply at all. Output exactly the single word NO_REPLY_NEEDED and nothing else. Only do this when the conversation has genuinely reached a natural stop; if there's any new question, new info, or open thread, reply normally instead. Never do this for a brand-new inquiry you haven't replied to yet
 
 Signature:
 Shine, The Mentalist
@@ -821,6 +822,7 @@ Only include this block once. Do not mention this block or its contents in the v
     }
 
     const replyText = result.text;
+    const noReplyNeeded = /^no_reply_needed$/i.test(replyText.trim());
     const bookingIntent = replyText.includes('[BOOKING_INTENT]');
     const pricingRequested = replyText.includes('[PRICING_REQUESTED]');
 
@@ -855,7 +857,7 @@ Only include this block once. Do not mention this block or its contents in the v
 
     const replySubject = subject?.startsWith('Re:') ? subject : `Re: ${subject || 'Your inquiry'}`;
 
-    if (!reviewMode) {
+    if (!reviewMode && !noReplyNeeded) {
       // Send reply email immediately
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -892,20 +894,25 @@ Only include this block once. Do not mention this block or its contents in the v
         // otherwise leaves the inbound/outbound pair's order undefined.
         const inboundTs = new Date();
         const outboundTs = new Date(inboundTs.getTime() + 500);
+        // A closing acknowledgment gets logged as inbound-only -- no outbound
+        // draft/pending-review row, since there's nothing to send or review.
+        const rowsToInsert = noReplyNeeded
+          ? [{ client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, cc_address: ccAddresses, created_at: inboundTs.toISOString() }]
+          : [
+              { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, cc_address: ccAddresses, created_at: inboundTs.toISOString() },
+              { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject, cc_address: ccAddresses, created_at: outboundTs.toISOString() }
+            ];
         const messagesRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
-          body: JSON.stringify([
-            { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, cc_address: ccAddresses, created_at: inboundTs.toISOString() },
-            { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject, cc_address: ccAddresses, created_at: outboundTs.toISOString() }
-          ])
+          body: JSON.stringify(rowsToInsert)
         });
         if (!messagesRes.ok) {
           const errBody = await messagesRes.text();
           console.error('Messages insert failed:', messagesRes.status, errBody);
         }
 
-        if (reviewMode) {
+        if (reviewMode && !noReplyNeeded) {
           try {
             await fetch('https://api.resend.com/emails', {
               method: 'POST',

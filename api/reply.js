@@ -275,6 +275,7 @@ Rules:
 - Never claim I only do one format (stage show) if asked about strolling — I do both, and which one fits is something we figure out together
 - If client says "yes lets book", "I want to book", "send the contract" — thank them for booking (in a way I haven't already phrased earlier in this thread) and mention I'll send a quick questionnaire to get everything set up, then add [BOOKING_INTENT] at the very end
 - Never make up availability
+- If their message is just a closing acknowledgment that doesn't call for a response — "sounds good", "see you then", "great, thanks!", "ok", a 👍, confirming something already settled with nothing new asked or added — don't write a reply at all. Output exactly the single word NO_REPLY_NEEDED and nothing else. Only do this when the conversation has genuinely reached a natural stop; if there's any new question, new info, or open thread, reply normally instead
 
 Call/meeting detection (separate from the actual performance date):
 - Today's date is ${new Date().toISOString().slice(0, 10)}. Resolve any relative date the client gives ("tomorrow", "Thursday", "next week") against this.
@@ -332,6 +333,7 @@ Call/meeting detection (separate from the actual performance date):
       throw new Error('Claude returned an unexpected response shape (no text content)');
     }
     const replyText = claudeData.content[0].text;
+    const noReplyNeeded = /^no_reply_needed$/i.test(replyText.trim());
     const bookingIntent = replyText.includes('[BOOKING_INTENT]');
     const pricingRequested = replyText.includes('[PRICING_REQUESTED]');
     const callMatch = replyText.match(/\[CALL_SCHEDULED:\s*(\d{4}-\d{2}-\d{2})\s*\|\s*([^\]|]+?)\s*\|\s*([^\]]+?)\s*\]/);
@@ -359,7 +361,7 @@ Call/meeting detection (separate from the actual performance date):
       console.error('Settings lookup failed, defaulting to auto-send:', e.message);
     }
 
-    if (!reviewMode) {
+    if (!reviewMode && !noReplyNeeded) {
       // Send SMS reply immediately
       const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
       const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
@@ -399,20 +401,27 @@ Call/meeting detection (separate from the actual performance date):
         // rendered ABOVE the AI's response that was actually written to answer it.
         const inboundTs = new Date();
         const outboundTs = new Date(inboundTs.getTime() + 500);
+        // A closing acknowledgment ("thanks", "see you tonight") gets logged as
+        // inbound-only -- no outbound draft/pending-review row, since there's
+        // nothing to send or review. Keeps the thread from ending on a
+        // needless AI reply just to have the last word.
+        const rowsToInsert = noReplyNeeded
+          ? [{ client_id: client.id, channel: 'sms', direction: 'inbound', content: Body, status: 'received', to_address: null, created_at: inboundTs.toISOString() }]
+          : [
+              { client_id: client.id, channel: 'sms', direction: 'inbound', content: Body, status: 'received', to_address: null, created_at: inboundTs.toISOString() },
+              { client_id: client.id, channel: 'sms', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: From, created_at: outboundTs.toISOString() }
+            ];
         const messagesRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
-          body: JSON.stringify([
-            { client_id: client.id, channel: 'sms', direction: 'inbound', content: Body, status: 'received', to_address: null, created_at: inboundTs.toISOString() },
-            { client_id: client.id, channel: 'sms', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: From, created_at: outboundTs.toISOString() }
-          ])
+          body: JSON.stringify(rowsToInsert)
         });
         if (!messagesRes.ok) {
           const errBody = await messagesRes.text();
           console.error('Messages insert failed:', messagesRes.status, errBody);
         }
 
-        if (reviewMode) {
+        if (reviewMode && !noReplyNeeded) {
           try {
             await fetch('https://api.resend.com/emails', {
               method: 'POST',

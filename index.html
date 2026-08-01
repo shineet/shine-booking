@@ -3476,7 +3476,7 @@ function loadConversationLead(clientId) {
                 month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
             }) : '';
             var pending = m.status === 'pending_review'
-                ? '<span class="convo-pending">⏳ Pending review</span>' : '';
+                ? '<span class="convo-pending">⏳ Pending review</span> <button class="convo-restore" onclick="discardPendingReply(\'' + m.id + '\')">Discard</button>' : '';
             var discarded = m.status === 'discarded'
                 ? '<span class="convo-discarded">🚫 Discarded, not sent</span> <button class="convo-restore" onclick="restoreDiscardedMessage(\'' + m.id + '\')">&#8630; Restore &amp; edit</button>' : '';
             var subject = m.email_subject
@@ -3657,14 +3657,18 @@ function approvePendingReply(id) {
 function discardPendingReply(id) {
     if (!confirm('Discard this draft?')) return;
     var card = document.getElementById('pending-' + id);
-    card.querySelectorAll('button').forEach(function(b) { b.disabled = true; });
+    if (card) card.querySelectorAll('button').forEach(function(b) { b.disabled = true; });
     fetch('/api/pending-replies', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'discard', messageId: id })
     })
     .then(function(r) { return r.json(); })
-    .then(function(d) { if (d.error) throw new Error(d.error); loadPendingReplies(); })
-    .catch(function(e) { alert('Error: ' + e.message); card.querySelectorAll('button').forEach(function(b) { b.disabled = false; }); });
+    .then(function(d) {
+        if (d.error) throw new Error(d.error);
+        loadPendingReplies();
+        if (activeClientId) loadConversationLead(activeClientId);
+    })
+    .catch(function(e) { alert('Error: ' + e.message); if (card) card.querySelectorAll('button').forEach(function(b) { b.disabled = false; }); });
 }
 
 function restoreDiscardedMessage(id) {

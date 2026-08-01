@@ -426,6 +426,9 @@ td { padding: 9px 14px; vertical-align: middle; }
 .convo-empty { color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0; }
 .convo-loading { color: var(--muted); font-size: 13px; padding: 8px 0; }
 .convo-pending { color: var(--amber); }
+.convo-discarded { color: var(--red); }
+.convo-restore { background: none; border: 1px solid var(--border); color: var(--accent2); border-radius: 4px; padding: 1px 6px; font-size: 10px; cursor: pointer; }
+.convo-restore:hover { background: var(--surface2); }
 
 @media (max-width: 900px) {
   .kpi-row { grid-template-columns: repeat(3, 1fr); }
@@ -2145,7 +2148,9 @@ async function loadConversation(clientId) {
         month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
       }) : '';
       const pending = m.status === 'pending_review'
-        ? '<span class="convo-pending">⏳ Pending review</span>' : '';
+        ? `<span class="convo-pending">⏳ Pending review</span> <button class="convo-restore" onclick="discardConvoMessage('${m.id}')">Discard</button>` : '';
+      const discarded = m.status === 'discarded'
+        ? `<span class="convo-discarded">🚫 Discarded, not sent</span> <button class="convo-restore" onclick="restoreConvoMessage('${m.id}')">&#8630; Restore</button>` : '';
       const subject = m.email_subject
         ? `<div class="convo-subject">${esc(m.email_subject)}</div>` : '';
 
@@ -2157,6 +2162,7 @@ async function loadConversation(clientId) {
             <span class="convo-channel">${channel}</span>
             <span>${time}</span>
             ${pending}
+            ${discarded}
           </div>
         </div>`;
     }).join('');
@@ -2166,6 +2172,31 @@ async function loadConversation(clientId) {
   } catch(e) {
     loadingEl.textContent = 'Could not load messages.';
   }
+}
+
+async function discardConvoMessage(id) {
+  if (!confirm('Discard this draft? It will not be sent.')) return;
+  try {
+    const res = await fetch('/api/pending-replies', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'discard', messageId: id })
+    });
+    const d = await res.json();
+    if (d.error) throw new Error(d.error);
+    if (activeClient) loadConversation(activeClient.id);
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function restoreConvoMessage(id) {
+  try {
+    const res = await fetch('/api/pending-replies', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'restore', messageId: id })
+    });
+    const d = await res.json();
+    if (d.error) throw new Error(d.error);
+    if (activeClient) loadConversation(activeClient.id);
+  } catch(e) { alert('Error: ' + e.message); }
 }
 
 // Close on overlay click
