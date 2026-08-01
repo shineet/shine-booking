@@ -171,6 +171,83 @@ async function sendReminders(req, res) {
   }
 }
 
+// Shine's own cell -- same number api/reply.js already recognizes as the personal-phone-forward
+// sender, kept in sync with that hardcoded value rather than a new env var.
+const SHINE_PHONE = '+16128657681';
+
+// Fired by a third Vercel Cron job (see vercel.json), Monday mornings. Texts Shine himself
+// a heads-up of the active gigs on the calendar Mon-Sun that week, so he has a prep reminder
+// at the top of the week -- separate from the per-client day-before reminders above. Sends
+// nothing (silent no-op) if the week has no active gigs, per Shine's ask ("if I have some
+// shows that week").
+async function sendWeeklySummary(req, res) {
+  const auth = req.headers.authorization || '';
+  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  try {
+    const todayStr = centralDateString(0);
+    // getUTCDay() on a fixed-noon-UTC Date is a safe way to read the weekday of a plain
+    // Y-M-D calendar date without any local-timezone parsing ambiguity. 0=Sun..6=Sat.
+    const todayWeekday = new Date(todayStr + 'T12:00:00Z').getUTCDay();
+    const daysSinceMonday = (todayWeekday + 6) % 7; // Mon=0, Tue=1, ... Sun=6
+    const weekStart = centralDateString(-daysSinceMonday);
+    const weekEnd = centralDateString(-daysSinceMonday + 6);
+
+    const bRes = await fetch(
+      `${process.env.SUPABASE_URL}/rest/v1/bookings?event_date=gte.${weekStart}&event_date=lte.${weekEnd}&select=*`,
+      { headers: SB_HDR() }
+    );
+    const allBookings = await bRes.json();
+    if (!Array.isArray(allBookings)) throw new Error('Unexpected bookings response');
+    const bookings = allBookings.filter(b => !DONE_STATUSES.includes(String(b.status || '').toLowerCase()));
+
+    if (!bookings.length) {
+      res.status(200).json({ weekStart, weekEnd, count: 0, sent: false, reason: 'no active gigs this week' });
+      return;
+    }
+
+    bookings.sort((a, b) => {
+      if (a.event_date !== b.event_date) return a.event_date < b.event_date ? -1 : 1;
+      const ah = parseStartHour(a.start_time), bh = parseStartHour(b.start_time);
+      if (ah === null && bh === null) return 0;
+      if (ah === null) return 1;
+      if (bh === null) return -1;
+      return ah - bh;
+    });
+
+    const weekdayFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short' });
+    const lines = bookings.map(b => {
+      const [, m, d] = b.event_date.split('-');
+      const weekday = weekdayFmt.format(new Date(b.event_date + 'T12:00:00Z'));
+      const time = b.start_time ? `, ${b.start_time}` : '';
+      const label = b.event_title || b.client_name || 'Untitled event';
+      return `${weekday} ${parseInt(m, 10)}/${parseInt(d, 10)}${time} - ${label}`;
+    });
+
+    const smsText = `Your week ahead (${bookings.length} show${bookings.length > 1 ? 's' : ''}):\n${lines.join('\n')}`;
+
+    const twRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
+      method: 'POST',
+      headers: { Authorization: 'Basic ' + Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: SHINE_PHONE, Body: smsText }).toString(),
+    });
+
+    if (!twRes.ok) {
+      const twErr = await twRes.text();
+      res.status(200).json({ weekStart, weekEnd, count: bookings.length, sent: false, twilioError: twErr });
+      return;
+    }
+
+    res.status(200).json({ weekStart, weekEnd, count: bookings.length, sent: true });
+  } catch (e) {
+    console.error('send-weekly-summary error:', e);
+    res.status(500).json({ error: e.message });
+  }
+}
+
 // Session token = one-way hash of the dashboard password + the server secret key.
 // Reveals nothing if intercepted; only matches if the holder logged in with the real password.
 function makeToken() {
@@ -286,6 +363,10 @@ export default async function handler(req, res) {
 
     if (mode === 'send-reminders') {
       return await sendReminders(req, res);
+    }
+
+    if (mode === 'send-weekly-summary') {
+      return await sendWeeklySummary(req, res);
     }
 
     if (!bid) {
