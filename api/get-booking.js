@@ -2,6 +2,169 @@ import crypto from 'node:crypto';
 
 const ALLOWED_TABLES = new Set(['clients', 'messages', 'bookings', 'app_settings', 'gigs']);
 
+const SB_HDR = () => ({
+  'apikey': process.env.SUPABASE_SECRET_KEY,
+  'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+  'Content-Type': 'application/json',
+});
+
+// Returns the current date (optionally offset by days) as YYYY-MM-DD in Central time,
+// matching the plain-date format bookings.event_date is stored in.
+function centralDateString(offsetDays = 0) {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+
+// Reads the hour (0-23) out of a free-text start time like "7 PM", "11:30am", "2-3 PM".
+// Returns null if it can't be confidently parsed -- callers should treat that as "late"
+// (afternoon/evening), the safer default since it still gets a same-day reminder rather
+// than none at all.
+function parseStartHour(timeStr) {
+  if (!timeStr) return null;
+  const cleaned = String(timeStr).trim().toLowerCase();
+  const firstPart = cleaned.split('-')[0].trim();
+  const match = firstPart.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+  if (!match) return null;
+  let hour = parseInt(match[1], 10);
+  let meridiem = match[3];
+  if (!meridiem) {
+    const fullMatch = cleaned.match(/(am|pm)/);
+    if (fullMatch) meridiem = fullMatch[1];
+  }
+  if (isNaN(hour) || hour > 23 || !meridiem) return null;
+  if (meridiem === 'pm' && hour < 12) hour += 12;
+  if (meridiem === 'am' && hour === 12) hour = 0;
+  return hour;
+}
+
+const REMINDER_SUBJECT = 'Show day reminder';
+
+// Fired by two Vercel Cron jobs (see vercel.json): a 9am Central "morning" run that
+// reminds clients whose show is TODAY and isn't early (>= noon, or unparseable time --
+// defaulting unknown times to this bucket means they still get a same-day heads-up
+// rather than silently missing one), and a 5pm Central "evening" run the day before
+// that catches morning/noon shows, since a 9am-same-day reminder would land too close
+// to an early start time to be useful.
+async function sendReminders(req, res) {
+  const auth = req.headers.authorization || '';
+  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  const run = req.query.run === 'evening' ? 'evening' : 'morning';
+  const targetDate = run === 'evening' ? centralDateString(1) : centralDateString(0);
+
+  const results = { run, targetDate, sent: [], skipped: [], errors: [] };
+
+  try {
+    const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?event_date=eq.${targetDate}&contract_status=eq.signed&select=*`, {
+      headers: SB_HDR(),
+    });
+    const bookings = await bRes.json();
+    if (!Array.isArray(bookings)) throw new Error('Unexpected bookings response');
+
+    for (const booking of bookings) {
+      const hour = parseStartHour(booking.start_time);
+      const isEarly = hour !== null && hour < 12;
+      // Morning run only handles non-early (afternoon/evening/unknown) shows;
+      // evening run only handles early (morning/noon) shows for tomorrow.
+      if (run === 'morning' && isEarly) { results.skipped.push({ id: booking.id, reason: 'early show, handled by evening run' }); continue; }
+      if (run === 'evening' && !isEarly) { results.skipped.push({ id: booking.id, reason: 'not an early show' }); continue; }
+
+      try {
+        // Dedup: skip if we already sent this booking's reminder recently.
+        if (booking.client_id) {
+          const dupRes = await fetch(
+            `${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${booking.client_id}&email_subject=eq.${encodeURIComponent(REMINDER_SUBJECT)}&order=created_at.desc&limit=1`,
+            { headers: SB_HDR() }
+          );
+          const dupRows = await dupRes.json().catch(() => []);
+          if (Array.isArray(dupRows) && dupRows[0]) {
+            const sentAt = new Date(dupRows[0].created_at).getTime();
+            if (Date.now() - sentAt < 3 * 86400000) { results.skipped.push({ id: booking.id, reason: 'already sent' }); continue; }
+          }
+        }
+
+        const firstName = (booking.client_name || 'there').split(' ')[0];
+        const smsText = `Hi ${firstName}, this is Shine -- all set for tomorrow's show! I'll arrive about 15 minutes early to get set up before we start. Looking forward to it!`;
+        const emailText = `Hi ${firstName},\n\nJust a quick note ahead of tomorrow's event -- everything is set on my end and I'm looking forward to it!\n\nI'll plan to arrive about 15 minutes before the show start time to get set up, so we're ready to go right on schedule.\n\nIf anything changes or you need to reach me before then, just reply to this email or call/text me at (737) 271-5308.\n\nSee you tomorrow!\n\n– Shine, The Mentalist`;
+
+        let clientPhone = null;
+        if (booking.client_id) {
+          const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${booking.client_id}&select=phone`, { headers: SB_HDR() });
+          const cRows = await cRes.json().catch(() => []);
+          if (Array.isArray(cRows) && cRows[0]) clientPhone = cRows[0].phone || null;
+        }
+
+        const sentChannels = [];
+
+        if (booking.client_email) {
+          const emailRes = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+            body: JSON.stringify({
+              from: 'Shine, The Mentalist <shine@texasmentalist.com>',
+              to: booking.client_email,
+              bcc: ['shinethementalist@gmail.com'],
+              subject: 'All set for tomorrow!',
+              text: emailText,
+            }),
+          });
+          if (emailRes.ok) {
+            sentChannels.push('email');
+            if (booking.client_id) {
+              await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+                method: 'POST', headers: SB_HDR(),
+                body: JSON.stringify({
+                  client_id: booking.client_id, channel: 'email', direction: 'outbound',
+                  content: emailText, status: 'sent', to_address: booking.client_email,
+                  email_subject: REMINDER_SUBJECT,
+                }),
+              });
+            }
+          }
+        }
+
+        if (clientPhone && process.env.TWILIO_SID) {
+          const normPhone = (p) => { const d = String(p || '').replace(/\D/g, ''); return d.length === 10 ? '+1' + d : (d.length === 11 && d[0] === '1' ? '+' + d : (String(p || '').startsWith('+') ? p : '+' + d)); };
+          const twRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
+            method: 'POST',
+            headers: { Authorization: 'Basic ' + Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: normPhone(clientPhone), Body: smsText }).toString(),
+          });
+          if (twRes.ok) {
+            sentChannels.push('sms');
+            if (booking.client_id) {
+              await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+                method: 'POST', headers: SB_HDR(),
+                body: JSON.stringify({
+                  client_id: booking.client_id, channel: 'sms', direction: 'outbound',
+                  content: smsText, status: 'sent', to_address: normPhone(clientPhone),
+                  email_subject: REMINDER_SUBJECT,
+                }),
+              });
+            }
+          }
+        }
+
+        if (sentChannels.length) {
+          results.sent.push({ id: booking.id, client: booking.client_name, channels: sentChannels });
+        } else {
+          results.skipped.push({ id: booking.id, reason: 'no email or phone on file' });
+        }
+      } catch (bookingErr) {
+        results.errors.push({ id: booking.id, error: bookingErr.message });
+      }
+    }
+
+    res.status(200).json(results);
+  } catch (e) {
+    console.error('send-reminders error:', e);
+    res.status(500).json({ error: e.message, ...results });
+  }
+}
+
 // Session token = one-way hash of the dashboard password + the server secret key.
 // Reveals nothing if intercepted; only matches if the holder logged in with the real password.
 function makeToken() {
@@ -114,6 +277,11 @@ export default async function handler(req, res) {
 
   try {
     const { bid, mode } = req.query;
+
+    if (mode === 'send-reminders') {
+      return await sendReminders(req, res);
+    }
+
     if (!bid) {
       res.status(400).json({ error: 'Missing booking id' });
       return;

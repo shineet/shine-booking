@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/get-booking?mode=send-reminders&run=morning", "schedule": "0 14 * * *" },
+    { "path": "/api/get-booking?mode=send-reminders&run=evening", "schedule": "0 22 * * *" }
+  ]
+}
