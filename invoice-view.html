@@ -185,7 +185,12 @@ function render() {
     mode = 'paidInFull';
   } else if (booking.depositPaid) {
     mode = 'balance';
-    amountDueNow = Math.max(0, total - (Number(booking.paymentAmount) || baseDep));
+    // invoiceData.isFinalBalance means `total` is ALREADY the net amount still
+    // owed (e.g. a post-event remaining-balance invoice) -- subtracting
+    // payment_amount again would double-count the deposit already paid.
+    amountDueNow = invoiceData.isFinalBalance
+      ? Math.max(0, total)
+      : Math.max(0, total - (Number(booking.paymentAmount) || baseDep));
   } else if (dep >= 100) {
     mode = 'full';
     amountDueNow = total;

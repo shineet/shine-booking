@@ -2029,6 +2029,12 @@ function buildThankYouInvoiceData() {
     lineItems:      [{ description: 'Remaining Balance', details: thankYouCtx.eventName, amount: thankYouCtx.remaining }],
     total:          thankYouCtx.remaining,
     depositPercent: 100,
+    // Tells invoice-view.html that `total` above is ALREADY net of whatever
+    // deposit was paid -- without this it independently subtracts
+    // payment_amount a SECOND time whenever the booking shows deposit_paid,
+    // undercharging (this exact bug already happened once: Jacquie's $225
+    // remaining showed as $150 -- $75 deposit subtracted twice).
+    isFinalBalance: true,
   };
 }
 
