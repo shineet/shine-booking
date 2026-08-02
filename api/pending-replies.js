@@ -1493,6 +1493,55 @@ RULES:
       return;
     }
 
+    // POST action=thank-you-draft -> draft a post-gig thank-you note asking for a Google
+    // review, optionally mentioning that the remaining-balance invoice is attached/included.
+    // Triggered manually from the Gig Dashboard once a gig is marked Done.
+    if (req.method === 'POST' && req.body.action === 'thank-you-draft') {
+      const { clientName, eventType, eventDate, channel, reviewLink, includeBalance, balanceAmount } = req.body;
+      if (!reviewLink) { res.status(400).json({ error: 'Missing reviewLink' }); return; }
+
+      const balanceLine = includeBalance
+        ? `Also let them know the invoice for the remaining balance ($${Number(balanceAmount || 0).toLocaleString()}) is ${channel === 'email' ? 'attached to this email' : 'included below'}, and to reach out with any questions.`
+        : '';
+
+      const systemPrompt = `You are writing a thank-you note on behalf of Shine, The Mentalist, to a client whose event (${eventType || 'event'}${eventDate ? ' on ' + eventDate : ''}) JUST HAPPENED and went well.
+
+Thank them warmly and specifically for having Shine perform -- reference the event naturally, don't just say "your event." Then ask them, warmly and not pushy, if they'd be willing to leave a quick Google review. Include this exact link on its own line, unchanged: ${reviewLink}
+${balanceLine}
+
+RULES:
+- Warm, genuine, first person, brief. This is a thank-you, not a pitch.
+- No stock openers ("I hope this finds you well"), no corporate filler.
+- Sign off as: Shine, The Mentalist | +1 (737) 271-5308
+- Return ONLY the message body, no subject line, no commentary.
+- Absolutely no em dashes.`;
+
+      const userPrompt = `Client: ${clientName || 'there'}`;
+
+      try {
+        const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-6', max_tokens: 300,
+            system: systemPrompt + (await guidanceSuffix()) + (channel === 'email'
+              ? '\n\nFORMAT: this is an EMAIL. One or two short paragraphs is fine.'
+              : '\n\nFORMAT: this is an SMS. Keep it feeling like a real text -- short, but the review link must still be included on its own line.'),
+            messages: [{ role: 'user', content: userPrompt }]
+          })
+        });
+        const claudeData = await claudeRes.json();
+        if (claudeData.error) throw new Error(claudeData.error.message || JSON.stringify(claudeData.error));
+        let draft = '';
+        if (Array.isArray(claudeData.content)) claudeData.content.forEach(b => { if (b.type === 'text') draft += b.text; });
+        if (!draft) throw new Error('No draft generated');
+        res.status(200).json({ success: true, draft });
+      } catch(e) {
+        res.status(500).json({ error: e.message });
+      }
+      return;
+    }
+
     res.status(400).json({ error: 'Unknown action' });
 
   } catch(e) {

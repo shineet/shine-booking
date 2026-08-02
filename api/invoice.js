@@ -95,8 +95,68 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: err.message });
     }
 
+  } else if (action === 'send-note') {
+    // Plain message send with no PDF attachment -- used by the Gig Dashboard's
+    // "Send Thank You" flow when the client has already paid in full (nothing to
+    // invoice) or when sending by SMS (which can never carry a PDF attachment).
+    // Reuses the same "stable, never-expiring" invoice-view.html link as the
+    // 'send' action above when includeLink + invoiceData.bookingId are given, so a
+    // thank-you note can still point to the live remaining-balance payment page
+    // without generating or attaching a static PDF.
+    const { channel, toEmail, toPhone, toName, message, invoiceData, includeLink } = req.body;
+    if (!message) return res.status(400).json({ error: 'Missing message' });
+
+    let payUrl = null;
+    if (includeLink && invoiceData && invoiceData.bookingId) {
+      payUrl = `https://shine-booking.vercel.app/invoice-view.html?bid=${encodeURIComponent(invoiceData.bookingId)}&d=${encodeURIComponent(JSON.stringify(invoiceData))}`;
+    }
+
+    try {
+      if (channel === 'sms') {
+        if (!toPhone) return res.status(400).json({ error: 'Missing toPhone' });
+        if (!process.env.TWILIO_SID) return res.status(500).json({ error: 'SMS is not configured' });
+        const body = message + (payUrl ? `\n\n${payUrl}` : '');
+        const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+        const twRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: toPhone, Body: body }).toString()
+        });
+        if (!twRes.ok) { const t = await twRes.text(); throw new Error('Twilio send failed: ' + t); }
+        return res.status(200).json({ success: true });
+      }
+
+      if (!toEmail) return res.status(400).json({ error: 'Missing toEmail' });
+      const resend = new Resend(process.env.RESEND_KEY);
+      const payBtnHtml = payUrl
+        ? `<div style="text-align:center;margin:20px 0"><a href="${payUrl}" style="background:#1a7f5a;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:bold;display:inline-block">📄 View Invoice &amp; Pay Online</a></div>`
+        : '';
+      await resend.emails.send({
+        from:    'Shine, The Mentalist <shine@texasmentalist.com>',
+        to:      [toEmail],
+        bcc:     ['shinethementalist@gmail.com'],
+        subject: `Thank you${invoiceData?.eventName ? ' – ' + invoiceData.eventName : ''}!`,
+        text:    `Hi ${toName || 'there'},\n\n${message}${payUrl ? `\n\n${payUrl}` : ''}\n\n– Shine\ntexasmentalist.com`,
+        html:    `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;color:#1a1a2e">
+          <div style="border-bottom:3px solid #B8960C;padding-bottom:16px;margin-bottom:24px">
+            <h2 style="margin:0;font-size:22px">Shine, The Mentalist</h2>
+            <a href="https://texasmentalist.com" style="color:#B8960C;font-size:13px;text-decoration:none">texasmentalist.com</a>
+          </div>
+          <p>Hi ${toName || 'there'},</p>
+          ${message.split('\n').map(l => l ? `<p style="margin:6px 0">${l}</p>` : '<br>').join('')}
+          ${payBtnHtml}
+          <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
+            Shine, The Mentalist &nbsp;|&nbsp; texasmentalist.com &nbsp;|&nbsp; shine@texasmentalist.com
+          </div></div>`,
+      });
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('invoice send-note error:', err);
+      return res.status(500).json({ error: err.message });
+    }
+
   } else {
-    return res.status(400).json({ error: 'Invalid action. Use "generate" or "send".' });
+    return res.status(400).json({ error: 'Invalid action. Use "generate", "send", or "send-note".' });
   }
 };
 

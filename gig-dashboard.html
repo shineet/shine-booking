@@ -543,6 +543,36 @@ td { padding: 9px 14px; vertical-align: middle; }
     <div id="gig-detail-content"></div>
     <div class="modal-actions">
       <button class="secondary" onclick="closeModal('gig-detail-modal')">Close</button>
+      <button onclick="openThankYouModal()">🙏 Send Thank You</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Send Thank You Modal ── -->
+<div class="modal-overlay" id="thank-you-modal">
+  <div class="modal wide" style="max-width:600px;width:100%">
+    <h2>Send Thank You</h2>
+    <div id="ty-recipient" style="font-size:13px;color:var(--muted);margin-bottom:14px"></div>
+
+    <div class="form-group" id="ty-channel-label" style="display:none">
+      <label>Send by</label>
+      <select id="ty-channel" onchange="regenerateThankYouDraft()"></select>
+    </div>
+
+    <div class="form-group">
+      <label>Message</label>
+      <textarea id="ty-draft" rows="7" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:13px;font-family:inherit;width:100%;box-sizing:border-box"></textarea>
+    </div>
+
+    <div class="form-group" id="ty-balance-row" style="display:none;flex-direction:row;align-items:center;gap:6px">
+      <input type="checkbox" id="ty-include-balance" style="width:auto;margin:0" onchange="regenerateThankYouDraft()">
+      <label for="ty-include-balance" id="ty-balance-label" style="margin:0;font-size:13px;cursor:pointer">Attach invoice for remaining balance</label>
+    </div>
+
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('thank-you-modal')">Cancel</button>
+      <button class="secondary" onclick="regenerateThankYouDraft()">✨ Regenerate</button>
+      <button id="ty-send-btn" onclick="sendThankYou()">Send</button>
     </div>
   </div>
 </div>
@@ -827,6 +857,7 @@ td { padding: 9px 14px; vertical-align: middle; }
 // ── Config ──────────────────────────────────────────────────────────────────
 const SB_URL = 'https://nkhwttlmtidtippylbzs.supabase.co';
 const SB_KEY = ''; // moved server-side: all Supabase calls now route through /api/get-booking (RLS-protected)
+const GOOGLE_REVIEW_LINK = ''; // TODO: Shine's Google Business "write a review" link -- Send Thank You drafts need this set
 const TODAY  = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' }); // Austin local date (YYYY-MM-DD); avoids UTC rolling to tomorrow in the evening
 
 const SB_HEADERS = {
@@ -919,6 +950,8 @@ let sortKey     = 'date';
 let sortDir     = 1;
 let editingId   = null; // UUID string or null
 let activeClient = null; // client record open in detail modal
+let activeGigId  = null; // gigs.id open in the completed-gig detail modal
+let thankYouCtx  = {};   // context for the Send Thank You modal
 
 // ── Supabase helpers ─────────────────────────────────────────────────────────
 async function sbGet(path) {
@@ -1840,6 +1873,7 @@ async function deleteGig(id) {
 async function openGigDetail(gigId) {
   const g = allGigs.find(x => x.id === gigId);
   if (!g) return;
+  activeGigId = gigId;
 
   const fee   = Number(g.fee)||0;
   const tip   = Number(g.tip)||0;
@@ -1920,6 +1954,166 @@ async function openGigDetail(gigId) {
 
   document.getElementById('gig-detail-content').innerHTML = html;
   openModal('gig-detail-modal');
+}
+
+// ── Send Thank You (post-gig thank you + Google review ask + optional balance invoice) ──
+async function openThankYouModal() {
+  const g = allGigs.find(x => x.id === activeGigId);
+  if (!g || !g.client_id) { alert('This gig has no linked client record, so there\'s no contact info to send to.'); return; }
+  if (!GOOGLE_REVIEW_LINK) { alert('No Google review link is configured yet -- add one to GOOGLE_REVIEW_LINK in gig-dashboard.html before sending thank-you notes.'); return; }
+
+  let c;
+  try {
+    const rows = await sbGet(`clients?id=eq.${g.client_id}&select=*,bookings(*)`);
+    c = rows[0];
+  } catch(e) { alert('Could not load client details: ' + e.message); return; }
+  if (!c) { alert('Client record not found.'); return; }
+  if (!c.email && !c.phone) { alert('No email or phone on file for this client.'); return; }
+
+  const booking   = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings;
+  const fee       = Number(booking?.fee) || Number(g.fee) || 0;
+  const paid      = Number(booking?.payment_amount) || 0;
+  const remaining = booking?.paid_in_full ? 0 : Math.max(0, fee - paid);
+
+  thankYouCtx = {
+    clientId:   c.id,
+    clientName: c.name || '',
+    email:      c.email || '',
+    phone:      c.phone || '',
+    bookingId:  booking?.id || '',
+    eventName:  booking?.event_title || g.type || c.event_type || '',
+    eventDate:  fmtDate(g.date || c.event_date),
+    remaining:  remaining,
+  };
+
+  document.getElementById('ty-recipient').textContent =
+    (c.name || 'Client') + (c.email ? ` · ${c.email}` : '') + (c.phone ? ` · ${c.phone}` : '');
+
+  const channelSel   = document.getElementById('ty-channel');
+  const channelLabel = document.getElementById('ty-channel-label');
+  channelSel.innerHTML =
+    (c.email ? '<option value="email">Email</option>' : '') +
+    (c.phone ? '<option value="sms">SMS</option>' : '');
+  const showChannelPicker = !!(c.email && c.phone);
+  channelSel.style.display   = showChannelPicker ? '' : 'none';
+  channelLabel.style.display = showChannelPicker ? '' : 'none';
+
+  const balRow = document.getElementById('ty-balance-row');
+  const balCb  = document.getElementById('ty-include-balance');
+  if (remaining > 0) {
+    balRow.style.display = 'flex';
+    document.getElementById('ty-balance-label').textContent =
+      `Attach invoice for remaining balance ($${remaining.toLocaleString()})`;
+    balCb.checked = true;
+  } else {
+    balRow.style.display = 'none';
+    balCb.checked = false;
+  }
+
+  openModal('thank-you-modal');
+  await regenerateThankYouDraft();
+}
+
+async function regenerateThankYouDraft() {
+  const draftEl = document.getElementById('ty-draft');
+  const channel = document.getElementById('ty-channel').value || (thankYouCtx.email ? 'email' : 'sms');
+  draftEl.value = 'Drafting…';
+  draftEl.disabled = true;
+  try {
+    const r = await fetch('/api/pending-replies', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action:         'thank-you-draft',
+        clientName:     thankYouCtx.clientName,
+        eventType:      thankYouCtx.eventName,
+        eventDate:      thankYouCtx.eventDate,
+        channel:        channel,
+        reviewLink:     GOOGLE_REVIEW_LINK,
+        includeBalance: document.getElementById('ty-include-balance').checked,
+        balanceAmount:  thankYouCtx.remaining,
+      })
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    draftEl.value = d.draft;
+  } catch(e) {
+    draftEl.value = '';
+    alert('Could not draft the message: ' + e.message);
+  } finally {
+    draftEl.disabled = false;
+  }
+}
+
+async function sendThankYou() {
+  const channel        = document.getElementById('ty-channel').value || (thankYouCtx.email ? 'email' : 'sms');
+  const message         = document.getElementById('ty-draft').value.trim();
+  const includeBalance  = document.getElementById('ty-include-balance').checked && thankYouCtx.remaining > 0;
+  if (!message) { alert('Message cannot be empty.'); return; }
+
+  const btn = document.getElementById('ty-send-btn');
+  btn.disabled = true;
+  try {
+    if (channel === 'email' && includeBalance) {
+      // Reuse the existing, already-tested invoice PDF + email flow: a single
+      // "Remaining Balance" line item at the gross-fee-minus-paid amount, with
+      // depositPercent 100 (this whole amount is now due, no further split).
+      const invoiceData = {
+        bookingId:     thankYouCtx.bookingId,
+        clientName:    thankYouCtx.clientName,
+        eventName:     thankYouCtx.eventName,
+        eventDate:     thankYouCtx.eventDate,
+        invoiceNumber: 'STM-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random()*900)+100),
+        invoiceDate:   new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}),
+        dueDate:       'Upon receipt',
+        lineItems:     [{ description: 'Remaining Balance', details: thankYouCtx.eventName, amount: thankYouCtx.remaining }],
+        total:         thankYouCtx.remaining,
+        depositPercent: 100,
+      };
+      const r = await fetch('/api/invoice', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send', invoiceData, toEmail: thankYouCtx.email, toName: thankYouCtx.clientName, customMessage: message })
+      });
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+    } else if (channel === 'sms') {
+      // SMS can never carry a PDF -- if the balance is included, mention it via the
+      // stable invoice-view.html link instead (recomputes the live remaining amount).
+      const invoiceData = includeBalance ? {
+        bookingId: thankYouCtx.bookingId, clientName: thankYouCtx.clientName, eventName: thankYouCtx.eventName,
+        lineItems: [{ description: 'Remaining Balance', amount: thankYouCtx.remaining }], total: thankYouCtx.remaining, depositPercent: 100,
+      } : null;
+      const r = await fetch('/api/invoice', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send-note', channel: 'sms', toPhone: thankYouCtx.phone, message, invoiceData, includeLink: !!invoiceData })
+      });
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+    } else {
+      // Email, nothing to invoice (already paid in full, or Shine chose not to attach one)
+      const r = await fetch('/api/invoice', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send-note', channel: 'email', toEmail: thankYouCtx.email, toName: thankYouCtx.clientName, message, includeLink: false })
+      });
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+    }
+
+    // Log to the conversation thread, same as every other outbound touchpoint in the app
+    try {
+      await sbPost('messages', {
+        client_id: thankYouCtx.clientId, channel, direction: 'outbound', content: message, status: 'sent',
+        to_address: channel === 'email' ? thankYouCtx.email : thankYouCtx.phone,
+        email_subject: channel === 'email' ? 'Thank you!' : null,
+      });
+    } catch(e) { console.error('Message log failed:', e.message); }
+
+    closeModal('thank-you-modal');
+    alert('Thank-you message sent!');
+  } catch(e) {
+    alert('Send failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ── Export ────────────────────────────────────────────────────────────────────
