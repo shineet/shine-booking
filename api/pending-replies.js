@@ -1511,6 +1511,7 @@ ${balanceLine}
 
 RULES:
 - Warm, genuine, first person, brief. This is a thank-you, not a pitch.
+- Do NOT start with a greeting line like "Hi ${clientName || 'there'}," or "Hello" -- begin directly with the thank-you itself. A greeting is added automatically outside your text (for email, the send template always prepends "Hi {name},"; writing your own would duplicate it).
 - No stock openers ("I hope this finds you well"), no corporate filler.
 - Sign off as: Shine, The Mentalist | +1 (737) 271-5308
 - Return ONLY the message body, no subject line, no commentary.
