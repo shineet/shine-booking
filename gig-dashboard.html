@@ -2037,11 +2037,18 @@ function buildThankYouInvoiceData() {
 // itself, not silently appended at send time, or what Shine sends won't match
 // what he reviewed (this is exactly what he flagged: the draft said "included
 // below" but nothing was actually there to see).
+//
+// Deliberately NO &d= payload here (unlike the email PDF path) -- invoice-view.html
+// already falls back to fetching the live booking straight from &bid= alone and
+// correctly computes the remaining balance from its own deposit_paid/payment_amount
+// fields (see invoice-view.html's `load()`). The full JSON invoiceData is only
+// needed to customize line-item text, and encodeURIComponent-ing it can easily
+// push the link past 400+ characters, multiplying the SMS segment count (and cost)
+// for no real benefit here -- bid-only is a fraction of the length and still 100%
+// accurate, since it reads live data rather than a snapshot baked in at draft time.
 function buildStableInvoiceLinkForThankYou() {
   if (!thankYouCtx.bookingId) return null;
-  const invoiceData = buildThankYouInvoiceData();
-  return 'https://shine-booking.vercel.app/invoice-view.html?bid=' + encodeURIComponent(thankYouCtx.bookingId) +
-    '&d=' + encodeURIComponent(JSON.stringify(invoiceData));
+  return 'https://shine-booking.vercel.app/invoice-view.html?bid=' + encodeURIComponent(thankYouCtx.bookingId);
 }
 
 async function regenerateThankYouDraft() {
