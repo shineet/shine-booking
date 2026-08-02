@@ -2014,9 +2014,40 @@ async function openThankYouModal() {
   await regenerateThankYouDraft();
 }
 
+// Builds the same "Remaining Balance" invoice payload used both to attach a real
+// PDF (email) and to construct the stable invoice-view.html link (SMS, or email
+// with no attachment) -- one shared shape so the two paths can't drift apart.
+function buildThankYouInvoiceData() {
+  return {
+    bookingId:      thankYouCtx.bookingId,
+    clientName:     thankYouCtx.clientName,
+    eventName:      thankYouCtx.eventName,
+    eventDate:      thankYouCtx.eventDate,
+    invoiceNumber:  'STM-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random()*900)+100),
+    invoiceDate:    new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}),
+    dueDate:        'Upon receipt',
+    lineItems:      [{ description: 'Remaining Balance', details: thankYouCtx.eventName, amount: thankYouCtx.remaining }],
+    total:          thankYouCtx.remaining,
+    depositPercent: 100,
+  };
+}
+
+// SMS can never carry a PDF attachment, so the only way to hand over the balance
+// invoice by text is a link -- and it needs to be visible in the editable draft
+// itself, not silently appended at send time, or what Shine sends won't match
+// what he reviewed (this is exactly what he flagged: the draft said "included
+// below" but nothing was actually there to see).
+function buildStableInvoiceLinkForThankYou() {
+  if (!thankYouCtx.bookingId) return null;
+  const invoiceData = buildThankYouInvoiceData();
+  return 'https://shine-booking.vercel.app/invoice-view.html?bid=' + encodeURIComponent(thankYouCtx.bookingId) +
+    '&d=' + encodeURIComponent(JSON.stringify(invoiceData));
+}
+
 async function regenerateThankYouDraft() {
   const draftEl = document.getElementById('ty-draft');
   const channel = document.getElementById('ty-channel').value || (thankYouCtx.email ? 'email' : 'sms');
+  const includeBalance = document.getElementById('ty-include-balance').checked;
   draftEl.value = 'Drafting…';
   draftEl.disabled = true;
   try {
@@ -2029,13 +2060,21 @@ async function regenerateThankYouDraft() {
         eventDate:      thankYouCtx.eventDate,
         channel:        channel,
         reviewLink:     GOOGLE_REVIEW_LINK,
-        includeBalance: document.getElementById('ty-include-balance').checked,
+        includeBalance: includeBalance,
         balanceAmount:  thankYouCtx.remaining,
       })
     });
     const d = await r.json();
     if (d.error) throw new Error(d.error);
-    draftEl.value = d.draft;
+    let draft = d.draft;
+    // Email's "invoice attached" promise is fulfilled by a real PDF attachment at
+    // send time -- nothing to inline. SMS has no attachment, so bake the actual
+    // pay link into the visible text right now.
+    if (channel === 'sms' && includeBalance) {
+      const link = buildStableInvoiceLinkForThankYou();
+      if (link) draft = draft.trimEnd() + '\n\n' + link;
+    }
+    draftEl.value = draft;
   } catch(e) {
     draftEl.value = '';
     alert('Could not draft the message: ' + e.message);
@@ -2057,34 +2096,19 @@ async function sendThankYou() {
       // Reuse the existing, already-tested invoice PDF + email flow: a single
       // "Remaining Balance" line item at the gross-fee-minus-paid amount, with
       // depositPercent 100 (this whole amount is now due, no further split).
-      const invoiceData = {
-        bookingId:     thankYouCtx.bookingId,
-        clientName:    thankYouCtx.clientName,
-        eventName:     thankYouCtx.eventName,
-        eventDate:     thankYouCtx.eventDate,
-        invoiceNumber: 'STM-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random()*900)+100),
-        invoiceDate:   new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}),
-        dueDate:       'Upon receipt',
-        lineItems:     [{ description: 'Remaining Balance', details: thankYouCtx.eventName, amount: thankYouCtx.remaining }],
-        total:         thankYouCtx.remaining,
-        depositPercent: 100,
-      };
       const r = await fetch('/api/invoice', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send', invoiceData, toEmail: thankYouCtx.email, toName: thankYouCtx.clientName, customMessage: message })
+        body: JSON.stringify({ action: 'send', invoiceData: buildThankYouInvoiceData(), toEmail: thankYouCtx.email, toName: thankYouCtx.clientName, customMessage: message })
       });
       const d = await r.json();
       if (d.error) throw new Error(d.error);
     } else if (channel === 'sms') {
-      // SMS can never carry a PDF -- if the balance is included, mention it via the
-      // stable invoice-view.html link instead (recomputes the live remaining amount).
-      const invoiceData = includeBalance ? {
-        bookingId: thankYouCtx.bookingId, clientName: thankYouCtx.clientName, eventName: thankYouCtx.eventName,
-        lineItems: [{ description: 'Remaining Balance', amount: thankYouCtx.remaining }], total: thankYouCtx.remaining, depositPercent: 100,
-      } : null;
+      // The pay link (if any) is already baked into `message` by regenerateThankYouDraft
+      // -- what's shown in the textarea is exactly what gets sent, no hidden server-side
+      // appending, so editing the draft can't silently desync it from the real send.
       const r = await fetch('/api/invoice', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send-note', channel: 'sms', toPhone: thankYouCtx.phone, message, invoiceData, includeLink: !!invoiceData })
+        body: JSON.stringify({ action: 'send-note', channel: 'sms', toPhone: thankYouCtx.phone, message, includeLink: false })
       });
       const d = await r.json();
       if (d.error) throw new Error(d.error);
