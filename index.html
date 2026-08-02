@@ -4215,6 +4215,8 @@ function saveEditedClient() {
     var newEventType = document.getElementById('edit-event_type').value||null;
     var newEventDate = document.getElementById('edit-event_date').value||null;
     var newVenue = document.getElementById('edit-venue').value.trim()||null;
+    var newStatus = document.getElementById('edit-status').value||'new';
+    var c = allClients.find(function(x) { return x.id === currentClientId; });
     fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + currentClientId, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=minimal' },
@@ -4227,7 +4229,7 @@ function saveEditedClient() {
             guests: document.getElementById('edit-guests').value.trim()||null,
             venue: newVenue,
             lead_source: composeSource('edit-lead_source', 'edit_other_source_name'),
-            status: document.getElementById('edit-status').value||'new',
+            status: newStatus,
             notes: document.getElementById('edit-notes').value.trim()||null,
             last_activity: new Date().toISOString()
         })
@@ -4238,7 +4240,6 @@ function saveEditedClient() {
         // linked bookings row, not the client -- keep it in sync so a reschedule here
         // (e.g. client texts a new date and Shine updates it) doesn't leave the gig
         // card showing the old date. venue_address is the bookings-table name for venue.
-        var c = allClients.find(function(x) { return x.id === currentClientId; });
         if (c && c.booking_id) {
             return fetch(SUPABASE_URL + '/rest/v1/bookings?id=eq.' + c.booking_id, {
                 method: 'PATCH',
@@ -4250,6 +4251,29 @@ function saveEditedClient() {
     .then(function() {
         closeEditModal();
         loadLeads();
+        // Nudge, not an auto-trigger: setting status to "completed" here has zero
+        // effect on the Gig Dashboard's own notion of done (bookings.status / the
+        // gigs history table) -- that's exactly the gap that let Jacquie's finished
+        // gig sit un-logged there. Surface it at the moment it happens instead of
+        // letting it go silent again, but never block the status change itself.
+        if (newStatus === 'completed' && c && c.booking_id) {
+            fetch(SUPABASE_URL + '/rest/v1/bookings?id=eq.' + c.booking_id + '&select=status,event_type,event_date', {
+                headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(rows) {
+                var b = rows[0];
+                if (!b) return;
+                var DONE_STATUSES = ['completed','lost','cancelled'];
+                if (DONE_STATUSES.indexOf(String(b.status||'').toLowerCase()) === -1) {
+                    var label = (b.event_type || 'this gig') + (b.event_date ? ' on ' + fmtDateLong(b.event_date) : '');
+                    if (confirm('This client still has an open gig on the Gig Dashboard (' + label + ') that isn\'t marked Done yet.\n\nOpen it there now?')) {
+                        window.open('gig-dashboard.html?openGig=' + encodeURIComponent(c.booking_id), '_blank');
+                    }
+                }
+            })
+            .catch(function(e) { console.error('Completion nudge check failed:', e.message); });
+        }
     })
     .catch(function(e) { alert('Error: ' + e.message); })
     .finally(function() { btn.disabled = false; btn.textContent = 'Save'; });

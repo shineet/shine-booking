@@ -938,7 +938,18 @@ function doLogin(pw) {
     })
     .catch(function (e) { msgEl.style.color = '#ff6b6b'; msgEl.textContent = 'Error: ' + e.message; });
 }
-function bootDashboard() { loadAll(); }
+async function bootDashboard() {
+  await loadAll();
+  // Deep-link from the booking app's "this client has an open gig" nudge
+  // (saveEditedClient in index.html) -- lands straight on Mark as Done for
+  // that specific gig instead of making Shine hunt for it in Upcoming.
+  const openGig = new URLSearchParams(location.search).get('openGig');
+  if (openGig) {
+    openDetail(openGig);
+    if (activeClient) openMarkDone();
+    history.replaceState(null, '', location.pathname);
+  }
+}
 
 // ── State ────────────────────────────────────────────────────────────────────
 let allGigs     = [];   // from gigs table
@@ -1526,13 +1537,27 @@ async function confirmDone() {
         client_id: c.id,
       });
     }
-    // Mark the GIG (booking) completed. The CONTACT is left untouched, so a planner
-    // stays active for future gigs and inbound replies can never reopen this one.
+    // Mark the GIG (booking) completed. The CONTACT is left untouched here, so a
+    // planner with other open bookings stays active and inbound replies can never
+    // reopen this one -- see the loadAll() call below for the one exception.
     if (c.booking_id) await sbPatch('bookings', c.booking_id, { status: 'completed' });
 
     closeModal('done-modal');
     activeClient = null;
     await loadAll();
+
+    // Sync the CONTACT's status forward too, but only when this was their LAST
+    // open booking -- otherwise a multi-booking planner (e.g. Paget) would get
+    // marked "completed" while still having other active gigs, which is exactly
+    // the class of bug the contact/gig split above was built to prevent. This is
+    // safe to auto-run unconditionally in the other direction (Mark as Done is
+    // always a deliberate click, never an incidental side effect like the inbound-
+    // email status flip that caused that original bug), and it's what keeps the
+    // Leads app's own "Completed" section from silently missing gigs finished here.
+    const hasOtherOpenBookings = upcoming.some(u => u.id === c.id);
+    if (!hasOtherOpenBookings) {
+      try { await sbPatch('clients', c.id, { status: 'completed' }); } catch(e) { console.error('Client status sync failed:', e.message); }
+    }
   } catch (err) {
     console.error(err);
     setSyncState('error', 'Save failed — check console');
