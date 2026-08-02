@@ -1554,10 +1554,18 @@ async function confirmDone() {
     // always a deliberate click, never an incidental side effect like the inbound-
     // email status flip that caused that original bug), and it's what keeps the
     // Leads app's own "Completed" section from silently missing gigs finished here.
-    const hasOtherOpenBookings = upcoming.some(u => u.id === c.id);
-    if (!hasOtherOpenBookings) {
-      try { await sbPatch('clients', c.id, { status: 'completed' }); } catch(e) { console.error('Client status sync failed:', e.message); }
-    }
+    //
+    // Checked directly against `bookings`, NOT the `upcoming` list -- `upcoming`
+    // only includes bookings with an event_date set, so a planner's second gig
+    // created without a date yet (allowed by New Gig, "add a date for it to show
+    // in Upcoming") would be invisible to that check and this would incorrectly
+    // fire anyway.
+    try {
+      const otherOpen = await sbGet(`bookings?client_id=eq.${c.id}&id=neq.${c.booking_id}&status=not.in.(completed,lost,cancelled)&select=id`);
+      if (!Array.isArray(otherOpen) || otherOpen.length === 0) {
+        await sbPatch('clients', c.id, { status: 'completed' });
+      }
+    } catch(e) { console.error('Client status sync failed:', e.message); }
   } catch (err) {
     console.error(err);
     setSyncState('error', 'Save failed — check console');

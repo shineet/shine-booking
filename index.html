@@ -1585,6 +1585,24 @@
     </div>
 </div>
 
+<!-- ── New Event Modal (planners: create another booking linked to this existing contact) ── -->
+<div class="modal-overlay" id="new-event-modal">
+    <div class="modal">
+        <h2>New Event</h2>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:14px" id="new-event-for"></p>
+        <div class="field"><label>Event / gig title *</label><input type="text" id="ne-title" placeholder="e.g. Fall Gala 2026"></div>
+        <div class="field"><label>Event type</label><input type="text" id="ne-type" placeholder="Corporate event"></div>
+        <div class="field"><label>Date</label><input type="date" id="ne-date"></div>
+        <div class="field"><label>Fee</label><input type="number" id="ne-fee" placeholder="0"></div>
+        <div class="field"><label>Venue</label><input type="text" id="ne-venue" placeholder="Venue / city"></div>
+        <p id="ne-msg" style="font-size:13px;margin:8px 0 0"></p>
+        <div class="modal-actions">
+            <button class="modal-cancel" onclick="closeNewEventModal()">Cancel</button>
+            <button class="modal-send" id="ne-save" onclick="saveNewEvent()">Create Event</button>
+        </div>
+    </div>
+</div>
+
 <script>
 var SUPABASE_URL = 'https://nkhwttlmtidtippylbzs.supabase.co';
 var SUPABASE_KEY = ''; // moved server-side: all Supabase calls now route through /api/get-booking (RLS-protected)
@@ -3372,6 +3390,9 @@ function renderDetail(c) {
     }
         actions += '<button class="d-btn blue" data-rid="' + esc(c.id) + '" data-rname="' + esc(c.name) + '" data-remail="' + esc(c.email||'') + '" data-rphone="' + esc(c.phone||'') + '" onclick="openComposeModal(this.dataset.rid,this.dataset.rname,this.dataset.remail,this.dataset.rphone)">✉️ Send message</button>';
     var isPlanner = c.contact_type === 'planner';
+    if (isPlanner) {
+        actions += '<button class="d-btn green" onclick="openNewEventModal(\'' + esc(c.id) + '\')">+ New Event</button>';
+    }
     actions += '<button class="d-btn ghost" onclick="toggleContactType(\'' + esc(c.id) + '\',\'' + (isPlanner ? 'client' : 'planner') + '\')">Mark as ' + (isPlanner ? 'direct client' : 'planner') + '</button>';
     actions += '<button class="d-btn ghost" onclick="openLinkModal(\'' + esc(c.id) + '\')">🔗 Link contact</button>';
     actions += '<button class="d-btn ghost" onclick="openEditModal(\'' + esc(c.id) + '\')">Edit</button>';
@@ -3740,6 +3761,90 @@ function toggleContactType(id, newType) {
         loadLeads();
     })
     .catch(function(e) { alert('Could not reclassify: ' + e.message); });
+}
+
+/* ── New Event (planners): create another booking linked to this EXISTING
+   contact instead of spinning up a whole new lead. Mirrors gig-dashboard.html's
+   own New Gig flow (same bookings-table shape) so the two stay consistent. Also
+   updates the client row's own event_date/type/venue/booking_id/status so this
+   new event becomes what shows on the planner's own detail view here, and so a
+   just-completed planner comes back out of "completed" the moment real new work
+   with them exists -- covers the case flagged after Jacquie's gig, where
+   marking one gig done had no way to reflect a planner having more work coming. ── */
+var newEventClientId = null;
+function openNewEventModal(clientId) {
+    var c = allClients.find(function(x) { return x.id === clientId; });
+    if (!c) return;
+    newEventClientId = clientId;
+    document.getElementById('new-event-for').textContent = 'For: ' + (c.name || 'this planner');
+    document.getElementById('ne-title').value = '';
+    document.getElementById('ne-type').value  = c.event_type || '';
+    document.getElementById('ne-date').value  = '';
+    document.getElementById('ne-fee').value   = '';
+    document.getElementById('ne-venue').value = '';
+    document.getElementById('ne-msg').textContent = '';
+    document.getElementById('new-event-modal').classList.add('show');
+}
+function closeNewEventModal() { document.getElementById('new-event-modal').classList.remove('show'); newEventClientId = null; }
+
+function saveNewEvent() {
+    if (!newEventClientId) return;
+    var c = allClients.find(function(x) { return x.id === newEventClientId; });
+    if (!c) return;
+    var msg = document.getElementById('ne-msg');
+    var title = document.getElementById('ne-title').value.trim();
+    if (!title) { msg.style.color = 'var(--amber)'; msg.textContent = 'Event title is required.'; return; }
+    var eventType = document.getElementById('ne-type').value.trim() || null;
+    var eventDate = document.getElementById('ne-date').value || null;
+    var venue     = document.getElementById('ne-venue').value.trim() || null;
+    var fee       = Number(document.getElementById('ne-fee').value) || null;
+
+    var btn = document.getElementById('ne-save');
+    btn.disabled = true; btn.textContent = 'Creating...'; msg.style.color = 'var(--muted)'; msg.textContent = '';
+
+    fetch(SUPABASE_URL + '/rest/v1/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+            client_id:       c.id,
+            client_name:     c.name || null,
+            client_email:    c.email || null,
+            event_title:     title,
+            event_type:      eventType,
+            event_date:      eventDate,
+            fee:             fee,
+            venue_address:   venue,
+            contract_status: 'not_sent',
+            intake_status:   'not_sent',
+            status:          'booked',
+        })
+    })
+    .then(function(r) { if (!r.ok) return r.text().then(function(t) { throw new Error(t); }); return r.json(); })
+    .then(function(rows) {
+        var newBooking = Array.isArray(rows) ? rows[0] : null;
+        // This new event becomes "the" active one for this contact on this app's own
+        // (single-booking) client view -- and pulls them back out of "completed" if
+        // that's where they were sitting, since real new work with them now exists.
+        return fetch(SUPABASE_URL + '/rest/v1/clients?id=eq.' + c.id, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Prefer': 'return=minimal' },
+            body: JSON.stringify({
+                event_type:  eventType,
+                event_date:  eventDate,
+                venue:       venue,
+                booking_id:  newBooking ? newBooking.id : c.booking_id,
+                status:      'booked',
+                last_activity: new Date().toISOString()
+            })
+        });
+    })
+    .then(function() {
+        closeNewEventModal();
+        closeDetail();
+        loadLeads();
+    })
+    .catch(function(e) { msg.style.color = 'var(--amber)'; msg.textContent = 'Could not create: ' + e.message; })
+    .finally(function() { btn.disabled = false; btn.textContent = 'Create Event'; });
 }
 
 function markAsBooked(id) {
