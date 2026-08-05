@@ -2748,6 +2748,19 @@ async function downloadInvoice() {
 async function sendInvoiceEmail() {
   const toEmail = document.getElementById('inv-to-email').value.trim();
   if (!toEmail) { alert('Please enter a client email address.'); return; }
+  // Without a linked booking, invoice-view.html has nothing to look up --
+  // api/invoice.js silently falls back to a raw Stripe link that expires in
+  // ~24h, with no warning until AFTER send (the small stable-link-status
+  // text below, easy to miss). Warn here, before anything goes out, so this
+  // can't happen silently.
+  if (!invoicePayCtx.bookingId) {
+    const proceed = confirm(
+      'This invoice isn\'t linked to a booking, so the payment link will EXPIRE in about 24 hours instead of staying live.\n\n' +
+      'If this client has an Upcoming gig card, cancel and open Invoice from there instead to get a permanent link.\n\n' +
+      'Send with the expiring link anyway?'
+    );
+    if (!proceed) return;
+  }
   const btn = event.currentTarget || event.target;
   const orig = btn.textContent;
   btn.textContent = 'Sending...'; btn.disabled = true;
