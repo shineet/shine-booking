@@ -208,6 +208,15 @@ function render() {
     if (mode === 'balance') {
       paySection.insertAdjacentHTML('afterbegin', '<div class="paid-banner" style="margin-bottom:14px">&#10003; Deposit received — $' + amountDueNow.toLocaleString() + ' balance remaining</div>');
     }
+    // Corporate clients (schools/districts, etc.) pay by card or check, not
+    // personal P2P apps -- hide Venmo/PayPal and simplify the manual-methods
+    // line to just Check, matching the same paymentMode distinction the
+    // invoice email already makes (see api/invoice.js's altNote text).
+    if (invoiceData.paymentMode === 'corporate') {
+      document.querySelector('.alt-divider').style.display = 'none';
+      document.querySelector('.alt-methods').style.display = 'none';
+      document.querySelector('.manual-methods').textContent = 'Also accepted: Check (mail-to on PDF)';
+    }
     document.getElementById('tip-row').style.display = (mode === 'deposit') ? 'none' : 'flex';
     document.getElementById('tip-input').oninput = () => updatePaymentUI(mode, amountDueNow);
     updatePaymentUI(mode, amountDueNow);
