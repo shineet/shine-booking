@@ -1542,6 +1542,14 @@ async function confirmDone() {
     // reopen this one -- see the loadAll() call below for the one exception.
     if (c.booking_id) await sbPatch('bookings', c.booking_id, { status: 'completed' });
 
+    // Best-effort: if this booking has a linked gig in the Repertoire app (created by
+    // clicking the Repertoire button on its card -- see openRepertoire() below, which
+    // tags the gig with srcId = this client's id), flag it completed there too so it
+    // moves to Repertoire's "Past Gigs" section immediately instead of waiting for its
+    // date to pass. Never blocks or fails Mark as Done itself if Repertoire's DB is
+    // unreachable -- this is a nice-to-have sync, not a required step.
+    markRepertoireGigCompleted(c.id).catch(function(e) { console.error('Repertoire sync failed:', e.message); });
+
     closeModal('done-modal');
     activeClient = null;
     await loadAll();
@@ -2475,6 +2483,25 @@ if (DASH_TOKEN) { bootDashboard(); } else { showLogin(); }
 
 // ── Repertoire button on upcoming cards ───────────────────────────────────────
 const REPERTOIRE_BASE = 'https://my-repertoire-lovat.vercel.app';
+
+// Repertoire's own Firebase Realtime Database, same one it reads/writes itself
+// (see DB in my-repertoire/index.html) -- writes are open with no auth token,
+// same as the app's own saves, so this PATCH works the same way from here.
+const REPERTOIRE_DB = 'https://my-repertoire-76b4b-default-rtdb.firebaseio.com';
+
+async function markRepertoireGigCompleted(clientId) {
+  const gigsRes = await fetch(REPERTOIRE_DB + '/gigs.json');
+  const gigs = await gigsRes.json();
+  if (!gigs || typeof gigs !== 'object') return;
+  const matches = Object.keys(gigs).filter(function(id) { return gigs[id] && gigs[id].srcId === clientId; });
+  for (const id of matches) {
+    await fetch(REPERTOIRE_DB + '/gigs/' + id + '.json', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completed: true }),
+    });
+  }
+}
 
 function openRepertoire(clientId, eventType, eventDate, clientName, eventTitle) {
   // Build URL with gig params — Repertoire app uses these to find or create the gig
