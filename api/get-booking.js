@@ -93,8 +93,13 @@ async function sendReminders(req, res) {
         }
 
         const firstName = (booking.client_name || 'there').split(' ')[0];
-        const smsText = `Hi ${firstName}, this is Shine -- all set for tomorrow's show! I'll arrive about 15 minutes early to get set up before we start. Looking forward to it!`;
-        const emailText = `Hi ${firstName},\n\nJust a quick note ahead of tomorrow's event -- everything is set on my end and I'm looking forward to it!\n\nI'll plan to arrive about 15 minutes before the show start time to get set up, so we're ready to go right on schedule.\n\nIf anything changes or you need to reach me before then, just reply to this email or call/text me at (737) 271-5308.\n\nSee you tomorrow!\n\n– Shine, The Mentalist`;
+        // The morning run's targetDate is TODAY (non-early shows), the evening run's is
+        // TOMORROW (early shows caught the night before) -- the wording has to match which
+        // one actually fired, or a same-day reminder ends up telling the client the show is
+        // tomorrow when it's actually today (real incident: 2026-08-06, Rachel's show).
+        const dayWord = run === 'morning' ? 'today' : 'tomorrow';
+        const smsText = `Hi ${firstName}, this is Shine -- all set for ${dayWord}'s show! I'll arrive about 15 minutes early to get set up before we start. Looking forward to it!`;
+        const emailText = `Hi ${firstName},\n\nJust a quick note ahead of ${dayWord}'s event -- everything is set on my end and I'm looking forward to it!\n\nI'll plan to arrive about 15 minutes before the show start time to get set up, so we're ready to go right on schedule.\n\nIf anything changes or you need to reach me before then, just reply to this email or call/text me at (737) 271-5308.\n\nSee you ${dayWord}!\n\n– Shine, The Mentalist`;
 
         let clientPhone = null;
         if (booking.client_id) {
@@ -113,7 +118,7 @@ async function sendReminders(req, res) {
               from: 'Shine, The Mentalist <shine@texasmentalist.com>',
               to: booking.client_email,
               bcc: ['shinethementalist@gmail.com'],
-              subject: 'All set for tomorrow!',
+              subject: `All set for ${dayWord}!`,
               text: emailText,
             }),
           });
