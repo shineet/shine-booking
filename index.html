@@ -47,15 +47,18 @@
         padding: 0 20px;
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: 14px;
         height: 52px;
         flex-shrink: 0;
         z-index: 10
     }
 
+    .topbar-main { display: flex; align-items: center; gap: 14px; min-width: 0 }
+    .topbar-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0 }
+
     .topbar-brand { font-size: 15px; font-weight: 600; white-space: nowrap }
     .topbar-brand span { color: var(--muted); font-weight: 400 }
-    .topbar-spacer { flex: 1 }
 
     /* ── Footer ── */
     .app-footer {
@@ -1039,7 +1042,7 @@
         .list-pane { width: 100%; border-right: none }
         .detail-pane {
             position: fixed;
-            top: 52px; left: 0; right: 0; bottom: 0;
+            top: 96px; left: 0; right: 0; bottom: 0; /* topbar is 2 rows on mobile now, not 52px */
             background: var(--bg);
             z-index: 30;
             transform: translateX(100%);
@@ -1049,7 +1052,28 @@
         .detail-back-btn { display: flex }
         .review-row span { display: none }
         #new-lead-shell { padding: 14px }
-        .topbar { padding: 0 14px }
+
+        /* The top menu used to be one unwrapping row that ran off-screen,
+           forcing a horizontal swipe to reach the later buttons. Split into
+           two stacked rows instead (nav on top, tools below), each of which
+           condenses its own content (icon-only buttons, shorter tab labels)
+           to fit width -- no swiping needed at any phone width. */
+        .topbar {
+            flex-direction: column;
+            align-items: stretch;
+            height: auto;
+            padding: 8px 14px;
+            gap: 8px;
+        }
+        .topbar-main, .topbar-tools {
+            width: 100%;
+            justify-content: space-between;
+            overflow-x: auto;
+        }
+        .topbar-brand span { display: none }
+        .ttab { padding: 5px 8px; font-size: 12px }
+        .topbar-icon-btn { padding: 6px 8px }
+        .topbar-icon-btn .btn-label, .ttab .btn-label { display: none }
     }
     </style>
 </head>
@@ -1057,26 +1081,29 @@
 
 <!-- Topbar -->
 <div class="topbar">
-    <div class="topbar-brand">&#10022; Shine <span>/ Booking</span></div>
-    <div class="topbar-tabs">
-        <button class="ttab active" onclick="showView('pipeline')">Leads</button>
-        <button class="ttab" onclick="showView('planners')">Planners</button>
-        <button class="ttab" onclick="showView('coldoutreach')">&#129505; Cold Outreach</button>
-        <button class="ttab" onclick="messagingExistingClientId=null;showView('new-lead')">+ New Lead</button>
+    <div class="topbar-main">
+        <div class="topbar-brand">&#10022; Shine <span>/ Booking</span></div>
+        <div class="topbar-tabs">
+            <button class="ttab active" onclick="showView('pipeline')">Leads</button>
+            <button class="ttab" onclick="showView('planners')">Planners</button>
+            <button class="ttab" onclick="showView('coldoutreach')">&#129505; <span class="btn-label">Cold Outreach</span></button>
+            <button class="ttab" onclick="messagingExistingClientId=null;showView('new-lead')">+ <span class="btn-label">New Lead</span></button>
+        </div>
     </div>
-    <div class="topbar-spacer"></div>
-    <div class="review-row">
-        <span id="review-toggle-desc">Auto-send</span>
-        <label class="switch">
-            <input type="checkbox" id="review-mode-toggle" onchange="onReviewModeToggle()">
-            <span class="switch-slider"></span>
-        </label>
+    <div class="topbar-tools">
+        <div class="review-row">
+            <span id="review-toggle-desc">Auto-send</span>
+            <label class="switch">
+                <input type="checkbox" id="review-mode-toggle" onchange="onReviewModeToggle()">
+                <span class="switch-slider"></span>
+            </label>
+        </div>
+        <button class="topbar-icon-btn" style="background:rgba(140,120,255,.14);color:#c9b8ff;border-color:rgba(140,120,255,.3);" onclick="suggestActionItems()" title="Scan the pipeline and suggest what to do next">&#129517; <span class="btn-label">Suggest actions</span></button>
+        <button class="topbar-icon-btn" style="background:rgba(120,200,140,.14);color:#8fe0a5;border-color:rgba(120,200,140,.3);" onclick="findLeads()" title="Search the web for live opportunities and draft intro emails, you review and send each one">&#128301; <span class="btn-label">Find leads</span></button>
+        <button class="topbar-icon-btn" style="background:rgba(240,165,0,.14);color:#e0a83c;border-color:rgba(240,165,0,.3);" onclick="openPastClients()" title="Keep in touch with past clients: birthday reminders a month out, casual check-ins for others">&#128231; <span class="btn-label">Past clients</span></button>
+        <button class="topbar-icon-btn" onclick="loadLeads();loadPendingReplies();">&#8635;</button>
+        <button class="topbar-icon-btn" onclick="openNoReplySettings()" title="No-reply threshold">&#9201;</button>
     </div>
-    <button class="topbar-icon-btn" style="background:rgba(140,120,255,.14);color:#c9b8ff;border-color:rgba(140,120,255,.3);" onclick="suggestActionItems()" title="Scan the pipeline and suggest what to do next">&#129517; Suggest actions</button>
-    <button class="topbar-icon-btn" style="background:rgba(120,200,140,.14);color:#8fe0a5;border-color:rgba(120,200,140,.3);" onclick="findLeads()" title="Search the web for live opportunities and draft intro emails, you review and send each one">&#128301; Find leads</button>
-    <button class="topbar-icon-btn" style="background:rgba(240,165,0,.14);color:#e0a83c;border-color:rgba(240,165,0,.3);" onclick="openPastClients()" title="Keep in touch with past clients: birthday reminders a month out, casual check-ins for others">&#128231; Past clients</button>
-    <button class="topbar-icon-btn" onclick="loadLeads();loadPendingReplies();">&#8635;</button>
-    <button class="topbar-icon-btn" onclick="openNoReplySettings()" title="No-reply threshold">&#9201;</button>
 </div>
 
 <!-- Shell -->
