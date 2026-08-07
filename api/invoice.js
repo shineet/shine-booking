@@ -24,9 +24,15 @@ module.exports = async function handler(req, res) {
     }
 
   } else if (action === 'send') {
-    const { invoiceData, toEmail, toName, customMessage } = req.body;
+    const { invoiceData, toEmail, toName, greeting, customMessage } = req.body;
     if (!invoiceData || !toEmail)
       return res.status(400).json({ error: 'Missing invoiceData or toEmail' });
+    // `greeting`, when given, is the ENTIRE greeting line verbatim (e.g. "Dear Ms.
+    // Ginn,") so callers that want more control than "Hi {name}," -- a different
+    // salutation word, a title, etc -- can override the whole line, not just the
+    // name slotted into a fixed "Hi ___," template. Falls back to the old
+    // toName-only behavior for callers that don't pass it.
+    const greetingLine = (greeting && String(greeting).trim()) ? String(greeting).trim() : `Hi ${toName || 'there'},`;
     try {
       const resend     = new Resend(process.env.RESEND_KEY);
       const buf        = await buildInvoicePDF(invoiceData);
@@ -75,13 +81,13 @@ module.exports = async function handler(req, res) {
         to:      [toEmail],
         bcc:     ['shinethementalist@gmail.com'],
         subject: `Invoice – ${invoiceData.eventName || 'Your Event'} | Shine, The Mentalist`,
-        text:    `Hi ${toName || 'there'},\n\n${body}${payLineText}\n\n– Shine\ntexasmentalist.com`,
+        text:    `${greetingLine}\n\n${body}${payLineText}\n\n– Shine\ntexasmentalist.com`,
         html:    `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;color:#1a1a2e">
           <div style="border-bottom:3px solid #B8960C;padding-bottom:16px;margin-bottom:24px">
             <h2 style="margin:0;font-size:22px">Shine, The Mentalist</h2>
             <a href="https://texasmentalist.com" style="color:#B8960C;font-size:13px;text-decoration:none">texasmentalist.com</a>
           </div>
-          <p>Hi ${toName || 'there'},</p>
+          <p>${greetingLine}</p>
           ${body.split('\n').map(l => l ? `<p style="margin:6px 0">${l}</p>` : '<br>').join('')}
           ${payBtnHtml}
           <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
@@ -103,8 +109,11 @@ module.exports = async function handler(req, res) {
     // 'send' action above when includeLink + invoiceData.bookingId are given, so a
     // thank-you note can still point to the live remaining-balance payment page
     // without generating or attaching a static PDF.
-    const { channel, toEmail, toPhone, toName, message, invoiceData, includeLink } = req.body;
+    const { channel, toEmail, toPhone, toName, greeting, message, invoiceData, includeLink } = req.body;
     if (!message) return res.status(400).json({ error: 'Missing message' });
+    // See the 'send' action above -- `greeting`, when given, overrides the whole
+    // greeting line, not just the name.
+    const greetingLine = (greeting && String(greeting).trim()) ? String(greeting).trim() : `Hi ${toName || 'there'},`;
 
     let payUrl = null;
     if (includeLink && invoiceData && invoiceData.bookingId) {
@@ -136,13 +145,13 @@ module.exports = async function handler(req, res) {
         to:      [toEmail],
         bcc:     ['shinethementalist@gmail.com'],
         subject: `Thank you${invoiceData?.eventName ? ' – ' + invoiceData.eventName : ''}!`,
-        text:    `Hi ${toName || 'there'},\n\n${message}${payUrl ? `\n\n${payUrl}` : ''}\n\n– Shine\ntexasmentalist.com`,
+        text:    `${greetingLine}\n\n${message}${payUrl ? `\n\n${payUrl}` : ''}\n\n– Shine\ntexasmentalist.com`,
         html:    `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;color:#1a1a2e">
           <div style="border-bottom:3px solid #B8960C;padding-bottom:16px;margin-bottom:24px">
             <h2 style="margin:0;font-size:22px">Shine, The Mentalist</h2>
             <a href="https://texasmentalist.com" style="color:#B8960C;font-size:13px;text-decoration:none">texasmentalist.com</a>
           </div>
-          <p>Hi ${toName || 'there'},</p>
+          <p>${greetingLine}</p>
           ${message.split('\n').map(l => l ? `<p style="margin:6px 0">${l}</p>` : '<br>').join('')}
           ${payBtnHtml}
           <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">
