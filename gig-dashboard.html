@@ -556,17 +556,28 @@ td { padding: 9px 14px; vertical-align: middle; }
 
     <div class="form-group" id="ty-channel-label" style="display:none">
       <label>Send by</label>
-      <select id="ty-channel" onchange="regenerateThankYouDraft()"></select>
+      <select id="ty-channel" onchange="updateThankYouGreetingRowVisibility(); regenerateThankYouDraft()"></select>
+    </div>
+
+    <div class="form-group" id="ty-greeting-row" style="display:none">
+      <label>Greeting name (email only)</label>
+      <input type="text" id="ty-greeting-name" placeholder="e.g. Dedrah, or Ms. Ginn" oninput="updateThankYouGreetingPreview()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:13px;font-family:inherit;width:100%;box-sizing:border-box">
     </div>
 
     <div class="form-group">
       <label>Message</label>
+      <div id="ty-greeting-preview" style="font-size:13px;color:var(--muted);margin-bottom:4px"></div>
       <textarea id="ty-draft" rows="7" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:13px;font-family:inherit;width:100%;box-sizing:border-box"></textarea>
     </div>
 
     <div class="form-group" id="ty-balance-row" style="display:none;flex-direction:row;align-items:center;gap:6px">
       <input type="checkbox" id="ty-include-balance" style="width:auto;margin:0" onchange="regenerateThankYouDraft()">
       <label for="ty-include-balance" id="ty-balance-label" style="margin:0;font-size:13px;cursor:pointer">Attach invoice for remaining balance</label>
+    </div>
+
+    <div class="form-group">
+      <label>Instructions for the AI (optional)</label>
+      <input type="text" id="ty-instruction" placeholder="Tell the AI what to change, then Regenerate" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-size:13px;font-family:inherit;width:100%;box-sizing:border-box">
     </div>
 
     <div class="modal-actions">
@@ -2039,6 +2050,14 @@ async function openThankYouModal() {
   channelSel.style.display   = showChannelPicker ? '' : 'none';
   channelLabel.style.display = showChannelPicker ? '' : 'none';
 
+  // Email greeting defaults to first name; Shine can edit it (e.g. to "Ms. Ginn"
+  // for a principal) before sending. SMS never gets a greeting line, so the field
+  // is hidden for phone-only / SMS-selected contacts.
+  document.getElementById('ty-greeting-name').value = (c.name || '').trim().split(/\s+/)[0] || '';
+  document.getElementById('ty-instruction').value = '';
+  updateThankYouGreetingRowVisibility();
+  updateThankYouGreetingPreview();
+
   const balRow = document.getElementById('ty-balance-row');
   const balCb  = document.getElementById('ty-include-balance');
   if (remaining > 0) {
@@ -2098,10 +2117,31 @@ function buildStableInvoiceLinkForThankYou() {
   return 'https://shine-booking.vercel.app/invoice-view.html?bid=' + encodeURIComponent(thankYouCtx.bookingId);
 }
 
+// SMS never gets a "Hi {name}," line (the send template only prepends one for
+// email -- see api/invoice.js), so the greeting field only makes sense, and is
+// only shown, for email sends.
+function updateThankYouGreetingRowVisibility() {
+  const channel = document.getElementById('ty-channel').value || (thankYouCtx.email ? 'email' : 'sms');
+  document.getElementById('ty-greeting-row').style.display = channel === 'email' ? '' : 'none';
+  updateThankYouGreetingPreview();
+}
+
+// Mirrors exactly what api/invoice.js's send-note/send handlers do server-side
+// ("Hi ${toName},") so the preview can never drift from what actually gets sent.
+function updateThankYouGreetingPreview() {
+  const channel = document.getElementById('ty-channel').value || (thankYouCtx.email ? 'email' : 'sms');
+  const previewEl = document.getElementById('ty-greeting-preview');
+  if (channel !== 'email') { previewEl.textContent = ''; return; }
+  const name = document.getElementById('ty-greeting-name').value.trim() || 'there';
+  previewEl.textContent = `Hi ${name},`;
+}
+
 async function regenerateThankYouDraft() {
   const draftEl = document.getElementById('ty-draft');
   const channel = document.getElementById('ty-channel').value || (thankYouCtx.email ? 'email' : 'sms');
   const includeBalance = document.getElementById('ty-include-balance').checked;
+  const instructionEl = document.getElementById('ty-instruction');
+  const instruction = instructionEl.value.trim();
   draftEl.value = 'Drafting…';
   draftEl.disabled = true;
   try {
@@ -2116,6 +2156,7 @@ async function regenerateThankYouDraft() {
         reviewLink:     GOOGLE_REVIEW_LINK,
         includeBalance: includeBalance,
         balanceAmount:  thankYouCtx.remaining,
+        instruction:    instruction,
       })
     });
     const d = await r.json();
@@ -2129,6 +2170,7 @@ async function regenerateThankYouDraft() {
       if (link) draft = draft.trimEnd() + '\n\n' + link;
     }
     draftEl.value = draft;
+    instructionEl.value = '';
   } catch(e) {
     draftEl.value = '';
     alert('Could not draft the message: ' + e.message);
@@ -2141,6 +2183,10 @@ async function sendThankYou() {
   const channel        = document.getElementById('ty-channel').value || (thankYouCtx.email ? 'email' : 'sms');
   const message         = document.getElementById('ty-draft').value.trim();
   const includeBalance  = document.getElementById('ty-include-balance').checked && thankYouCtx.remaining > 0;
+  // Whatever Shine typed into the greeting field (defaults to first name, editable
+  // to e.g. "Ms. Ginn") is what api/invoice.js prepends as "Hi {toName}," -- keeps
+  // the modal's preview and the actual sent email in sync.
+  const greetingName    = document.getElementById('ty-greeting-name').value.trim() || thankYouCtx.clientName;
   if (!message) { alert('Message cannot be empty.'); return; }
 
   const btn = document.getElementById('ty-send-btn');
@@ -2152,7 +2198,7 @@ async function sendThankYou() {
       // depositPercent 100 (this whole amount is now due, no further split).
       const r = await fetch('/api/invoice', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send', invoiceData: buildThankYouInvoiceData(), toEmail: thankYouCtx.email, toName: thankYouCtx.clientName, customMessage: message })
+        body: JSON.stringify({ action: 'send', invoiceData: buildThankYouInvoiceData(), toEmail: thankYouCtx.email, toName: greetingName, customMessage: message })
       });
       const d = await r.json();
       if (d.error) throw new Error(d.error);
@@ -2170,7 +2216,7 @@ async function sendThankYou() {
       // Email, nothing to invoice (already paid in full, or Shine chose not to attach one)
       const r = await fetch('/api/invoice', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send-note', channel: 'email', toEmail: thankYouCtx.email, toName: thankYouCtx.clientName, message, includeLink: false })
+        body: JSON.stringify({ action: 'send-note', channel: 'email', toEmail: thankYouCtx.email, toName: greetingName, message, includeLink: false })
       });
       const d = await r.json();
       if (d.error) throw new Error(d.error);

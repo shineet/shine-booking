@@ -1497,17 +1497,22 @@ RULES:
     // review, optionally mentioning that the remaining-balance invoice is attached/included.
     // Triggered manually from the Gig Dashboard once a gig is marked Done.
     if (req.method === 'POST' && req.body.action === 'thank-you-draft') {
-      const { clientName, eventType, eventDate, channel, reviewLink, includeBalance, balanceAmount } = req.body;
+      const { clientName, eventType, eventDate, channel, reviewLink, includeBalance, balanceAmount, instruction } = req.body;
       if (!reviewLink) { res.status(400).json({ error: 'Missing reviewLink' }); return; }
 
       const balanceLine = includeBalance
         ? `Also let them know the invoice for the remaining balance ($${Number(balanceAmount || 0).toLocaleString()}) is ${channel === 'email' ? 'attached to this email' : 'included below'}, and to reach out with any questions.`
         : '';
 
+      const instrBlock = (instruction && String(instruction).trim())
+        ? `\n\nSHINE'S INSTRUCTION FOR THIS SPECIFIC DRAFT (highest priority -- follow this for this one draft):\n${String(instruction).trim()}`
+        : '';
+
       const systemPrompt = `You are writing a thank-you note on behalf of Shine, The Mentalist, to a client whose event (${eventType || 'event'}${eventDate ? ' on ' + eventDate : ''}) JUST HAPPENED and went well.
 
 Thank them warmly and specifically for having Shine perform -- reference the event naturally, don't just say "your event." Then ask them, warmly and not pushy, if they'd be willing to leave a quick Google review. Include this exact link on its own line, unchanged: ${reviewLink}
 ${balanceLine}
+${instrBlock}
 
 RULES:
 - Warm, genuine, first person, brief. This is a thank-you, not a pitch.
