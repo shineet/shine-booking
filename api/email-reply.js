@@ -8,6 +8,21 @@ function emailIlikeParam(email) {
   return encodeURIComponent(String(email || '').trim().replace(/[%_\\]/g, m => '\\' + m));
 }
 
+// Some sending mail servers (commonly Exim/cPanel-hosted mail) apply BATV
+// (Bounce Address Tag Validation) tagging as "prvs=<tag>=<realaddress>" --
+// meant to stay on the invisible envelope sender only, for bounce-spoofing
+// protection, but it can leak into what we read as the visible From address.
+// A tagged address doesn't match the client's real stored email, so the
+// lookup below fails and silently creates a duplicate "new lead" instead of
+// matching their existing record. Confirmed against a real reply from Krista
+// Pachica (radpartners.com) that arrived as
+// "prvs=66828e5188=krista.pachica@radpartners.com". Strip the tag back to
+// the real address whenever present.
+function stripBatvTag(email) {
+  const m = String(email || '').match(/^prvs=[^=]+=(.+)$/i);
+  return m ? m[1] : email;
+}
+
 // ── Inbound email body decoding ──────────────────────────────────────────────
 // Some mail servers send the text/plain part with Content-Transfer-Encoding
 // base64 or quoted-printable. If we don't decode it, the dashboard + the
@@ -31,11 +46,19 @@ function decodeQuotedPrintable(str) {
 // A run of base64 chars (possibly newline-wrapped) that isn't readable prose — i.e.
 // an encoded body that slipped through undecoded. Real prose contains spaces; a
 // wrapped base64 block only contains line breaks, so a space rules it out.
+//
+// Deliberately does NOT require the run to be an exact multiple of 4 -- a real
+// inbound reply (Krista Pachica, radpartners.com) showed up with its base64 body
+// clipped a few characters short by the multipart-boundary regex in
+// extractMimePart, and the old strict length%4===0 check rejected it outright,
+// leaving the raw base64 displayed undecoded. Node's base64 decoder tolerates a
+// short/unpadded final group fine (confirmed: it just drops the last partial
+// character or two), so require only a long-enough base64-alphabet run.
 function looksLikeBase64Block(s) {
   const raw = String(s || '').trim();
   if (/ /.test(raw)) return false;
   const t = raw.replace(/\s+/g, '');
-  return t.length >= 24 && t.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(t);
+  return t.length >= 24 && /^[A-Za-z0-9+/]+={0,2}$/.test(t);
 }
 
 function decodeBase64Body(s) {
@@ -171,7 +194,7 @@ async function emergencySaveInbound(reqBody, reasonLabel) {
     if (!from) return false;
     const subject = reqBody?.subject || '';
     const rawEmail = reqBody?.rawEmail || '';
-    const fromEmail = from.match(/<(.+)>/)?.[1] || from;
+    const fromEmail = stripBatvTag(from.match(/<(.+)>/)?.[1] || from);
     const fromNameMatch = from.match(/^"?([^"<]+)"?\s*<.+>$/);
     const fromName = fromNameMatch ? fromNameMatch[1].trim() : '';
     const emailBody = stripQuotedReply(normalizeBody(reqBody?.body || '') || extractPlainText(rawEmail) || htmlToText(extractHtmlPart(rawEmail)) || '(could not extract email body)');
@@ -610,7 +633,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const fromEmail = from.match(/<(.+)>/)?.[1] || from;
+    const fromEmail = stripBatvTag(from.match(/<(.+)>/)?.[1] || from);
     const fromNameMatch = from.match(/^"?([^"<]+)"?\s*<.+>$/);
     const fromName = fromNameMatch ? fromNameMatch[1].trim() : '';
     // Anyone the client copied on their inbound email (e.g. Natalie cc'ing Leo) --
