@@ -439,6 +439,12 @@
         // School/education bookings skip indoor/outdoor (near-always indoors on campus) and
         // get a different Section 2/3 question set below, tailored to a staff/faculty event.
         const isSchool = eventType.includes('school') || eventType.includes('education');
+        // Senior living / retirement community shows: residents plus their families, so there is
+        // usually no single guest of honour, and the questions that matter instead are mobility,
+        // hearing/vision and how residents can take part. Also always indoors, like school events.
+        const isSenior = eventType.includes('senior') || eventType.includes('retirement')
+            || eventType.includes('assisted living') || eventType.includes('nursing')
+            || eventType.includes('memory care');
         let html = '';
 
         // Section 1: Event basics
@@ -462,7 +468,7 @@
       <label>Event location / address</label>
       <input type="text" id="q_address" placeholder="Full address">
     </div>
-  ` + (isSchool ? '' : `
+  ` + ((isSchool || isSenior) ? '' : `
     <div class="field">
       <label>Indoor or outdoor event?</label>
       <div class="radio-group">${
@@ -717,6 +723,34 @@
       <div class="field"><label>Anything else I should know about the space or the crowd?</label><textarea id="q_anything_else"></textarea></div>
     `
             ;
+        } else if (isSenior) {
+            html += `
+      <div class="field"><label>Who is the show for?</label>
+        <div class="radio-group">${
+            radioGroup('q_crowd', ['Residents only', 'Residents and their families', 'Residents, families and staff'])}</div>
+      </div>
+      <div class="field"><label>What is the occasion?</label><input type="text" id="q_occasion" placeholder="e.g. family day, summer social, holiday celebration"></div>
+      <div class="field"><label>Roughly how many residents do you expect?</label><input type="text" id="q_resident_count" placeholder="e.g. 30"></div>
+      <div class="field"><label>Will children be attending?</label>
+        <div class="radio-group">${
+            radioGroup('q_kids_present', ['Yes, quite a few', 'A handful', 'No'])}</div>
+      </div>
+      <div class="field"><label>How will most of the audience be seated?</label>
+        <div class="radio-group">${
+            radioGroup('q_seating', ['Rows of chairs', 'Around tables', 'Mix of chairs and wheelchairs', 'Not sure yet'])}</div>
+      </div>
+      <div class="field"><label>Are most residents able to come up front to take part, or should I come to them in their seats?</label>
+        <div class="radio-group">${
+            radioGroup('q_participation', ['Most can come up', 'Some can, some cannot', 'Best to come to them'])}</div>
+      </div>
+      <div class="field"><label>Any hearing or vision considerations I should plan around? <span class="hint">(this helps me pace the show and pick the right effects)</span></label><textarea id="q_accessibility"></textarea></div>
+      <div class="field"><label>Any residents who would love to be involved? <span class="hint">(names, and anything fun about them — a hobby, a career, a story the room would enjoy)</span></label><textarea id="q_trivia"></textarea></div>
+      <div class="field"><label>Anyone who should NOT be singled out or brought into the show?</label><textarea id="q_exclude"></textarea></div>
+      <div class="field"><label>Is anyone being celebrated that day? <span class="hint">(a birthday, an anniversary, a long-time resident — optional)</span></label><input type="text" id="q_special_day" placeholder="Name and occasion, if applicable"></div>
+      <div class="field"><label>Who should I check in with when I arrive? <span class="hint">(name and mobile, e.g. activities director)</span></label><input type="text" id="q_day_contact" placeholder="Name, phone"></div>
+      <div class="field"><label>Any other entertainment or activities before or after my show?</label><textarea id="q_other_entertainment"></textarea></div>
+    `
+            ;
         } else {
             // General / private celebration
             html += `
@@ -754,7 +788,20 @@
 
         // Section 3: Logistics
         html += '<div class="section"><div class="section-title">⚡ Logistics</div>';
-        html += isSchool ? `
+        html += isSenior ? `
+    <div class="field">
+      <label>What kind of space will this be in?</label>
+      <div class="radio-group">${radioGroup('q_room_type', ['Activity room', 'Dining room', 'Community hall', 'Chapel / auditorium', 'Other'])}</div>
+    </div>
+    <div class="field">
+      <label>Is a microphone and sound system available on site? <span class="hint">(a mic makes a real difference for this audience — I can bring my own if not)</span></label>
+      <div class="radio-group">${radioGroup('q_av_available', ['Yes, mic and speakers', 'Speakers only', "Neither, I'll bring my own", 'Not sure yet'])}</div>
+    </div>
+    <div class="field">
+      <label>Is access to a power outlet available?</label>
+      <div class="radio-group">${radioGroup('q_power', ['Yes', 'No', 'Not sure'])}</div>
+    </div>
+  ` : isSchool ? `
     <div class="field">
       <label>What kind of space will this be in?</label>
       <div class="radio-group">${radioGroup('q_room_type', ['Gym', 'Cafeteria', 'Auditorium', 'Classroom', 'Other'])}</div>
