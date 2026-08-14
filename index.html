@@ -1037,12 +1037,95 @@
     .edit-note { font-size: 12px; color: var(--muted); margin-top: 6px; font-style: italic }
 
     /* ── MOBILE: hide detail pane, show as push screen ── */
+    /* ── Bottom tab bar (mobile only) ─────────────────────────────────────
+       Desktop keeps the top bar exactly as it was. On a phone the top rows
+       were both cramped and hard to hit -- the "+" for a new lead, the single
+       most-used action, was a text button a few pixels wide. Everything moves
+       to a thumb-reachable bottom bar with a raised centre button instead. */
+    .tabbar, .more-sheet, .more-backdrop { display: none; }
+
+    @media (max-width: 700px) {
+        .tabbar {
+            display: flex;
+            position: fixed; left: 0; right: 0; bottom: 0;
+            z-index: 60;
+            align-items: flex-end;
+            background: rgba(20,19,26,.92);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            border-top: 1px solid var(--border);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        .tabbar-item {
+            flex: 1;
+            background: none; border: none; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center; gap: 2px;
+            /* 54px of height before the safe-area inset: comfortably past the
+               44pt minimum Apple recommends, which the old buttons were not. */
+            padding: 9px 0 8px;
+            color: #7d7a90; font-size: 10px; font-weight: 600;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .tabbar-item .ti { font-size: 19px; line-height: 1; }
+        .tabbar-item.active { color: var(--accent, #8b7dff); }
+        .tabbar-item:active { opacity: .55; }
+
+        /* Raised centre action. Deliberately the largest target on screen. */
+        .tabbar-fab {
+            flex: 0 0 auto;
+            width: 58px; height: 58px; margin: 0 6px -14px;
+            border-radius: 50%;
+            background: linear-gradient(160deg, #8b7dff, #6b5ce0);
+            color: #fff; font-size: 30px; font-weight: 300; line-height: 1;
+            border: 3px solid var(--bg);
+            box-shadow: 0 6px 18px rgba(107,92,224,.45);
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .tabbar-fab:active { transform: scale(.93); }
+
+        /* Overflow sheet for the actions that do not earn a permanent slot. */
+        .more-backdrop {
+            display: block; position: fixed; inset: 0;
+            background: rgba(0,0,0,.5); z-index: 70;
+        }
+        .more-sheet {
+            display: block; position: fixed; left: 0; right: 0; bottom: 0;
+            z-index: 71;
+            background: #17161c;
+            border-top-left-radius: 16px; border-top-right-radius: 16px;
+            padding: 8px 0 calc(10px + env(safe-area-inset-bottom, 0px));
+            box-shadow: 0 -10px 40px rgba(0,0,0,.5);
+        }
+        .more-sheet .grabber {
+            width: 38px; height: 4px; border-radius: 2px;
+            background: #3a3846; margin: 6px auto 10px;
+        }
+        .more-sheet button.more-row {
+            width: 100%; background: none; border: none; cursor: pointer;
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 20px; font-size: 15px; color: #e8e6ef; text-align: left;
+        }
+        .more-sheet button.more-row:active { background: rgba(255,255,255,.05); }
+        .more-sheet .more-row .mi { font-size: 18px; width: 24px; text-align: center; }
+        .more-sheet .more-toggle {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 20px; border-top: 1px solid var(--border); margin-top: 6px;
+            font-size: 14px; color: #b9b6c8;
+        }
+    }
+
     @media (max-width: 700px) {
         .app-footer { display: none }
         .list-pane { width: 100%; border-right: none }
         .detail-pane {
             position: fixed;
-            top: 96px; left: 0; right: 0; bottom: 0; /* topbar is 2 rows on mobile now, not 52px */
+            /* Top bar is a single row again now that its buttons live in the
+               bottom bar. Bottom padding clears the tab bar so the last row of
+               a conversation is not sitting underneath it. */
+            top: 56px; left: 0; right: 0; bottom: 0;
+            padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
             background: var(--bg);
             z-index: 30;
             transform: translateX(100%);
@@ -1058,22 +1141,20 @@
            two stacked rows instead (nav on top, tools below), each of which
            condenses its own content (icon-only buttons, shorter tab labels)
            to fit width -- no swiping needed at any phone width. */
+        /* Was two stacked, horizontally-scrolling rows. Every one of those
+           buttons now has a bigger home in the bottom bar, so the top bar goes
+           back to a single slim row with just identity on it. */
         .topbar {
-            flex-direction: column;
-            align-items: stretch;
-            height: auto;
-            padding: 8px 14px;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            height: 56px;
+            padding: 0 16px;
             gap: 8px;
         }
-        .topbar-main, .topbar-tools {
-            width: 100%;
-            justify-content: space-between;
-            overflow-x: auto;
-        }
+        .topbar-tabs, .topbar-tools { display: none }
         .topbar-brand span { display: none }
-        .ttab { padding: 5px 8px; font-size: 12px }
-        .topbar-icon-btn { padding: 6px 8px }
-        .topbar-icon-btn .btn-label, .ttab .btn-label { display: none }
+        .topbar-brand { font-size: 16px }
     }
     </style>
 </head>
@@ -1769,9 +1850,45 @@ var QUESTION_LABELS = {
 };
 
 /* ── View switching ── */
+// ── Bottom tab bar behaviour (mobile) ────────────────────────────────────
+// The bar mirrors the top bar's actions rather than owning its own logic, so
+// there is still exactly one implementation of each action and desktop is
+// untouched.
+function openMoreSheet() {
+    // Keep the sheet's Auto-send switch in step with the real one on every
+    // open, rather than trying to keep two checkboxes synchronised forever.
+    var real = document.getElementById('review-mode-toggle');
+    var mirror = document.getElementById('review-mode-toggle-m');
+    if (real && mirror) mirror.checked = real.checked;
+    document.getElementById('more-backdrop').style.display = 'block';
+    document.getElementById('more-sheet').style.display = 'block';
+}
+function closeMoreSheet() {
+    document.getElementById('more-backdrop').style.display = 'none';
+    document.getElementById('more-sheet').style.display = 'none';
+}
+// Drive the real toggle so all the existing onReviewModeToggle logic runs
+// unchanged; the sheet's switch is only ever a remote control for it.
+function mirrorReviewToggle(el) {
+    var real = document.getElementById('review-mode-toggle');
+    if (!real) return;
+    real.checked = el.checked;
+    if (typeof onReviewModeToggle === 'function') onReviewModeToggle();
+}
+function syncTabbar(view) {
+    ['tb-pipeline', 'tb-planners'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.classList.remove('active');
+    });
+    var map = { pipeline: 'tb-pipeline', planners: 'tb-planners' };
+    var el = document.getElementById(map[view]);
+    if (el) el.classList.add('active');
+}
+
 function showView(view) {
     document.getElementById('pipeline-shell').style.display  = (view === 'pipeline' || view === 'planners' || view === 'coldoutreach') ? 'flex'  : 'none';
     document.getElementById('new-lead-shell').style.display  = view === 'new-lead'  ? 'block' : 'none';
+    syncTabbar(view);
     document.querySelectorAll('.ttab').forEach(function(t) { t.classList.remove('active'); });
     document.querySelectorAll('.ttab').forEach(function(t) {
         if ((view === 'pipeline' && t.textContent.trim() === 'Leads') ||
@@ -5208,5 +5325,38 @@ closeContractModal = function() {
     ciLineItems = [];
 };
 </script>
+<!-- Bottom tab bar + overflow sheet: mobile only, hidden by CSS on desktop.
+     Mirrors the top bar's actions rather than replacing them, so desktop is
+     untouched and there is exactly one implementation of each action. -->
+<nav class="tabbar" id="tabbar">
+    <button class="tabbar-item" id="tb-pipeline" onclick="showView('pipeline')">
+        <span class="ti">&#128203;</span><span>Leads</span></button>
+    <button class="tabbar-item" id="tb-planners" onclick="showView('planners')">
+        <span class="ti">&#128101;</span><span>Planners</span></button>
+    <button class="tabbar-fab" onclick="messagingExistingClientId=null;showView('new-lead')"
+            aria-label="Add a new lead" title="New lead">+</button>
+    <button class="tabbar-item" id="tb-find" onclick="findLeads()">
+        <span class="ti">&#128301;</span><span>Find</span></button>
+    <button class="tabbar-item" id="tb-more" onclick="openMoreSheet()">
+        <span class="ti">&#8943;</span><span>More</span></button>
+</nav>
+
+<div class="more-backdrop" id="more-backdrop" onclick="closeMoreSheet()" style="display:none"></div>
+<div class="more-sheet" id="more-sheet" style="display:none">
+    <div class="grabber"></div>
+    <button class="more-row" onclick="closeMoreSheet();showView('coldoutreach')"><span class="mi">&#129505;</span> Cold outreach</button>
+    <button class="more-row" onclick="closeMoreSheet();openPastClients()"><span class="mi">&#128231;</span> Past clients</button>
+    <button class="more-row" onclick="closeMoreSheet();suggestActionItems()"><span class="mi">&#129517;</span> Suggest actions</button>
+    <button class="more-row" onclick="closeMoreSheet();loadLeads();loadPendingReplies();"><span class="mi">&#8635;</span> Refresh</button>
+    <button class="more-row" onclick="closeMoreSheet();openNoReplySettings()"><span class="mi">&#9201;</span> No-reply threshold</button>
+    <div class="more-toggle">
+        <span>Auto-send replies</span>
+        <label class="switch">
+            <input type="checkbox" id="review-mode-toggle-m" onchange="mirrorReviewToggle(this)">
+            <span class="switch-slider"></span>
+        </label>
+    </div>
+</div>
+
 </body>
 </html>
