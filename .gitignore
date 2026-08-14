@@ -3,3 +3,5 @@
 node_modules
 
 tools/family-note-sync/.env
+tools/family-note-sync/*.log
+tools/family-note-sync/__pycache__/

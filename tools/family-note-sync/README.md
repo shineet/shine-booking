@@ -43,6 +43,23 @@ later. Nothing is lost, it is just delayed.
    launchctl load ~/Library/LaunchAgents/com.shine.familynotesync.plist
    ```
 
+## Checking on the schedule
+
+```bash
+launchctl list | grep familynotesync   # second column is the last exit code
+tail -20 tools/family-note-sync/sync.log
+cat tools/family-note-sync/sync.err.log # empty is good
+```
+
+To stop it:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.shine.familynotesync.plist
+```
+
+The logs append forever. They are tiny (a few lines per run), but if they
+ever get unwieldy just delete them; launchd recreates them.
+
 ## Day-to-day
 
 ```bash
