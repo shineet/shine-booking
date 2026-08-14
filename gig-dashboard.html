@@ -152,6 +152,17 @@ button.success { background: #1a3a28; color: #6ee0a4; border: 1px solid #2a5a38;
 .card-footer { display: flex; justify-content: space-between; align-items: center; }
 .card-fee { font-size: 18px; font-weight: 700; color: var(--green); }
 .card-source { font-size: 11px; color: var(--muted); }
+.family-near {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--muted, #8b8b96);
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin-top: 5px;
+}
 .family-clash {
   display: inline-block;
   font-size: 11px;
@@ -1019,26 +1030,69 @@ async function sbDelete(table, id) {
 // advisory -- it never blocks anything, it just answers "is something already
 // happening that day?" without having to go and look at the note.
 let familyByDate = {};
+let familyList = [];
 
 // The note now contains the gigs themselves, because the agent writes them
 // back. Without this filter every booked gig would cheerfully warn about
 // itself, and a warning that always fires is a warning nobody reads.
 const FAMILY_GIG_WORDS = ['magic', 'show', 'gig', 'performance'];
 
+// How far either side counts as "near". Three days because the note runs in
+// clusters -- Onam prep on the 5th and Onam dinner on the 6th mean the 4th is
+// not really a free evening, which a same-day-only check would never show.
+const FAMILY_NEAR_DAYS = 3;
+
 function buildFamilyIndex(rows) {
   familyByDate = {};
+  familyList = [];
   (Array.isArray(rows) ? rows : []).forEach(r => {
     const t = String(r.title || '').toLowerCase();
     if (FAMILY_GIG_WORDS.some(w => t.includes(w))) return;
     (familyByDate[r.event_date] = familyByDate[r.event_date] || []).push(r.title);
+    familyList.push({ date: r.event_date, title: r.title });
   });
 }
 
+// Both sides are plain YYYY-MM-DD, so parse as UTC and diff there. Going
+// through local time would shift by a day either side of a DST boundary and
+// silently mislabel "2 days before" as "1 day before".
+function dayDelta(fromStr, toStr) {
+  const a = Date.parse(fromStr + 'T00:00:00Z');
+  const b = Date.parse(toStr + 'T00:00:00Z');
+  if (isNaN(a) || isNaN(b)) return null;
+  return Math.round((b - a) / 86400000);
+}
+
 function familyClashBadge(dateStr) {
+  if (!dateStr) return '';
+  let out = '';
+
   const hits = familyByDate[dateStr];
-  if (!hits || !hits.length) return '';
-  const what = hits.join(' · ');
-  return `<div class="family-clash" title="From the shared Family note">👨‍👩‍👧 Family: ${esc(what)}</div>`;
+  if (hits && hits.length) {
+    out += `<div class="family-clash" title="From the shared Family note">👨‍👩‍👧 Family: ${esc(hits.join(' · '))}</div>`;
+  }
+
+  // Nearby entries, closest first. Deliberately quieter than the same-day
+  // warning and capped at two, because a card that shouts about everything
+  // within three days stops being scannable.
+  const near = familyList
+    .map(e => ({ ...e, d: dayDelta(dateStr, e.date) }))
+    .filter(e => e.d !== null && e.d !== 0 && Math.abs(e.d) <= FAMILY_NEAR_DAYS)
+    .sort((x, y) => Math.abs(x.d) - Math.abs(y.d));
+
+  if (near.length) {
+    const shown = near.slice(0, 2).map(e => {
+      const n = Math.abs(e.d);
+      const when = e.d < 0
+        ? `${n} day${n > 1 ? 's' : ''} before`
+        : `${n} day${n > 1 ? 's' : ''} after`;
+      return `${esc(e.title)} (${when})`;
+    }).join(' · ');
+    const more = near.length > 2 ? ` +${near.length - 2} more` : '';
+    out += `<div class="family-near" title="From the shared Family note">📅 Nearby: ${shown}${more}</div>`;
+  }
+
+  return out;
 }
 
 async function loadAll() {
