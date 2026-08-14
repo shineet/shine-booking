@@ -12,9 +12,9 @@
   NOTE ON PERMISSIONS: controlling Apple Notes needs Automation permission.
   macOS grants that to the app that asks, so run sync.py from Terminal by hand
   at least once first and approve the prompt. launchd runs under a different
-  context and may need its own approval under System Settings -> Privacy &
-  Security -> Automation. If scheduled runs do nothing while manual runs work,
-  that is the cause -- check sync.err.log.
+  context and may need its own approval under System Settings, Privacy and
+  Security, Automation. If scheduled runs do nothing while manual runs work,
+  that is the cause. Check sync.err.log.
 -->
 <plist version="1.0">
 <dict>
