@@ -172,6 +172,42 @@ def gig_already_noted(text: str, date: dt.date) -> str | None:
     return None
 
 
+# "at 7 pm", "7pm", "at 6:30 PM", "3pm". Used to decide whether an existing
+# hand-written line already states a time, so the agent does not append a
+# second one.
+TIME_RE = re.compile(r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b", re.IGNORECASE)
+
+
+def has_time(text: str) -> bool:
+    return bool(TIME_RE.search(text or ""))
+
+
+def append_time(text: str, raw_line: str, time_str: str) -> tuple[str, str]:
+    """
+    Add a time to one existing line, in place.
+
+    This is the ONE case where an existing line is modified rather than left
+    alone, and only because Shine asked for it: when the booking knows the
+    start time but his hand-written line does not. Nothing else about the
+    line changes -- the time is appended to the end and the wording, position
+    and surrounding lines are untouched.
+
+    Returns (new_text, new_line).
+    """
+    new_line = f"{raw_line.rstrip()} at {time_str}"
+    out = []
+    replaced = False
+    for line in text.splitlines():
+        if not replaced and line.strip() == raw_line.strip():
+            # Keep the original leading whitespace rather than reflowing it.
+            prefix = line[: len(line) - len(line.lstrip())]
+            out.append(prefix + new_line.strip())
+            replaced = True
+        else:
+            out.append(line)
+    return "\n".join(out), new_line.strip()
+
+
 def format_line(date: dt.date, title: str) -> str:
     """
     Render a new line in the same style as the existing ones, so the note

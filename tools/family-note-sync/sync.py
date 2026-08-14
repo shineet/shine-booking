@@ -216,8 +216,22 @@ def push(env, note_text, dry_run: bool) -> str:
         # wins -- it is recorded as-is and never edited or replaced.
         existing = family_note.gig_already_noted(note_text, date)
         if existing:
-            print(f"PUSH: already in the note, recording only: {existing}")
-            line = existing
+            # The one permitted edit to an existing line: fill in a start time
+            # the note is missing and the booking knows. Wording, position and
+            # every other line stay exactly as written.
+            time = pretty_time(b.get("start_time"))
+            if time and not family_note.has_time(existing):
+                note_text_after, line = family_note.append_time(note_text, existing, time)
+                if dry_run:
+                    print(f"PUSH: would add time to: {existing}  ->  {line}")
+                else:
+                    path = family_note.backup(note_text)
+                    family_note.write_note(note_text_after)
+                    print(f"PUSH: added time: {line}  (backup {os.path.basename(path)})")
+                note_text = note_text_after
+            else:
+                print(f"PUSH: already in the note, recording only: {existing}")
+                line = existing
         else:
             line = describe(b)
             note_text_after, line, _ = family_note.insert_line(note_text, date, line)

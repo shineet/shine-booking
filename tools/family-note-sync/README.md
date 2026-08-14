@@ -61,7 +61,10 @@ Onam prep either side of it.
 The note is shared, and losing it would be a real loss. So:
 
 - every write takes a timestamped backup to `~/Documents/FamilyNoteBackups`
-- only whole lines are inserted; existing lines are never edited or reordered
+- lines are inserted whole, never reordered
+- an existing line is edited in exactly one case, at Shine's request: a
+  start time the booking knows and the note is missing gets appended to
+  the end of that line. Wording and position are untouched.
 - an identical line already present is left alone and simply recorded
 - a parse returning **zero** events never wipes `family_events` — an empty
   result is far more likely to mean the read failed than that the family
