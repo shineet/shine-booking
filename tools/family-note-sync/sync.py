@@ -101,14 +101,42 @@ def supabase(env, method, path, body=None, prefer=None):
 # ---------------------------------------------------------------- pull
 
 def pull(env, note_text, dry_run: bool) -> int:
-    """Note -> family_events. Returns the number of events published."""
-    events = family_note.parse_events(note_text)
-    if not events:
+    """
+    Note -> family_events. Returns the number of events published.
+
+    The note is the sole source of truth and it is pruned by hand: Shine and
+    his wife delete entries once they are past. So this is a full replace, not
+    a merge -- anything no longer in the note stops existing here too, and is
+    never resurrected from an older sync.
+
+    Past events are dropped entirely rather than archived. They cannot produce
+    a useful clash warning (nobody books a gig into last week) and would
+    otherwise pile up forever as the note gets tidied.
+    """
+    all_events = family_note.parse_events(note_text)
+    if not all_events:
         # Refuse to wipe the table over an empty parse. An empty result is far
         # more likely to mean the note failed to read, or its format changed,
         # than that the family genuinely has nothing on. Leaving yesterday's
         # warnings up is strictly safer than showing none.
         print("PULL: parsed 0 events -- leaving existing rows untouched")
+        return 0
+
+    # Parse the WHOLE note first, then filter. Year inference walks the note in
+    # order and rolls forward when a date goes backwards, so it needs to see
+    # the earlier entries even though they are not published.
+    today = dt.date.today()
+    events = [e for e in all_events if e["date"] >= today]
+    dropped = len(all_events) - len(events)
+
+    if not events:
+        # Distinct from the guard above: the note read fine, there is simply
+        # nothing upcoming left in it. Safe to clear.
+        if dry_run:
+            print(f"PULL: would clear all rows ({dropped} past event(s), nothing upcoming)")
+            return 0
+        supabase(env, "DELETE", "family_events?id=gte.0")
+        print(f"PULL: cleared all rows ({dropped} past event(s), nothing upcoming)")
         return 0
 
     batch = str(uuid.uuid4())
@@ -119,8 +147,9 @@ def pull(env, note_text, dry_run: bool) -> int:
         "sync_batch": batch,
     } for e in events]
 
+    note = f" ({dropped} past event(s) skipped)" if dropped else ""
     if dry_run:
-        print(f"PULL: would publish {len(rows)} events as batch {batch[:8]}")
+        print(f"PULL: would publish {len(rows)} events as batch {batch[:8]}{note}")
         for e in events:
             print(f"       {e['date']}  {e['title']}")
         return len(rows)
@@ -128,9 +157,11 @@ def pull(env, note_text, dry_run: bool) -> int:
     # Insert the new batch BEFORE removing the old one. If this dies in
     # between, the dashboard briefly sees duplicates rather than an empty
     # calendar -- a duplicate warning is harmless, a missing one is not.
+    # Deleting every other batch is also what removes events Shine has since
+    # deleted from the note, and anything that has slipped into the past.
     supabase(env, "POST", "family_events", rows, prefer="return=minimal")
     supabase(env, "DELETE", f"family_events?sync_batch=neq.{batch}")
-    print(f"PULL: published {len(rows)} events (batch {batch[:8]})")
+    print(f"PULL: published {len(rows)} events (batch {batch[:8]}){note}")
     return len(rows)
 
 

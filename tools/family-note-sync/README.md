@@ -87,6 +87,12 @@ The note is shared, and losing it would be a real loss. So:
   result is far more likely to mean the read failed than that the family
   genuinely has nothing on
 - only future gigs are written; a completed gig in the past is noise
+- **the note is the sole source of truth.** Shine and his wife delete
+  entries once they are past, so the pull is a full replace: anything no
+  longer in the note stops existing in `family_events` too, and is never
+  resurrected from an older sync. Past-dated events are dropped rather
+  than archived — they cannot produce a useful clash warning and would
+  otherwise accumulate forever
 
 ## What the note entry says
 
