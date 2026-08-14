@@ -1,6 +1,11 @@
 import crypto from 'node:crypto';
 
-const ALLOWED_TABLES = new Set(['clients', 'messages', 'bookings', 'app_settings', 'gigs']);
+// family_events is read-only in practice: it is written by the Mac-side
+// note agent (tools/family-note-sync), and the dashboard only reads it to
+// warn about clashes. Added here rather than as a new endpoint because
+// Vercel Hobby caps this project at 12 serverless functions and api/ is
+// already at 12 -- a 13th file fails the build.
+const ALLOWED_TABLES = new Set(['clients', 'messages', 'bookings', 'app_settings', 'gigs', 'family_events']);
 
 const SB_HDR = () => ({
   'apikey': process.env.SUPABASE_SECRET_KEY,

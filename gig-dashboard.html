@@ -152,6 +152,17 @@ button.success { background: #1a3a28; color: #6ee0a4; border: 1px solid #2a5a38;
 .card-footer { display: flex; justify-content: space-between; align-items: center; }
 .card-fee { font-size: 18px; font-weight: 700; color: var(--green); }
 .card-source { font-size: 11px; color: var(--muted); }
+.family-clash {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--amber);
+  background: rgba(240,165,0,.12);
+  border: 1px solid rgba(240,165,0,.25);
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin-top: 6px;
+}
 .intake-pending-badge {
   display: inline-block;
   font-size: 11px;
@@ -1002,15 +1013,47 @@ async function sbDelete(table, id) {
 }
 
 // ── Load all data ─────────────────────────────────────────────────────────────
+// ── Family calendar clash warnings ─────────────────────────────────────────
+// Populated from family_events, which the Mac-side agent
+// (tools/family-note-sync) keeps in step with the shared Apple Note. Purely
+// advisory -- it never blocks anything, it just answers "is something already
+// happening that day?" without having to go and look at the note.
+let familyByDate = {};
+
+// The note now contains the gigs themselves, because the agent writes them
+// back. Without this filter every booked gig would cheerfully warn about
+// itself, and a warning that always fires is a warning nobody reads.
+const FAMILY_GIG_WORDS = ['magic', 'show', 'gig', 'performance'];
+
+function buildFamilyIndex(rows) {
+  familyByDate = {};
+  (Array.isArray(rows) ? rows : []).forEach(r => {
+    const t = String(r.title || '').toLowerCase();
+    if (FAMILY_GIG_WORDS.some(w => t.includes(w))) return;
+    (familyByDate[r.event_date] = familyByDate[r.event_date] || []).push(r.title);
+  });
+}
+
+function familyClashBadge(dateStr) {
+  const hits = familyByDate[dateStr];
+  if (!hits || !hits.length) return '';
+  const what = hits.join(' · ');
+  return `<div class="family-clash" title="From the shared Family note">👨‍👩‍👧 Family: ${esc(what)}</div>`;
+}
+
 async function loadAll() {
   setSyncState('syncing', 'Loading...');
   document.getElementById('refresh-btn').disabled = true;
   try {
-    const [gigs, bookings, contacts] = await Promise.all([
+    const [gigs, bookings, contacts, familyRows] = await Promise.all([
       sbGet('gigs?select=*&order=date.desc.nullslast'),
       sbGet('bookings?select=*'),
       sbGet('clients?select=*'),
+      // Advisory only, so a failure here must never take the dashboard down
+      // with it -- fall back to no warnings rather than no dashboard.
+      sbGet('family_events?select=event_date,title&order=event_date.asc').catch(() => []),
     ]);
+    buildFamilyIndex(familyRows);
 
     allGigs     = Array.isArray(gigs) ? gigs : [];
     allContacts = Array.isArray(contacts) ? contacts : [];
@@ -1115,6 +1158,7 @@ function renderUpcoming() {
     const booking = Array.isArray(c.bookings) ? c.bookings[0] : c.bookings;
     const intakeDone = booking && booking.intake_status === 'completed';
     const intakeBadge = !intakeDone ? '<div class="intake-pending-badge">⏳ Awaiting questionnaire</div>' : '';
+    const familyBadge = familyClashBadge(c.event_date);
     // Title = the gig (event title); byline = who booked it (company · contact, planner tagged).
     // When there is no event title, the title falls back to the contact's name and the
     // byline is omitted to avoid repeating it.
@@ -1134,6 +1178,7 @@ function renderUpcoming() {
         ${whoLine}
         <div class="card-meta">${esc(meta)}</div>
         ${intakeBadge}
+        ${familyBadge}
         <div class="card-footer">
           <div class="card-fee">${fee}</div>
           <div style="display:flex;align-items:center;gap:8px">
