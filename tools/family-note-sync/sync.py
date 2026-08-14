@@ -72,7 +72,14 @@ def load_env() -> dict:
 
 def supabase(env, method, path, body=None, prefer=None):
     """Minimal PostgREST client -- no dependencies, this runs on a bare Mac."""
-    url = env["SUPABASE_URL"].rstrip("/") + "/rest/v1/" + path.lstrip("/")
+    # Supabase's dashboard shows the API URL WITH "/rest/v1/" already on it
+    # (Settings -> Data API), while the SUPABASE_URL convention this project
+    # uses elsewhere is the bare origin. Accept either rather than produce a
+    # baffling /rest/v1/rest/v1/ 404 depending on which one got pasted.
+    base = env["SUPABASE_URL"].strip().rstrip("/")
+    if base.endswith("/rest/v1"):
+        base = base[: -len("/rest/v1")]
+    url = base + "/rest/v1/" + path.lstrip("/")
     headers = {
         "apikey": env["SUPABASE_SECRET_KEY"],
         "Authorization": f"Bearer {env['SUPABASE_SECRET_KEY']}",
