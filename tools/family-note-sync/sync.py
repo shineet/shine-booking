@@ -146,14 +146,37 @@ def describe(booking: dict) -> str:
     or the fee. Set FAMILY_NOTE_INCLUDE_VENUE=1 in .env to append the venue.
     """
     label = "Magic Show"
-    time = (booking.get("event_time") or "").strip()
+    time = pretty_time(booking.get("start_time"))
     if time:
         label += f" at {time}"
     if os.environ.get("FAMILY_NOTE_INCLUDE_VENUE") == "1":
-        venue = (booking.get("venue") or "").strip()
+        venue = (booking.get("venue_address") or "").strip()
         if venue:
             label += f" ({venue})"
     return label
+
+
+def pretty_time(value) -> str:
+    """
+    "19:00:00" -> "7 pm", "19:30:00" -> "7:30 pm".
+
+    The note is written by hand in plain language ("at 7 pm"), so a raw SQL
+    time would look out of place. Anything that does not parse is passed
+    through untouched rather than dropped -- better an odd-looking line than
+    a silently missing time.
+    """
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    for fmt in ("%H:%M:%S", "%H:%M"):
+        try:
+            t = dt.datetime.strptime(raw, fmt).time()
+        except ValueError:
+            continue
+        hour = t.hour % 12 or 12
+        ampm = "am" if t.hour < 12 else "pm"
+        return f"{hour}:{t.minute:02d} {ampm}" if t.minute else f"{hour} {ampm}"
+    return raw
 
 
 def push(env, note_text, dry_run: bool) -> str:
@@ -165,7 +188,7 @@ def push(env, note_text, dry_run: bool) -> str:
     today = dt.date.today().isoformat()
     bookings = supabase(
         env, "GET",
-        f"bookings?select=id,event_date,event_time,venue,status,client_name"
+        f"bookings?select=id,event_date,start_time,venue_address,status,client_name,event_title"
         f"&status=in.({status_filter})"
         f"&event_date=gte.{today}"
         f"&order=event_date.asc",
@@ -185,23 +208,26 @@ def push(env, note_text, dry_run: bool) -> str:
 
     for b in pending:
         date = dt.date.fromisoformat(b["event_date"])
-        title = describe(b)
-        new_text, line, changed = family_note.insert_line(note_text, date, title)
 
-        if not changed:
-            # An identical line is already in the note -- most likely Shine or
-            # his wife typed it by hand. Record it as written so we stop
-            # reconsidering it every run, but do not touch the note.
-            print(f"PUSH: already written by hand, recording only: {line}")
+        # Match on the DATE, not the wording. Shine writes these by hand in his
+        # own phrasing ("Magic show at 7 pm") while this would generate "Magic
+        # Show", and the first dry run showed an exact-string check would have
+        # added a second line for two gigs already in the note. His line always
+        # wins -- it is recorded as-is and never edited or replaced.
+        existing = family_note.gig_already_noted(note_text, date)
+        if existing:
+            print(f"PUSH: already in the note, recording only: {existing}")
+            line = existing
         else:
+            line = describe(b)
+            note_text_after, line, _ = family_note.insert_line(note_text, date, line)
             if dry_run:
                 print(f"PUSH: would insert: {line}")
-                note_text = new_text
-                continue
-            path = family_note.backup(note_text)
-            family_note.write_note(new_text)
-            note_text = new_text
-            print(f"PUSH: inserted: {line}  (backup {os.path.basename(path)})")
+            else:
+                path = family_note.backup(note_text)
+                family_note.write_note(note_text_after)
+                print(f"PUSH: inserted: {line}  (backup {os.path.basename(path)})")
+            note_text = note_text_after
 
         if not dry_run:
             supabase(env, "POST", "family_note_writes", [{

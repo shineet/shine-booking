@@ -146,6 +146,32 @@ def events_on(text: str, target: dt.date, window: int = 0) -> list[dict]:
     ]
 
 
+# A note entry counts as "this gig is already written down" if it falls on the
+# right date and reads like a show. Exact string matching is not enough: Shine
+# types these by hand as "Magic show at 7 pm" while the app would generate
+# "Magic Show", and the first dry run showed that difference would have added a
+# second line for a gig already in the note.
+GIG_WORDS = ("magic", "show", "gig", "performance")
+
+
+def gig_already_noted(text: str, date: dt.date) -> str | None:
+    """
+    The existing note line for a gig on this date, or None.
+
+    Deliberately loose. A false positive means a gig is missing from the note
+    and Shine adds it himself, which he already does. A false negative means a
+    duplicate line appears in a note he shares with his wife, which is worse
+    and harder to notice.
+    """
+    for e in parse_events(text):
+        if e["date"] != date:
+            continue
+        title = e["title"].lower()
+        if any(w in title for w in GIG_WORDS):
+            return e["raw"]
+    return None
+
+
 def format_line(date: dt.date, title: str) -> str:
     """
     Render a new line in the same style as the existing ones, so the note
