@@ -23,6 +23,12 @@ Usage:
     python3 family_note.py add 2026-09-19 "Magic Show at 7 pm" [--commit]
 """
 
+# Deferred annotation evaluation. launchd runs this with /usr/bin/python3,
+# which is 3.9 on this Mac, and "dt.date | None" is a runtime TypeError
+# there without this. py_compile does not catch it -- the syntax is
+# valid, it fails when the def is evaluated.
+from __future__ import annotations
+
 import argparse
 import datetime as dt
 import os
