@@ -265,10 +265,26 @@ def insert_line(text: str, date: dt.date, title: str) -> tuple[str, str, bool]:
 
 
 def backup(text: str) -> str:
-    """Snapshot the note before any write. Returns the backup path."""
+    """
+    Snapshot the note before any write. Returns the backup path.
+
+    Timestamped to the microsecond, and refuses to overwrite an existing
+    file. Second-level stamps were not enough: a single run that both
+    back-filled a time and inserted a gig produced two writes inside the same
+    second, so the second backup silently clobbered the first and the only
+    copy of the pre-run note was lost. That is precisely the failure a backup
+    exists to prevent.
+    """
     os.makedirs(BACKUP_DIR, exist_ok=True)
-    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     path = os.path.join(BACKUP_DIR, f"Family-{stamp}.txt")
+
+    # Belt and braces in case two runs somehow land on the same microsecond.
+    n = 1
+    while os.path.exists(path):
+        path = os.path.join(BACKUP_DIR, f"Family-{stamp}-{n}.txt")
+        n += 1
+
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
     return path
