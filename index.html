@@ -2803,6 +2803,52 @@ function foundLeadsAgeLabel() {
     return '<div style="font-size:11px;color:#8a86a0;margin-bottom:10px;">Showing your last search, ' + when + '. Tap &#128260; Search again for a fresh sweep.</div>';
 }
 
+// "3 days ago" / "today" for the already-in-pipeline warning. Kept tiny and
+// local rather than reaching for a date library, and tolerant of a null or
+// unparseable timestamp because it only ever decorates a warning.
+function relativeDayLabel(iso) {
+    var t = Date.parse(iso);
+    if (isNaN(t)) return 'previously';
+    var days = Math.floor((Date.now() - t) / 86400000);
+    if (days <= 0) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < 30) return days + ' days ago';
+    var months = Math.floor(days / 30);
+    if (months < 12) return months + (months === 1 ? ' month ago' : ' months ago');
+    var years = Math.floor(days / 365);
+    return years + (years === 1 ? ' year ago' : ' years ago');
+}
+
+// Two-step send for a contact already in the pipeline. First click arms the
+// button and says plainly what will happen; a second click within 6 seconds
+// goes through to the normal send path. Re-rendering resets it, so an armed
+// button can never survive a refresh and fire later by accident.
+var _outreachArmed = {};
+function confirmOutreachLead(i) {
+    var btn = document.getElementById('fl-send-' + i);
+    if (!btn) return;
+    if (_outreachArmed[i]) {
+        clearTimeout(_outreachArmed[i]);
+        delete _outreachArmed[i];
+        sendOutreachLead(i);
+        return;
+    }
+    var original = btn.textContent;
+    btn.textContent = 'Tap again to confirm';
+    btn.style.background = 'rgba(220,80,80,.18)';
+    btn.style.color = '#ff8a8a';
+    btn.style.borderColor = 'rgba(220,80,80,.5)';
+    _outreachArmed[i] = setTimeout(function() {
+        delete _outreachArmed[i];
+        var b2 = document.getElementById('fl-send-' + i);
+        if (!b2) return;
+        b2.textContent = original;
+        b2.style.background = 'rgba(240,165,0,.16)';
+        b2.style.color = '#f0a500';
+        b2.style.borderColor = 'rgba(240,165,0,.45)';
+    }, 6000);
+}
+
 function renderFoundLeads() {
     var b = document.getElementById('findleads-body');
     if (!b) return;
@@ -2813,9 +2859,39 @@ function renderFoundLeads() {
             ? '<div style="font-size:12.5px;color:#e8e6ef;">' + escHtml(l.contactName || 'Contact') + ' &middot; ' + escHtml(l.contactEmail) + '</div>'
             : '<div style="font-size:12.5px;color:#8a86a0;">No public contact email found, note this one manually.</div>';
         var meta = [l.eventType, l.eventWindow, l.location, l.estimatedBudget].filter(Boolean).map(escHtml).join(' &middot; ');
+
+        // The lead sweep has no memory of who has been contacted, so the
+        // server tags anyone already in the pipeline. Surfacing it here, before
+        // the Send button, is the whole point: the old behaviour only revealed
+        // it in the success label, after Resend had already delivered.
+        var knownBanner = '';
+        if (l.known && !l.sent) {
+            var bits = [];
+            if (l.known.status) bits.push('status ' + escHtml(l.known.status));
+            if (l.known.lastActivity) bits.push('last contact ' + escHtml(relativeDayLabel(l.known.lastActivity)));
+            if (l.known.leadSource) bits.push('via ' + escHtml(l.known.leadSource));
+            knownBanner =
+                '<div style="margin-top:10px;background:rgba(240,165,0,.13);border:1px solid rgba(240,165,0,.4);border-radius:8px;padding:9px 11px;">' +
+                '<div style="font-size:12.5px;font-weight:700;color:#f0a500;">&#9888;&#65039; Already in your pipeline' +
+                (l.known.name ? ' &mdash; ' + escHtml(l.known.name) : '') + '</div>' +
+                (bits.length ? '<div style="font-size:11.5px;color:#d9c08a;margin-top:3px;">' + bits.join(' &middot; ') + '</div>' : '') +
+                '<div style="font-size:11.5px;color:#d9c08a;margin-top:4px;">You have contacted this address before. Sending again will add to that same thread.</div>' +
+                '</div>';
+        }
+
+        // Known contacts get a two-step Send: the first click arms it, the
+        // second actually sends. Deliberately a confirmation rather than a
+        // block, because re-approaching a lead that went cold a year ago is
+        // legitimate and blocking it would just push the email to Gmail where
+        // nothing gets logged.
+        var sendLabel = l.known ? 'Send anyway' : 'Send intro email';
+        var sendStyle = l.known
+            ? 'background:rgba(240,165,0,.16);color:#f0a500;border:1px solid rgba(240,165,0,.45);'
+            : 'background:rgba(120,200,140,.16);color:#8fe0a5;border:1px solid rgba(120,200,140,.35);';
+        var sendCall = l.known ? 'confirmOutreachLead(' + i + ')' : 'sendOutreachLead(' + i + ')';
         var sendBtn = l.sent
             ? '<button disabled style="background:rgba(120,200,140,.1);color:#6fae82;border:1px solid rgba(120,200,140,.25);border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:default;">' + escHtml(l.sentLabel || '✓ Sent') + '</button>'
-            : '<button id="fl-send-' + i + '" onclick="sendOutreachLead(' + i + ')" style="background:rgba(120,200,140,.16);color:#8fe0a5;border:1px solid rgba(120,200,140,.35);border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;">Send intro email</button>';
+            : '<button id="fl-send-' + i + '" onclick="' + sendCall + '" style="' + sendStyle + 'border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;">' + sendLabel + '</button>';
         var draftBlock = hasEmail ? (
             '<div style="margin-top:10px;">' +
             '<input type="text" id="fl-subject-' + i + '" value="' + escAttr(l.draftSubject || '') + '"' + (l.sent ? ' disabled' : '') + ' style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12.5px;color:#e8e6ef;margin-bottom:6px;box-sizing:border-box;">' +
@@ -2829,6 +2905,7 @@ function renderFoundLeads() {
             (meta ? '<div style="font-size:12px;color:#8a86a0;margin-top:3px;">' + meta + '</div>' : '') +
             '<div style="font-size:12.5px;color:#c9c6d6;margin-top:6px;">' + escHtml(l.fit || '') + '</div>' +
             '<div style="margin-top:8px;">' + contactLine + '</div>' +
+            knownBanner +
             draftBlock +
             '</div>';
     }).join('');

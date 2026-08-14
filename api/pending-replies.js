@@ -1257,6 +1257,49 @@ Depth over breadth: 3-4 well-verified leads with real contact info actually chec
       const beforeCount = leads.length;
       leads = leads.filter(l => !isPastEventWindow(l.eventWindow, todayISO));
       if (leads.length < beforeCount) console.log(`Find leads: dropped ${beforeCount - leads.length} past-dated lead(s) as a safety net (today=${todayISO})`);
+
+      // Flag anyone already in the pipeline BEFORE Shine sees the card.
+      //
+      // The lead search is a fresh web sweep with no memory: the model is not
+      // given the client list and cannot know who has already been contacted,
+      // so it will happily draft a cold intro to someone mid-negotiation or to
+      // a venue that already declined. The existing email lookup on
+      // send-outreach-lead runs only AFTER Resend has delivered, which means
+      // "you already know this person" arrives too late to act on.
+      //
+      // Deliberately a lookup rather than a prompt instruction -- this has to
+      // be right every time, not usually.
+      try {
+        const withEmail = leads.filter(l => l.contactEmail);
+        if (withEmail.length) {
+          const sbHeaders = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+          await Promise.all(withEmail.map(async (l) => {
+            try {
+              const r = await fetch(
+                `${process.env.SUPABASE_URL}/rest/v1/clients?email=ilike.${emailIlikeParam(l.contactEmail)}` +
+                `&select=id,name,status,last_activity,last_channel,lead_source&order=created_at.desc&limit=1`,
+                { headers: sbHeaders }
+              );
+              if (!r.ok) return;                       // fail open: no badge beats no leads
+              const rows = await r.json();
+              const hit = Array.isArray(rows) ? rows[0] : null;
+              if (!hit) return;
+              l.known = {
+                name: hit.name || null,
+                status: hit.status || null,
+                lastActivity: hit.last_activity || null,
+                lastChannel: hit.last_channel || null,
+                leadSource: hit.lead_source || null,
+              };
+            } catch (e) { /* one failed lookup must not lose the whole sweep */ }
+          }));
+          const n = leads.filter(l => l.known).length;
+          if (n) console.log(`Find leads: ${n} of ${leads.length} lead(s) already in the pipeline`);
+        }
+      } catch (e) {
+        console.error('Find leads: known-contact check failed:', e.message);
+      }
+
       res.status(200).json({ success: true, leads });
       return;
     }
