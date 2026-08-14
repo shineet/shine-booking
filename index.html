@@ -2865,6 +2865,26 @@ function renderFoundLeads() {
         // the Send button, is the whole point: the old behaviour only revealed
         // it in the success label, after Resend had already delivered.
         var knownBanner = '';
+        if (l.knownDomain && !l.known && !l.sent) {
+            // Same organisation, different address. Softer than an exact match
+            // because it may genuinely be a different department, but still
+            // worth stopping for: emailing events@venue while mid-thread with
+            // sarah@venue is exactly the mistake an address-only check misses.
+            var who = l.knownDomain.contacts.map(function(c) {
+                var line = escHtml(c.name || c.email || 'contact');
+                if (c.email && c.name) line += ' (' + escHtml(c.email) + ')';
+                var extra = [];
+                if (c.status) extra.push(escHtml(c.status));
+                if (c.lastActivity) extra.push(relativeDayLabel(c.lastActivity));
+                return line + (extra.length ? ' &middot; ' + extra.join(' &middot; ') : '');
+            }).join('<br>');
+            knownBanner =
+                '<div style="margin-top:10px;background:rgba(240,165,0,.09);border:1px solid rgba(240,165,0,.3);border-radius:8px;padding:9px 11px;">' +
+                '<div style="font-size:12.5px;font-weight:700;color:#e0a83a;">&#9888;&#65039; You already know someone at ' + escHtml(l.knownDomain.domain) + '</div>' +
+                '<div style="font-size:11.5px;color:#d9c08a;margin-top:4px;line-height:1.5;">' + who + '</div>' +
+                '<div style="font-size:11.5px;color:#d9c08a;margin-top:4px;">Different address, same organisation. Check you are not cutting across an existing conversation.</div>' +
+                '</div>';
+        }
         if (l.known && !l.sent) {
             var bits = [];
             if (l.known.status) bits.push('status ' + escHtml(l.known.status));
@@ -2884,11 +2904,12 @@ function renderFoundLeads() {
         // block, because re-approaching a lead that went cold a year ago is
         // legitimate and blocking it would just push the email to Gmail where
         // nothing gets logged.
-        var sendLabel = l.known ? 'Send anyway' : 'Send intro email';
-        var sendStyle = l.known
+        var needsConfirm = !!(l.known || l.knownDomain);
+        var sendLabel = needsConfirm ? 'Send anyway' : 'Send intro email';
+        var sendStyle = needsConfirm
             ? 'background:rgba(240,165,0,.16);color:#f0a500;border:1px solid rgba(240,165,0,.45);'
             : 'background:rgba(120,200,140,.16);color:#8fe0a5;border:1px solid rgba(120,200,140,.35);';
-        var sendCall = l.known ? 'confirmOutreachLead(' + i + ')' : 'sendOutreachLead(' + i + ')';
+        var sendCall = needsConfirm ? 'confirmOutreachLead(' + i + ')' : 'sendOutreachLead(' + i + ')';
         var sendBtn = l.sent
             ? '<button disabled style="background:rgba(120,200,140,.1);color:#6fae82;border:1px solid rgba(120,200,140,.25);border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:default;">' + escHtml(l.sentLabel || '✓ Sent') + '</button>'
             : '<button id="fl-send-' + i + '" onclick="' + sendCall + '" style="' + sendStyle + 'border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;">' + sendLabel + '</button>';

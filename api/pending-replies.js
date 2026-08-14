@@ -9,6 +9,27 @@ function normalizePhone(phone) {
 
 // Case-insensitive email match (Postgres eq. is case-sensitive; see email-reply.js/intake.js
 // for the bug this avoids). % and _ escaped since ilike treats them as wildcards.
+// Free-mail hosts. Matching on the domain is only meaningful when the domain
+// IS the organisation -- two unrelated strangers both on gmail.com are not
+// "the same client", and treating them as such would put a warning on almost
+// every lead and train Shine to click straight through it.
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  'gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.uk', 'ymail.com',
+  'hotmail.com', 'outlook.com', 'live.com', 'msn.com', 'aol.com',
+  'icloud.com', 'me.com', 'mac.com', 'proton.me', 'protonmail.com',
+  'gmx.com', 'yandex.com', 'zoho.com', 'mail.com', 'fastmail.com',
+  'hey.com', 'duck.com', 'comcast.net', 'att.net', 'verizon.net',
+  'sbcglobal.net', 'bellsouth.net', 'cox.net', 'charter.net', 'earthlink.net',
+]);
+
+function orgDomain(email) {
+  const at = String(email || '').lastIndexOf('@');
+  if (at === -1) return null;
+  const d = String(email).slice(at + 1).trim().toLowerCase();
+  if (!d || !d.includes('.')) return null;
+  return PUBLIC_EMAIL_DOMAINS.has(d) ? null : d;
+}
+
 function emailIlikeParam(email) {
   return encodeURIComponent(String(email || '').trim().replace(/[%_\\]/g, function(m) { return '\\' + m; }));
 }
@@ -1283,18 +1304,45 @@ Depth over breadth: 3-4 well-verified leads with real contact info actually chec
               if (!r.ok) return;                       // fail open: no badge beats no leads
               const rows = await r.json();
               const hit = Array.isArray(rows) ? rows[0] : null;
-              if (!hit) return;
-              l.known = {
-                name: hit.name || null,
-                status: hit.status || null,
-                lastActivity: hit.last_activity || null,
-                lastChannel: hit.last_channel || null,
-                leadSource: hit.lead_source || null,
+              if (hit) {
+                l.known = {
+                  name: hit.name || null,
+                  status: hit.status || null,
+                  lastActivity: hit.last_activity || null,
+                  lastChannel: hit.last_channel || null,
+                  leadSource: hit.lead_source || null,
+                };
+                return;
+              }
+
+              // No exact address match. Check the organisation: emailing
+              // events@venue while mid-thread with sarah@venue is the mistake
+              // an address-only check sails straight past. Skipped entirely for
+              // free-mail domains, where a shared host means nothing.
+              const domain = orgDomain(l.contactEmail);
+              if (!domain) return;
+              const dr = await fetch(
+                `${process.env.SUPABASE_URL}/rest/v1/clients?email=ilike.*@${encodeURIComponent(domain)}` +
+                `&select=name,email,status,last_activity&order=last_activity.desc.nullslast&limit=3`,
+                { headers: sbHeaders }
+              );
+              if (!dr.ok) return;
+              const drows = await dr.json();
+              if (!Array.isArray(drows) || !drows.length) return;
+              l.knownDomain = {
+                domain,
+                contacts: drows.map(c => ({
+                  name: c.name || null,
+                  email: c.email || null,
+                  status: c.status || null,
+                  lastActivity: c.last_activity || null,
+                })),
               };
             } catch (e) { /* one failed lookup must not lose the whole sweep */ }
           }));
           const n = leads.filter(l => l.known).length;
-          if (n) console.log(`Find leads: ${n} of ${leads.length} lead(s) already in the pipeline`);
+          const nd = leads.filter(l => l.knownDomain).length;
+          if (n || nd) console.log(`Find leads: ${n} exact contact match(es), ${nd} same-organisation match(es) of ${leads.length} lead(s)`);
         }
       } catch (e) {
         console.error('Find leads: known-contact check failed:', e.message);
