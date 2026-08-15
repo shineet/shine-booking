@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- viewport-fit=cover is required for env(safe-area-inset-*) to report
+     anything but 0. Combined with apple-mobile-web-app-status-bar-style
+     black-translucent below, the app draws under the status bar and the
+     home indicator, so every fixed edge has to pad itself. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Shine, The Mentalist — Booking Pipeline</title>
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icons/icon-180.png">
@@ -1042,7 +1046,7 @@
        were both cramped and hard to hit -- the "+" for a new lead, the single
        most-used action, was a text button a few pixels wide. Everything moves
        to a thumb-reachable bottom bar with a raised centre button instead. */
-    .tabbar, .more-sheet, .more-backdrop { display: none; }
+    .tabbar, .more-sheet, .more-backdrop, .topbar-refresh { display: none; }
 
     @media (max-width: 700px) {
         .tabbar {
@@ -1054,7 +1058,9 @@
             backdrop-filter: saturate(180%) blur(20px);
             -webkit-backdrop-filter: saturate(180%) blur(20px);
             border-top: 1px solid var(--border);
-            padding-bottom: env(safe-area-inset-bottom, 0px);
+            /* max(), not the raw inset: on a device reporting 0 the labels sat
+               hard against the screen edge and the raised button was clipped. */
+            padding-bottom: max(env(safe-area-inset-bottom, 0px), 10px);
         }
         .tabbar-item {
             flex: 1;
@@ -1073,7 +1079,7 @@
         /* Raised centre action. Deliberately the largest target on screen. */
         .tabbar-fab {
             flex: 0 0 auto;
-            width: 58px; height: 58px; margin: 0 6px -14px;
+            width: 58px; height: 58px; margin: 0 6px -8px;
             border-radius: 50%;
             background: linear-gradient(160deg, #8b7dff, #6b5ce0);
             color: #fff; font-size: 30px; font-weight: 300; line-height: 1;
@@ -1118,14 +1124,23 @@
 
     @media (max-width: 700px) {
         .app-footer { display: none }
-        .list-pane { width: 100%; border-right: none }
+        /* The bar is fixed and deliberately always on screen (Shine asked for
+           it not to disappear), so every scrolling surface has to reserve room
+           underneath or its last row hides behind it. 70px covers the 54px bar
+           plus the raised button's overhang. */
+        .list-pane {
+            width: 100%; border-right: none;
+            padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+        }
+        #new-lead-shell { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)) }
+        .shell { padding-bottom: 0 }
         .detail-pane {
             position: fixed;
             /* Top bar is a single row again now that its buttons live in the
                bottom bar. Bottom padding clears the tab bar so the last row of
                a conversation is not sitting underneath it. */
-            top: 56px; left: 0; right: 0; bottom: 0;
-            padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+            top: calc(52px + env(safe-area-inset-top, 0px)); left: 0; right: 0; bottom: 0;
+            padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
             background: var(--bg);
             z-index: 30;
             transform: translateX(100%);
@@ -1148,11 +1163,24 @@
             flex-direction: row;
             align-items: center;
             justify-content: space-between;
-            height: 56px;
-            padding: 0 16px;
+            /* Height grows by the status bar inset rather than the content
+               sliding underneath the clock. */
+            height: calc(52px + env(safe-area-inset-top, 0px));
+            padding: env(safe-area-inset-top, 0px) 14px 0;
             gap: 8px;
         }
+        .topbar-refresh { display: flex }
         .topbar-tabs, .topbar-tools { display: none }
+        .topbar-refresh {
+            align-items: center; justify-content: center;
+            width: 40px; height: 40px;              /* a real tap target */
+            background: rgba(255,255,255,.06);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: #c9c6d6; font-size: 19px; line-height: 1;
+            cursor: pointer; -webkit-tap-highlight-color: transparent;
+        }
+        .topbar-refresh:active { opacity: .55 }
         .topbar-brand span { display: none }
         .topbar-brand { font-size: 16px }
     }
@@ -1164,6 +1192,11 @@
 <div class="topbar">
     <div class="topbar-main">
         <div class="topbar-brand">&#10022; Shine <span>/ Booking</span></div>
+        <!-- Mobile-only: refresh is used constantly and should not be buried in
+             the More sheet. Hidden on desktop, which already has one in the
+             tools row. -->
+        <button class="topbar-refresh" onclick="loadLeads();loadPendingReplies();"
+                aria-label="Refresh" title="Refresh">&#8635;</button>
         <div class="topbar-tabs">
             <button class="ttab active" onclick="showView('pipeline')">Leads</button>
             <button class="ttab" onclick="showView('planners')">Planners</button>
@@ -5347,7 +5380,6 @@ closeContractModal = function() {
     <button class="more-row" onclick="closeMoreSheet();showView('coldoutreach')"><span class="mi">&#129505;</span> Cold outreach</button>
     <button class="more-row" onclick="closeMoreSheet();openPastClients()"><span class="mi">&#128231;</span> Past clients</button>
     <button class="more-row" onclick="closeMoreSheet();suggestActionItems()"><span class="mi">&#129517;</span> Suggest actions</button>
-    <button class="more-row" onclick="closeMoreSheet();loadLeads();loadPendingReplies();"><span class="mi">&#8635;</span> Refresh</button>
     <button class="more-row" onclick="closeMoreSheet();openNoReplySettings()"><span class="mi">&#9201;</span> No-reply threshold</button>
     <div class="more-toggle">
         <span>Auto-send replies</span>
