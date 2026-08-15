@@ -1091,6 +1091,11 @@
         }
         .tabbar-fab:active { transform: scale(.93); }
 
+        /* Standard iOS drill-down: the tab bar steps aside for a detail view
+           and the sticky back button is the way out. Reclaims the whole bottom
+           strip for the conversation. */
+        body.detail-open .tabbar { display: none; }
+
         /* Overflow sheet for the actions that do not earn a permanent slot. */
         .more-backdrop {
             display: block; position: fixed; inset: 0;
@@ -1133,7 +1138,7 @@
             padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
         }
         #new-lead-shell { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)) }
-        #detail-body { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)) }
+        #detail-body { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)) }
         .shell { padding-bottom: 0 }
         .detail-pane {
             position: fixed;
@@ -1933,6 +1938,10 @@ function syncTabbar(view) {
 function showView(view) {
     document.getElementById('pipeline-shell').style.display  = (view === 'pipeline' || view === 'planners' || view === 'coldoutreach') ? 'flex'  : 'none';
     document.getElementById('new-lead-shell').style.display  = view === 'new-lead'  ? 'block' : 'none';
+    // Insurance: every current exit from a conversation goes through
+    // closeDetail(), but a future path that switches view directly must not be
+    // able to strand the tab bar hidden with no way to get it back.
+    document.body.classList.remove('detail-open');
     syncTabbar(view);
     document.querySelectorAll('.ttab').forEach(function(t) { t.classList.remove('active'); });
     document.querySelectorAll('.ttab').forEach(function(t) {
@@ -2425,10 +2434,12 @@ function selectLead(id) {
     if (row) row.classList.add('selected');
     renderDetail(c);
     document.getElementById('detail-pane').classList.add('open');
+    document.body.classList.add('detail-open');
 }
 
 function closeDetail() {
     document.getElementById('detail-pane').classList.remove('open');
+    document.body.classList.remove('detail-open');
     activeClientId = null;
     document.querySelectorAll('.lead-row').forEach(function(r) { r.classList.remove('selected'); });
 }
