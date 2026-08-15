@@ -1133,6 +1133,7 @@
             padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
         }
         #new-lead-shell { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)) }
+        #detail-body { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)) }
         .shell { padding-bottom: 0 }
         .detail-pane {
             position: fixed;
@@ -1140,14 +1141,25 @@
                bottom bar. Bottom padding clears the tab bar so the last row of
                a conversation is not sitting underneath it. */
             top: calc(52px + env(safe-area-inset-top, 0px)); left: 0; right: 0; bottom: 0;
-            padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
             background: var(--bg);
             z-index: 30;
             transform: translateX(100%);
             transition: transform .28s cubic-bezier(.4,0,.2,1)
         }
         .detail-pane.open { transform: translateX(0) }
-        .detail-back-btn { display: flex }
+        /* Was a normal child of the scrolling pane, so it scrolled away the
+           moment Shine read down a conversation and there was then no visible
+           way out. Pinned to the top of the pane instead, with a solid
+           background so messages pass underneath it cleanly. */
+        .detail-back-btn {
+            display: flex;
+            position: sticky; top: 0; z-index: 5;
+            width: 100%;
+            background: var(--bg);
+            border-bottom: 1px solid var(--border);
+            padding: 13px 16px;
+            font-size: 14px;
+        }
         .review-row span { display: none }
         #new-lead-shell { padding: 14px }
 
