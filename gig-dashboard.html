@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Shine, The Mentalist — Gig Dashboard</title>
 <!-- Distinct dock/home-screen icon (gold top hat) so it doesn't clash with the Booking App's blue star -->
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/gig-icon-180.png">
@@ -456,10 +456,110 @@ td { padding: 9px 14px; vertical-align: middle; }
   .kpi-row { grid-template-columns: repeat(3, 1fr); }
   .charts-row { grid-template-columns: 1fr; }
 }
+/* ── Bottom tab bar (mobile only) ───────────────────────────────────────
+   Same treatment as the booking app: on a phone the topbar's six buttons
+   wrapped into a cramped block where "+ Add Gig", the action that matters
+   most, was no easier to hit than "Export CSV". Everything moves to a
+   thumb-reachable bottom bar with a raised centre button. Desktop keeps the
+   topbar exactly as it was. */
+.tabbar, .more-sheet, .more-backdrop, .topbar-refresh { display: none; }
+
 @media (max-width: 600px) {
   .kpi-row { grid-template-columns: repeat(2, 1fr); }
-  .main { padding: 16px; }
+  .main {
+    padding: 16px;
+    /* The bar is fixed, so the page has to reserve room or the last table
+       row sits underneath it. */
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  }
   .detail-grid { grid-template-columns: 1fr; }
+
+  /* Topbar: title + sync + one refresh button. The rest moved down. */
+  .topbar {
+    padding-top: env(safe-area-inset-top, 0px);
+    align-items: center;
+    gap: 10px;
+  }
+  .topbar h1 { font-size: 15px; }
+  .topbar-titlewrap { min-width: 0; }
+  .topbar-titlewrap h1 {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .topbar-right { display: none; }
+  .topbar-refresh {
+    display: flex; align-items: center; justify-content: center;
+    flex: 0 0 auto;
+    width: 40px; height: 40px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text, #e8e6ef); font-size: 19px; line-height: 1;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .topbar-refresh:active { opacity: .55 }
+
+  .tabbar {
+    display: flex;
+    position: fixed; left: 0; right: 0; bottom: 0;
+    z-index: 60;
+    align-items: flex-end;
+    background: rgba(20,19,26,.92);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-top: 1px solid var(--border);
+    /* max(), not the raw inset: on a device reporting 0 the labels would sit
+       hard against the screen edge and the raised button would be clipped. */
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 10px);
+  }
+  .tabbar-item {
+    flex: 1;
+    background: none; border: none; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 9px 0 8px;
+    color: var(--muted); font-size: 10px; font-weight: 600;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tabbar-item .ti { font-size: 19px; line-height: 1; }
+  .tabbar-item:active { opacity: .55; }
+
+  .tabbar-fab {
+    flex: 0 0 auto;
+    width: 58px; height: 58px; margin: 0 6px -8px;
+    border-radius: 50%;
+    background: linear-gradient(160deg, #8b7dff, #6b5ce0);
+    color: #fff; font-size: 30px; font-weight: 300; line-height: 1;
+    border: 3px solid var(--bg);
+    box-shadow: 0 6px 18px rgba(107,92,224,.45);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tabbar-fab:active { transform: scale(.93); }
+
+  .more-backdrop {
+    display: block; position: fixed; inset: 0;
+    background: rgba(0,0,0,.5); z-index: 70;
+  }
+  .more-sheet {
+    display: block; position: fixed; left: 0; right: 0; bottom: 0;
+    z-index: 71;
+    background: var(--card, #17161c);
+    border-top-left-radius: 16px; border-top-right-radius: 16px;
+    padding: 8px 0 calc(10px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -10px 40px rgba(0,0,0,.5);
+  }
+  .more-sheet .grabber {
+    width: 38px; height: 4px; border-radius: 2px;
+    background: var(--border); margin: 6px auto 10px;
+  }
+  .more-sheet .more-row {
+    width: 100%; background: none; border: none; cursor: pointer;
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 20px; font-size: 15px; color: var(--text, #e8e6ef);
+    text-align: left; text-decoration: none;
+  }
+  .more-sheet .more-row:active { background: rgba(255,255,255,.05); }
+  .more-sheet .more-row .mi { font-size: 18px; width: 24px; text-align: center; }
 }
 </style>
 </head>
@@ -467,10 +567,13 @@ td { padding: 9px 14px; vertical-align: middle; }
 
 <!-- Topbar -->
 <div class="topbar">
-  <div>
+  <div class="topbar-titlewrap">
     <h1>Shine, The Mentalist — Gig Dashboard</h1>
     <div class="sub" id="topbar-sub">Loading...</div>
   </div>
+  <!-- Mobile-only: refresh is used constantly and should not be buried in a
+       sheet. Hidden on desktop, which already has one in the button row. -->
+  <button class="topbar-refresh" onclick="loadAll()" aria-label="Refresh" title="Refresh">&#8635;</button>
   <div class="topbar-right">
     <div class="sync-status">
       <div class="sync-dot syncing" id="sync-dot"></div>
@@ -523,7 +626,7 @@ td { padding: 9px 14px; vertical-align: middle; }
   </div>
 
   <!-- History table -->
-  <div class="table-section">
+  <div class="table-section" id="history-section">
     <div class="table-header">
       <h3>Gig History <span id="count-badge" style="font-size:12px;color:var(--muted);font-weight:400;margin-left:4px;"></span></h3>
       <div class="filters">
@@ -2981,6 +3084,52 @@ function copyStableLink() {
   navigator.clipboard.writeText(el.value).then(function(){
     document.getElementById('stable-link-status').textContent = 'Link copied!';
   }, function(){ /* fallback: it's already selected for manual copy */ });
+}
+</script>
+<!-- Bottom tab bar + overflow sheet: mobile only, hidden by CSS on desktop.
+     This page is one long scroll rather than separate views, so the two tabs
+     either side of the button jump to a section instead of switching view. -->
+<nav class="tabbar" id="tabbar">
+    <button class="tabbar-item" onclick="jumpTo('top')">
+        <span class="ti">&#128200;</span><span>Overview</span></button>
+    <button class="tabbar-item" onclick="jumpTo('history-section')">
+        <span class="ti">&#128203;</span><span>History</span></button>
+    <button class="tabbar-fab" onclick="openAdd()" aria-label="Add a gig" title="Add gig">+</button>
+    <button class="tabbar-item" onclick="openPlanners()">
+        <span class="ti">&#128101;</span><span>Planners</span></button>
+    <button class="tabbar-item" onclick="openMoreSheet()">
+        <span class="ti">&#8943;</span><span>More</span></button>
+</nav>
+
+<div class="more-backdrop" id="more-backdrop" onclick="closeMoreSheet()" style="display:none"></div>
+<div class="more-sheet" id="more-sheet" style="display:none">
+    <div class="grabber"></div>
+    <button class="more-row" onclick="closeMoreSheet();openAISettings()"><span class="mi">&#129302;</span> AI settings</button>
+    <button class="more-row" onclick="closeMoreSheet();exportCSV()"><span class="mi">&#128229;</span> Export CSV</button>
+    <a class="more-row" href="https://shine-booking.vercel.app/index.html" target="_blank" rel="noopener" onclick="closeMoreSheet()"><span class="mi">&#128241;</span> Booking app &#8599;</a>
+</div>
+
+<script>
+// ── Bottom tab bar (mobile) ────────────────────────────────────────────────
+// Mirrors the topbar's actions so there is still one implementation of each.
+function openMoreSheet() {
+    document.getElementById('more-backdrop').style.display = 'block';
+    document.getElementById('more-sheet').style.display = 'block';
+}
+function closeMoreSheet() {
+    document.getElementById('more-backdrop').style.display = 'none';
+    document.getElementById('more-sheet').style.display = 'none';
+}
+// This page is a single scroll, so the side tabs jump to a section rather
+// than switching view. 'top' is handled separately because the overview has
+// no wrapper element of its own.
+function jumpTo(id) {
+    if (id === 'top') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    var el = document.getElementById(id);
+    if (!el) return;
+    // Offset by the topbar so the section heading is not hidden under it.
+    var y = el.getBoundingClientRect().top + window.pageYOffset - 64;
+    window.scrollTo({ top: y, behavior: 'smooth' });
 }
 </script>
 </body>
