@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Family">
 <title>Family Calendar</title>
+<script src="lib/family-note.js"></script>
 <style>
   :root { --bg:#faf8f2; --ink:#2b2b2b; --muted:#8a8578; --line:#e7e2d6; --accent:#b58900; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -22,12 +23,6 @@
   }
   header h1 { font-size: 20px; margin: 0; font-weight: 700; }
   #status { margin-left: auto; font-size: 12px; color: var(--muted); }
-  #gigs {
-    padding: 8px 18px; font-size: 13px; color: var(--muted);
-    border-bottom: 1px solid var(--line); background: #f3efe4;
-  }
-  #gigs b { color: var(--ink); font-weight: 600; }
-  #gigs .none { color: var(--muted); }
   textarea {
     flex: 1; width: 100%; border: 0; outline: none; resize: none;
     background: transparent; color: var(--ink);
@@ -60,8 +55,7 @@
       <h1>Family Calendar</h1>
       <span id="status">Loading…</span>
     </header>
-    <div id="gigs"></div>
-    <textarea id="note" placeholder="Type here, one thing per line — like:&#10;Aug 29 dentist 3pm&#10;Sep 6 Onam dinner&#10;&#10;It saves itself as you type."
+    <textarea id="note" placeholder="Type here, one thing per line — like:&#10;Aug 29 dentist 3pm&#10;Sep 6 Onam dinner&#10;Shine not to travel Sep 1 to 5&#10;&#10;It saves itself as you type."
       autocapitalize="sentences" autocomplete="off" spellcheck="true"></textarea>
   </div>
 
@@ -168,28 +162,40 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) saveNow(); else if (TOKEN) loadNote().catch(() => {});
 });
 
-// ── Booked gigs, read-only ────────────────────────────────────────────────────
-// She used to see gigs in the note because the old agent wrote them in. Now
-// they show here instead, so she still has the whole picture without them
-// cluttering the list she controls.
-async function loadGigs() {
-  const box = document.getElementById('gigs');
+// ── Keep booked gigs in the list, inline by date ──────────────────────────────
+// The note reads exactly as it does now: one sequential list, gigs sitting on
+// their own dates among the family entries -- not clubbed anywhere. A newly
+// booked gig is added in date order if it is not already written, which is
+// what the old Mac agent used to do, now done here on open.
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+async function mergeGigsIntoNote() {
+  const today = new Date().toISOString().slice(0, 10);
+  let rows;
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    const rows = await db('GET',
+    rows = await db('GET',
       'bookings?select=event_date,start_time,client_name,event_title,status'
       + '&event_date=gte.' + today + '&order=event_date.asc');
-    const done = ['completed', 'lost', 'cancelled'];
-    const gigs = (Array.isArray(rows) ? rows : [])
-      .filter(b => b.event_date && !done.includes(String(b.status || '').toLowerCase()))
-      .slice(0, 6);
-    if (!gigs.length) { box.innerHTML = '<span class="none">No gigs booked yet.</span>'; return; }
-    box.innerHTML = '🎩 <b>Your gigs:</b> ' + gigs.map(g => {
-      const d = new Date(g.event_date + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
-      const t = g.start_time ? ' ' + g.start_time : '';
-      return d + (g.event_title ? ' ' + g.event_title : '') + t;
-    }).join(' · ');
-  } catch (e) { box.textContent = ''; }
+  } catch (e) { return; }
+  const done = ['completed', 'lost', 'cancelled'];
+  const gigs = (Array.isArray(rows) ? rows : [])
+    .filter(b => b.event_date && !done.includes(String(b.status || '').toLowerCase()));
+
+  let content = noteEl.value;
+  let changed = false;
+  gigs.forEach(g => {
+    if (window.FamilyNote.hasGigOn(content, g.event_date)) return; // already written
+    const [y, m, d] = g.event_date.split('-').map(Number);
+    const title = g.event_title && g.event_title.trim() ? g.event_title.trim() : 'Magic Show';
+    const time = g.start_time ? ' at ' + g.start_time : '';
+    const line = `${MONTH_ABBR[m - 1]} ${d} ${title}${time}`;
+    content = window.FamilyNote.insertByDate(content, g.event_date, line);
+    changed = true;
+  });
+  if (changed) {
+    noteEl.value = content;
+    await saveNow();
+  }
 }
 
 async function boot() {
@@ -197,7 +203,7 @@ async function boot() {
   document.getElementById('app').classList.remove('hidden');
   try {
     await loadNote();
-    await loadGigs();
+    await mergeGigsIntoNote();
   } catch (e) { /* 401 handled in db() */ }
 }
 
