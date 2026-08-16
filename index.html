@@ -9,6 +9,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Shine, The Mentalist — Booking Pipeline</title>
     <link rel="manifest" href="/manifest.json">
+    <script src="/lib/family-note.js"></script>
     <link rel="apple-touch-icon" href="/icons/icon-180.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1232,6 +1233,7 @@
         <button class="topbar-icon-btn" style="background:rgba(140,120,255,.14);color:#c9b8ff;border-color:rgba(140,120,255,.3);" onclick="suggestActionItems()" title="Scan the pipeline and suggest what to do next">&#129517; <span class="btn-label">Suggest actions</span></button>
         <button class="topbar-icon-btn" style="background:rgba(120,200,140,.14);color:#8fe0a5;border-color:rgba(120,200,140,.3);" onclick="findLeads()" title="Search the web for live opportunities and draft intro emails, you review and send each one">&#128301; <span class="btn-label">Find leads</span></button>
         <button class="topbar-icon-btn" style="background:rgba(240,165,0,.14);color:#e0a83c;border-color:rgba(240,165,0,.3);" onclick="openPastClients()" title="Keep in touch with past clients: birthday reminders a month out, casual check-ins for others">&#128231; <span class="btn-label">Past clients</span></button>
+        <button class="topbar-icon-btn" style="background:rgba(240,165,0,.14);color:#e0a83c;border-color:rgba(240,165,0,.3);" onclick="openCheckDate()" title="Check if a date is free before accepting a lead">&#128197; <span class="btn-label">Check date</span></button>
         <button class="topbar-icon-btn" onclick="loadLeads();loadPendingReplies();">&#8635;</button>
         <button class="topbar-icon-btn" onclick="openNoReplySettings()" title="No-reply threshold">&#9201;</button>
     </div>
@@ -1425,6 +1427,19 @@
 </div>
 
 <!-- Pricing modal -->
+<div class="modal-overlay" id="check-date-modal">
+    <div class="modal">
+        <h2>Check a Date</h2>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 12px;">See what is already on that day and around it — your gigs and the family list, together — before accepting a lead.</p>
+        <input type="date" id="cd-input" onchange="runCheckDate()"
+               style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:16px;">
+        <div id="cd-result" style="margin-top:14px;color:var(--text);font-size:14px;"></div>
+        <div style="margin-top:16px;text-align:right;">
+            <button class="modal-cancel" onclick="document.getElementById('check-date-modal').classList.remove('show')">Close</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="pricing-modal">
     <div class="modal">
         <h2>Send pricing</h2>
@@ -5380,6 +5395,114 @@ closeContractModal = function() {
     document.getElementById('contract-dl-invoice-btn').style.display = 'none';
     ciLineItems = [];
 };
+
+// ── Check a date ──────────────────────────────────────────────────────────────
+// Same feature as the gig dashboard: is a date free, and what is around it?
+// Reads the live family note (parsed in the browser) plus booked gigs, so a
+// GigSalad/Bark lead can be judged without leaving the pipeline. All fetches
+// go through the same proxy shim the rest of this page uses.
+var CD_WINDOW = 7;
+var cdFamilyByDate = {}, cdFamilyList = [], cdStanding = [], cdGigs = [], cdLastEdited = null;
+var CD_GIG_WORDS = ['magic', 'show', 'gig', 'performance'];
+
+function cdDayDelta(fromStr, toStr) {
+    var a = Date.parse(fromStr + 'T00:00:00Z'), b = Date.parse(toStr + 'T00:00:00Z');
+    if (isNaN(a) || isNaN(b)) return null;
+    return Math.round((b - a) / 86400000);
+}
+
+function cdSb(path) {
+    return fetch(SUPABASE_URL + '/rest/v1/' + path,
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } })
+        .then(function (r) { return r.ok ? r.json() : []; });
+}
+
+function cdLoad() {
+    return Promise.all([
+        cdSb('family_note?id=eq.1&select=content,updated_at'),
+        cdSb('bookings?select=event_date,start_time,client_name,event_title,status&order=event_date.asc')
+    ]).then(function (res) {
+        var fam = res[0] || [], bk = res[1] || [];
+        var content = (fam[0] && fam[0].content) || '';
+        cdLastEdited = (fam[0] && fam[0].updated_at) || null;
+        cdFamilyByDate = {}; cdFamilyList = [];
+        window.FamilyNote.parseEvents(content).forEach(function (e) {
+            var t = e.title.toLowerCase();
+            if (CD_GIG_WORDS.some(function (w) { return t.indexOf(w) !== -1; })) return;
+            (cdFamilyByDate[e.date] = cdFamilyByDate[e.date] || []).push(e.title);
+            cdFamilyList.push({ date: e.date, title: e.title });
+        });
+        cdStanding = window.FamilyNote.parseStanding(content);
+        var done = ['completed', 'lost', 'cancelled'];
+        cdGigs = (Array.isArray(bk) ? bk : [])
+            .filter(function (b) { return b.event_date && done.indexOf(String(b.status || '').toLowerCase()) === -1; })
+            .map(function (b) {
+                return { date: b.event_date,
+                    label: (b.client_name || b.event_title || 'Gig') + (b.start_time ? ' · ' + b.start_time : '') };
+            });
+    });
+}
+
+function cdFreshness() {
+    if (!cdLastEdited) return '';
+    var mins = Math.max(0, Math.round((Date.now() - Date.parse(cdLastEdited)) / 60000));
+    var ago = mins < 1 ? 'moments ago' : mins === 1 ? '1 minute ago'
+        : mins < 60 ? mins + ' minutes ago' : Math.round(mins / 60) + ' hour(s) ago';
+    return '<div style="margin-top:12px;font-size:12px;color:var(--muted);">👨‍👩‍👧 Family list (live) · last edited ' + ago + '</div>';
+}
+
+function openCheckDate() {
+    document.getElementById('cd-input').value = '';
+    document.getElementById('cd-result').innerHTML = '<span style="color:var(--muted);">Getting the latest…</span>';
+    document.getElementById('check-date-modal').classList.add('show');
+    cdLoad().then(function () {
+        document.getElementById('cd-result').innerHTML = '<span style="color:var(--muted);">Pick a date to check.</span>' + cdFreshness();
+    });
+}
+
+function cdEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+function runCheckDate() {
+    var target = document.getElementById('cd-input').value;
+    var box = document.getElementById('cd-result');
+    if (!target) { box.innerHTML = ''; return; }
+
+    var items = [];
+    cdGigs.forEach(function (g) {
+        var d = cdDayDelta(target, g.date);
+        if (d === null || Math.abs(d) > CD_WINDOW) return;
+        items.push({ d: d, kind: 'gig', label: g.label });
+    });
+    cdFamilyList.forEach(function (e) {
+        var d = cdDayDelta(target, e.date);
+        if (d === null || Math.abs(d) > CD_WINDOW) return;
+        items.push({ d: d, kind: 'family', label: e.title });
+    });
+    var onDay = items.filter(function (i) { return i.d === 0; });
+    var near = items.filter(function (i) { return i.d !== 0; }).sort(function (a, b) { return Math.abs(a.d) - Math.abs(b.d); });
+    var gigOnDay = onDay.some(function (i) { return i.kind === 'gig'; });
+
+    var nice = new Date(target + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    var html = '<div style="font-weight:700;margin-bottom:6px;">' + cdEsc(nice) + '</div>';
+    if (cdStanding.length) {
+        html += '<div style="background:#4a3a00;border:1px solid #7a5c00;border-radius:8px;padding:8px 10px;margin:6px 0;color:#f0d68a;">⚠️ Standing note: ' + cdEsc(cdStanding.join(' · ')) + '</div>';
+    }
+    html += gigOnDay
+        ? '<div style="background:#4a1616;border:1px solid #7a2020;border-radius:8px;padding:8px 10px;margin:6px 0;color:#f2b8b8;">🎩 You have a gig booked that day.</div>'
+        : '<div style="color:#2ec27e;font-weight:600;margin:6px 0;">✓ No gig booked on this date.</div>';
+
+    function line(i) {
+        var icon = i.kind === 'gig' ? '🎩' : '👨‍👩‍👧';
+        if (i.d === 0) return '<div>' + icon + ' ' + cdEsc(i.label) + '</div>';
+        var n = Math.abs(i.d), when = (i.d < 0 ? n + ' day(s) before' : n + ' day(s) after');
+        return '<div>' + icon + ' ' + cdEsc(i.label) + ' <span style="color:var(--muted);">(' + when + ')</span></div>';
+    }
+    if (onDay.length) html += '<div style="margin-top:10px;font-weight:600;">On this day</div><div style="line-height:1.7;">' + onDay.map(line).join('') + '</div>';
+    if (near.length) html += '<div style="margin-top:10px;font-weight:600;">Within ' + CD_WINDOW + ' days</div><div style="line-height:1.7;">' + near.map(line).join('') + '</div>';
+    if (!onDay.length && !near.length) html += '<div style="margin-top:10px;color:var(--muted);">Nothing else within ' + CD_WINDOW + ' days.</div>';
+    html += cdFreshness();
+    box.innerHTML = html;
+}
 </script>
 <!-- Bottom tab bar + overflow sheet: mobile only, hidden by CSS on desktop.
      Mirrors the top bar's actions rather than replacing them, so desktop is
