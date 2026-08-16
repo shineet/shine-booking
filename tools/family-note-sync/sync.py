@@ -41,6 +41,12 @@ import family_note
 HERE = os.path.dirname(os.path.abspath(__file__))
 ENV_PATH = os.path.join(HERE, ".env")
 
+# Sentinel date for standing availability notes (see pull()). Far in the
+# future so the dashboard never renders them as a real day's event; it keys
+# on this exact value to pull them out. Kept in step with the same constant in
+# gig-dashboard.html.
+FAMILY_STANDING_DATE = "2099-01-01"
+
 # Anything at or past "booked" is a real commitment worth putting on the
 # family list. Mirrors STATUS_RANK in api/reply.js -- keep the two in step.
 BOOKED_STATUSES = [
@@ -114,7 +120,8 @@ def pull(env, note_text, dry_run: bool) -> int:
     otherwise pile up forever as the note gets tidied.
     """
     all_events = family_note.parse_events(note_text)
-    if not all_events:
+    standing = family_note.parse_standing_notes(note_text)
+    if not all_events and not standing:
         # Refuse to wipe the table over an empty parse. An empty result is far
         # more likely to mean the note failed to read, or its format changed,
         # than that the family genuinely has nothing on. Leaving yesterday's
@@ -129,16 +136,6 @@ def pull(env, note_text, dry_run: bool) -> int:
     events = [e for e in all_events if e["date"] >= today]
     dropped = len(all_events) - len(events)
 
-    if not events:
-        # Distinct from the guard above: the note read fine, there is simply
-        # nothing upcoming left in it. Safe to clear.
-        if dry_run:
-            print(f"PULL: would clear all rows ({dropped} past event(s), nothing upcoming)")
-            return 0
-        supabase(env, "DELETE", "family_events?id=gte.0")
-        print(f"PULL: cleared all rows ({dropped} past event(s), nothing upcoming)")
-        return 0
-
     batch = str(uuid.uuid4())
     rows = [{
         "event_date": e["date"].isoformat(),
@@ -147,11 +144,34 @@ def pull(env, note_text, dry_run: bool) -> int:
         "sync_batch": batch,
     } for e in events]
 
+    # Standing availability notes ride the same table on a sentinel date, so
+    # the dashboard's Check Date can always show them without a schema change
+    # or a new endpoint. FAMILY_STANDING_DATE is far in the future so they
+    # never appear as a real day's event.
+    rows += [{
+        "event_date": FAMILY_STANDING_DATE,
+        "title": s["title"],
+        "raw_line": s["raw"],
+        "sync_batch": batch,
+    } for s in standing]
+
+    if not rows:
+        # Note read fine, nothing upcoming and no standing notes. Safe to clear.
+        if dry_run:
+            print(f"PULL: would clear all rows ({dropped} past event(s), nothing upcoming)")
+            return 0
+        supabase(env, "DELETE", "family_events?id=gte.0")
+        print(f"PULL: cleared all rows ({dropped} past event(s), nothing upcoming)")
+        return 0
+
     note = f" ({dropped} past event(s) skipped)" if dropped else ""
+    stand = f", {len(standing)} standing note(s)" if standing else ""
     if dry_run:
-        print(f"PULL: would publish {len(rows)} events as batch {batch[:8]}{note}")
+        print(f"PULL: would publish {len(events)} events{stand} as batch {batch[:8]}{note}")
         for e in events:
             print(f"       {e['date']}  {e['title']}")
+        for s in standing:
+            print(f"       [standing]  {s['title']}")
         return len(rows)
 
     # Insert the new batch BEFORE removing the old one. If this dies in
@@ -161,7 +181,7 @@ def pull(env, note_text, dry_run: bool) -> int:
     # deleted from the note, and anything that has slipped into the past.
     supabase(env, "POST", "family_events", rows, prefer="return=minimal")
     supabase(env, "DELETE", f"family_events?sync_batch=neq.{batch}")
-    print(f"PULL: published {len(rows)} events (batch {batch[:8]}){note}")
+    print(f"PULL: published {len(events)} events{stand} (batch {batch[:8]}){note}")
     return len(rows)
 
 

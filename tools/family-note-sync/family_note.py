@@ -146,6 +146,43 @@ def events_on(text: str, target: dt.date, window: int = 0) -> list[dict]:
     ]
 
 
+# Availability directives that belong to no single date, like
+# "Shine not to travel the week after 22nd". A "Check Date" that ignores these
+# could call a day free when it is not, so they are captured and always shown.
+# Deliberately narrow -- only lines clearly about travel or availability, so a
+# stray sentence never gets pulled in.
+STANDING_KEYWORDS = (
+    "travel", "not available", "unavailable", "out of town", "out-of-town",
+    "away", "blackout", "no gig", "no gigs", "don't book", "do not book",
+    "not to book", "keep free", "keep the week", "no shows", "no bookings",
+)
+
+
+def parse_standing_notes(text: str) -> list[dict]:
+    """
+    Free-standing availability lines from the note (no date of their own).
+
+    A line qualifies only if it is NOT a dated event line and it mentions one
+    of the availability keywords -- narrow on purpose, so ordinary lines are
+    left alone.
+    """
+    out: list[dict] = []
+    seen: set[str] = set()
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line in seen:
+            continue
+        # Skip anything that is (or starts like) a dated event.
+        m = EVENT_RE.match(line)
+        if m and MONTHS.get(m.group("month").lower()):
+            continue
+        low = line.lower()
+        if any(k in low for k in STANDING_KEYWORDS):
+            out.append({"title": line, "raw": line})
+            seen.add(line)
+    return out
+
+
 # A note entry counts as "this gig is already written down" if it falls on the
 # right date and reads like a show. Exact string matching is not enough: Shine
 # types these by hand as "Magic show at 7 pm" while the app would generate

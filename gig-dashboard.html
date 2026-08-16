@@ -582,6 +582,7 @@ td { padding: 9px 14px; vertical-align: middle; }
     <a class="topbar-link" href="https://shine-booking.vercel.app/index.html" target="_blank" rel="noopener">Booking App &#8599;</a>
     <button class="secondary" onclick="openPlanners()">Planners</button>
     <button class="secondary" onclick="openAISettings()">AI Settings</button>
+    <button class="secondary" onclick="openCheckDate()">Check Date</button>
     <button class="secondary" id="refresh-btn" onclick="loadAll()">Refresh</button>
     <button class="secondary" onclick="exportCSV()">Export CSV</button>
     <button onclick="openAdd()">+ Add Gig</button>
@@ -728,6 +729,24 @@ td { padding: 9px 14px; vertical-align: middle; }
 </div>
 
 <!-- ── Mark as Done Modal ── -->
+<div class="modal-overlay" id="check-date-modal">
+  <div class="modal" style="max-width:520px;width:100%">
+    <h2>Check a Date</h2>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 12px;">
+      Before accepting a lead, see what is already on that day and around it —
+      your gigs and the shared Family note, together.
+    </p>
+    <div class="form-group">
+      <label>Date of the enquiry</label>
+      <input type="date" id="check-date-input" onchange="runCheckDate()">
+    </div>
+    <div id="check-date-result" style="margin-top:14px;"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeModal('check-date-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="done-modal">
   <div class="modal">
     <h2>Mark Gig as Done</h2>
@@ -1134,6 +1153,13 @@ async function sbDelete(table, id) {
 // happening that day?" without having to go and look at the note.
 let familyByDate = {};
 let familyList = [];
+// Standing directive lines from the note that have no single date ("Shine not
+// to travel the week after 22nd"). The Mac agent stores these as sentinel-
+// dated rows so they ride the existing table without a schema change; the
+// dashboard pulls them back out and always shows them, since a "you're free"
+// answer that ignores them would be wrong.
+let familyStandingNotes = [];
+const FAMILY_STANDING_DATE = '2099-01-01';
 
 // The note now contains the gigs themselves, because the agent writes them
 // back. Without this filter every booked gig would cheerfully warn about
@@ -1148,7 +1174,13 @@ const FAMILY_NEAR_DAYS = 3;
 function buildFamilyIndex(rows) {
   familyByDate = {};
   familyList = [];
+  familyStandingNotes = [];
   (Array.isArray(rows) ? rows : []).forEach(r => {
+    // Sentinel-dated rows are standing notes, not events for a day.
+    if (r.event_date === FAMILY_STANDING_DATE) {
+      familyStandingNotes.push(r.title);
+      return;
+    }
     const t = String(r.title || '').toLowerCase();
     if (FAMILY_GIG_WORDS.some(w => t.includes(w))) return;
     (familyByDate[r.event_date] = familyByDate[r.event_date] || []).push(r.title);
@@ -1196,6 +1228,89 @@ function familyClashBadge(dateStr) {
   }
 
   return out;
+}
+
+// ── Check a date ────────────────────────────────────────────────────────────
+// Answers "am I free on X, and what is around it?" in one place, pulling gigs
+// (upcoming pipeline + history) and the Family note together, so a lead can be
+// judged without opening the note or scrolling the pipeline.
+const CHECK_WINDOW_DAYS = 7;
+
+function openCheckDate() {
+  document.getElementById('check-date-input').value = '';
+  document.getElementById('check-date-result').innerHTML =
+    '<div style="font-size:13px;color:var(--muted);">Pick a date to check.</div>';
+  openModal('check-date-modal');
+}
+
+function runCheckDate() {
+  const target = document.getElementById('check-date-input').value;
+  const box = document.getElementById('check-date-result');
+  if (!target) { box.innerHTML = ''; return; }
+
+  // Every commitment near the date, from both stores, tagged by kind.
+  const items = [];
+  (upcoming || []).forEach(c => {
+    const d = dayDelta(target, c.event_date);
+    if (d === null || Math.abs(d) > CHECK_WINDOW_DAYS) return;
+    const time = (c.bookings && c.bookings[0] && c.bookings[0].start_time) || '';
+    items.push({ d, kind: 'gig', date: c.event_date,
+      label: `${c.name || 'Gig'}${c.event_type ? ' — ' + c.event_type : ''}${time ? ' · ' + time : ''}` });
+  });
+  (allGigs || []).forEach(g => {
+    if (!g.date) return;
+    const d = dayDelta(target, g.date);
+    if (d === null || Math.abs(d) > CHECK_WINDOW_DAYS) return;
+    items.push({ d, kind: 'gig', date: g.date,
+      label: `${g.client || g.client_name || 'Gig'}${g.time ? ' · ' + g.time : ''} (past)` });
+  });
+  familyList.forEach(e => {
+    const d = dayDelta(target, e.date);
+    if (d === null || Math.abs(d) > CHECK_WINDOW_DAYS) return;
+    items.push({ d, kind: 'family', date: e.date, label: e.title });
+  });
+
+  const onDay  = items.filter(i => i.d === 0).sort((a, b) => a.kind.localeCompare(b.kind));
+  const nearby = items.filter(i => i.d !== 0).sort((a, b) => Math.abs(a.d) - Math.abs(b.d));
+  const gigOnDay = onDay.some(i => i.kind === 'gig');
+
+  const nice = new Date(target + 'T00:00:00').toLocaleDateString('en-US',
+    { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+  let html = `<div style="font-weight:700;margin-bottom:6px;">${esc(nice)}</div>`;
+
+  // Standing notes first -- they can override an otherwise-free day.
+  if (familyStandingNotes.length) {
+    html += `<div class="family-clash" style="background:#4a3a00;border-color:#7a5c00;">`
+      + `⚠️ Standing note: ${esc(familyStandingNotes.join(' · '))}</div>`;
+  }
+
+  html += gigOnDay
+    ? `<div class="family-clash" style="background:#4a1616;border-color:#7a2020;">🎩 You have a gig booked that day.</div>`
+    : `<div style="color:#2ec27e;font-weight:600;margin:6px 0;">✓ No gig booked on this date.</div>`;
+
+  const line = i => {
+    const icon = i.kind === 'gig' ? '🎩' : '👨‍👩‍👧';
+    if (i.d === 0) return `<div>${icon} ${esc(i.label)}</div>`;
+    const n = Math.abs(i.d);
+    const when = i.d < 0 ? `${n} day${n > 1 ? 's' : ''} before` : `${n} day${n > 1 ? 's' : ''} after`;
+    return `<div>${icon} ${esc(i.label)} <span style="color:var(--muted);">(${when})</span></div>`;
+  };
+
+  if (onDay.length) {
+    html += `<div style="margin-top:10px;font-weight:600;">On this day</div>`
+      + `<div style="font-size:13px;line-height:1.7;">${onDay.map(line).join('')}</div>`;
+  }
+  if (nearby.length) {
+    html += `<div style="margin-top:10px;font-weight:600;">Within ${CHECK_WINDOW_DAYS} days</div>`
+      + `<div style="font-size:13px;line-height:1.7;">${nearby.map(line).join('')}</div>`;
+  }
+  if (!onDay.length && !nearby.length) {
+    html += `<div style="margin-top:10px;font-size:13px;color:var(--muted);">`
+      + `Nothing else within ${CHECK_WINDOW_DAYS} days.</div>`;
+  }
+
+  box.innerHTML = html;
 }
 
 async function loadAll() {
