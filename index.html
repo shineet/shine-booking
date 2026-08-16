@@ -5436,7 +5436,7 @@ function cdLoad() {
             (cdFamilyByDate[e.date] = cdFamilyByDate[e.date] || []).push(e.title);
             cdFamilyList.push({ date: e.date, title: e.title });
         });
-        cdStanding = window.FamilyNote.parseStanding(content);
+        cdStanding = window.FamilyNote.standingNotes(content);
         var done = ['completed', 'lost', 'cancelled'];
         cdGigs = (Array.isArray(bk) ? bk : [])
             .filter(function (b) { return b.event_date && done.indexOf(String(b.status || '').toLowerCase()) === -1; })
@@ -5488,8 +5488,11 @@ function runCheckDate() {
 
     var nice = new Date(target + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     var html = '<div style="font-weight:700;margin-bottom:6px;">' + cdEsc(nice) + '</div>';
-    if (cdStanding.length) {
-        html += '<div style="background:#4a3a00;border:1px solid #7a5c00;border-radius:8px;padding:8px 10px;margin:6px 0;color:#f0d68a;">⚠️ Standing note: ' + cdEsc(cdStanding.join(' · ')) + '</div>';
+    var standingHere = cdStanding
+        .filter(function (n) { return window.FamilyNote.standingApplies(n, target); })
+        .map(function (n) { return n.text; });
+    if (standingHere.length) {
+        html += '<div style="background:#4a3a00;border:1px solid #7a5c00;border-radius:8px;padding:8px 10px;margin:6px 0;color:#f0d68a;">⚠️ Standing note: ' + cdEsc(standingHere.join(' · ')) + '</div>';
     }
     html += gigOnDay
         ? '<div style="background:#4a1616;border:1px solid #7a2020;border-radius:8px;padding:8px 10px;margin:6px 0;color:#f2b8b8;">🎩 You have a gig booked that day.</div>'

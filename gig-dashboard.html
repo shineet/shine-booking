@@ -1186,7 +1186,9 @@ async function loadFamilyFromNote() {
     (familyByDate[e.date] = familyByDate[e.date] || []).push(e.title);
     familyList.push({ date: e.date, title: e.title });
   });
-  familyStandingNotes = window.FamilyNote.parseStanding(content);
+  // Standing notes as ranges, so Check Date only shows one when the date falls
+  // inside it (not on every date).
+  familyStandingNotes = window.FamilyNote.standingNotes(content);
 }
 
 async function loadFamilyFromEventsFallback() {
@@ -1334,10 +1336,14 @@ function runCheckDate() {
 
   let html = `<div style="font-weight:700;margin-bottom:6px;">${esc(nice)}</div>`;
 
-  // Standing notes first -- they can override an otherwise-free day.
-  if (familyStandingNotes.length) {
+  // Standing notes that actually cover this date -- they can override an
+  // otherwise-free day, but only inside their own window.
+  const standingHere = familyStandingNotes
+    .filter(n => window.FamilyNote.standingApplies(n, target))
+    .map(n => n.text);
+  if (standingHere.length) {
     html += `<div class="family-clash" style="background:#4a3a00;border-color:#7a5c00;">`
-      + `⚠️ Standing note: ${esc(familyStandingNotes.join(' · '))}</div>`;
+      + `⚠️ Standing note: ${esc(standingHere.join(' · '))}</div>`;
   }
 
   html += gigOnDay
