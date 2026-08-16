@@ -34,7 +34,7 @@
          reaching the family list quickly enough to matter, not about being
          instant. -->
     <key>StartInterval</key>
-    <integer>900</integer>
+    <integer>120</integer>
 
     <!-- Also run once when the Mac starts / the agent loads, so a gig booked
          while the machine was asleep lands as soon as it wakes. -->

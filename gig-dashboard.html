@@ -1235,12 +1235,46 @@ function familyClashBadge(dateStr) {
 // (upcoming pipeline + history) and the Family note together, so a lead can be
 // judged without opening the note or scrolling the pipeline.
 const CHECK_WINDOW_DAYS = 7;
+let lastFamilySyncedAt = null;
 
-function openCheckDate() {
-  document.getElementById('check-date-input').value = '';
-  document.getElementById('check-date-result').innerHTML =
-    '<div style="font-size:13px;color:var(--muted);">Pick a date to check.</div>';
+// How current the Family-note data is, in words. The note can only reach here
+// via the Mac agent (Apple Notes has no API and nothing on the web -- iPhone
+// or Mac browser -- can read it directly), so this is the honest measure of
+// freshness: a phone edit shows up only after the Mac next syncs.
+function familyFreshnessLine() {
+  if (!lastFamilySyncedAt) return '';
+  const ageMs = Date.now() - Date.parse(lastFamilySyncedAt);
+  const mins = Math.max(0, Math.round(ageMs / 60000));
+  const ago = mins < 1 ? 'just now' : mins === 1 ? '1 minute ago' : `${mins} minutes ago`;
+  // Over ~10 minutes almost always means the Mac is asleep, so a phone edit
+  // may not be reflected. Say so rather than quietly showing stale data.
+  const stale = ageMs > 10 * 60000;
+  const colour = stale ? '#e0a800' : 'var(--muted)';
+  const warn = stale
+    ? ' — your Mac may be asleep, so a recent phone edit might not show yet'
+    : '';
+  return `<div style="margin-top:12px;font-size:12px;color:${colour};">`
+    + `👨‍👩‍👧 Family note synced ${ago}${warn}</div>`;
+}
+
+async function openCheckDate() {
   openModal('check-date-modal');
+  document.getElementById('check-date-input').value = '';
+  const box = document.getElementById('check-date-result');
+  box.innerHTML = '<div style="font-size:13px;color:var(--muted);">Getting the latest from the Family note…</div>';
+  // Re-read the note's events fresh every time Check Date opens, rather than
+  // trusting whatever was loaded when the page first opened -- the whole point
+  // is an up-to-date answer.
+  try {
+    const fam = await sbGet('family_events?select=event_date,title,synced_at&order=event_date.asc');
+    buildFamilyIndex(fam);
+    lastFamilySyncedAt = (Array.isArray(fam) ? fam : [])
+      .reduce((mx, r) => (r.synced_at && (!mx || r.synced_at > mx)) ? r.synced_at : mx, null);
+  } catch (e) {
+    // Advisory only; fall back to whatever the page already had.
+  }
+  box.innerHTML = '<div style="font-size:13px;color:var(--muted);">Pick a date to check.</div>'
+    + familyFreshnessLine();
 }
 
 function runCheckDate() {
@@ -1310,6 +1344,7 @@ function runCheckDate() {
       + `Nothing else within ${CHECK_WINDOW_DAYS} days.</div>`;
   }
 
+  html += familyFreshnessLine();
   box.innerHTML = html;
 }
 
