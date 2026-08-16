@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 // warn about clashes. Added here rather than as a new endpoint because
 // Vercel Hobby caps this project at 12 serverless functions and api/ is
 // already at 12 -- a 13th file fails the build.
-const ALLOWED_TABLES = new Set(['clients', 'messages', 'bookings', 'app_settings', 'gigs', 'family_events']);
+const ALLOWED_TABLES = new Set(['clients', 'messages', 'bookings', 'app_settings', 'gigs', 'family_events', 'family_note']);
 
 const SB_HDR = () => ({
   'apikey': process.env.SUPABASE_SECRET_KEY,
@@ -336,6 +336,28 @@ function tokenValid(t) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// A separate, weaker credential for the family page (family.html), so Shine's
+// wife can edit the shared note without the dashboard password -- which would
+// also open the leads/revenue dashboard. A family token is scoped in the db
+// proxy to just the note (and reading gigs), nothing else.
+function makeFamilyToken() {
+  return crypto.createHash('sha256')
+    .update(String(process.env.FAMILY_PIN || '') + '|' + String(process.env.SUPABASE_SECRET_KEY || '') + '|family')
+    .digest('hex');
+}
+function familyTokenValid(t) {
+  if (!t || typeof t !== 'string' || !process.env.FAMILY_PIN) return false;
+  const a = Buffer.from(t);
+  const b = Buffer.from(makeFamilyToken());
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+// What a family token is allowed to touch: the note freely, gigs read-only.
+function familyAllowed(table, method) {
+  if (table === 'family_note') return true;
+  if (table === 'bookings' && method === 'GET') return true;
+  return false;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -361,13 +383,30 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (body.action === 'family_login') {
+      if (!process.env.FAMILY_PIN) {
+        res.status(500).json({ error: 'FAMILY_PIN is not set on the server.' });
+        return;
+      }
+      const supplied = Buffer.from(String(body.pin || ''));
+      const real = Buffer.from(String(process.env.FAMILY_PIN));
+      const ok = supplied.length === real.length && crypto.timingSafeEqual(supplied, real);
+      if (!ok) { res.status(401).json({ error: 'Wrong PIN.' }); return; }
+      res.status(200).json({ token: makeFamilyToken() });
+      return;
+    }
+
     if (body.action === 'db') {
-      if (!tokenValid(body.token)) { res.status(401).json({ error: 'Unauthorized' }); return; }
       const path = String(body.path || '');
       const table = path.split(/[?/]/)[0];
-      if (!ALLOWED_TABLES.has(table)) { res.status(403).json({ error: 'Table not allowed: ' + table }); return; }
       const method = String(body.method || 'GET').toUpperCase();
       if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(method)) { res.status(405).json({ error: 'Method not allowed' }); return; }
+      // Full dashboard token: any allowed table. Family token: note + gigs only.
+      const isFull = tokenValid(body.token);
+      const isFamily = !isFull && familyTokenValid(body.token);
+      if (!isFull && !isFamily) { res.status(401).json({ error: 'Unauthorized' }); return; }
+      if (isFamily && !familyAllowed(table, method)) { res.status(403).json({ error: 'Not allowed for this login' }); return; }
+      if (isFull && !ALLOWED_TABLES.has(table)) { res.status(403).json({ error: 'Table not allowed: ' + table }); return; }
 
       const opts = {
         method,

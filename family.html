@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Family">
+<title>Family Calendar</title>
+<style>
+  :root { --bg:#faf8f2; --ink:#2b2b2b; --muted:#8a8578; --line:#e7e2d6; --accent:#b58900; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  header {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 14px 18px 8px; border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 20px; margin: 0; font-weight: 700; }
+  #status { margin-left: auto; font-size: 12px; color: var(--muted); }
+  #gigs {
+    padding: 8px 18px; font-size: 13px; color: var(--muted);
+    border-bottom: 1px solid var(--line); background: #f3efe4;
+  }
+  #gigs b { color: var(--ink); font-weight: 600; }
+  #gigs .none { color: var(--muted); }
+  textarea {
+    flex: 1; width: 100%; border: 0; outline: none; resize: none;
+    background: transparent; color: var(--ink);
+    font: 17px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: 16px 18px 40px; -webkit-text-size-adjust: 100%;
+  }
+  /* PIN gate */
+  #gate {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    padding: 24px;
+  }
+  #gate h2 { margin: 0; font-weight: 700; }
+  #gate p { margin: 0; color: var(--muted); font-size: 14px; text-align: center; }
+  #gate input {
+    font-size: 20px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px;
+    text-align: center; width: 200px; letter-spacing: 4px;
+  }
+  #gate button {
+    font-size: 16px; padding: 12px 28px; border: 0; border-radius: 12px;
+    background: var(--accent); color: #fff; font-weight: 600;
+  }
+  #gate .err { color: #c0392b; font-size: 13px; min-height: 16px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+  <div id="app" class="hidden">
+    <header>
+      <h1>Family Calendar</h1>
+      <span id="status">Loading…</span>
+    </header>
+    <div id="gigs"></div>
+    <textarea id="note" placeholder="Type here, one thing per line — like:&#10;Aug 29 dentist 3pm&#10;Sep 6 Onam dinner&#10;&#10;It saves itself as you type."
+      autocapitalize="sentences" autocomplete="off" spellcheck="true"></textarea>
+  </div>
+
+  <div id="gate">
+    <h2>Family Calendar</h2>
+    <p>Enter the family PIN</p>
+    <input id="pin" type="tel" inputmode="numeric" autocomplete="off" placeholder="••••">
+    <button onclick="submitPin()">Open</button>
+    <div class="err" id="gate-err"></div>
+  </div>
+
+<script>
+const API = '/api/get-booking';
+let TOKEN = localStorage.getItem('familyToken') || '';
+
+async function api(action, extra) {
+  const r = await fetch(API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ action }, extra || {})),
+  });
+  return r;
+}
+
+// Every DB call goes through the server proxy with the family token, which is
+// scoped server-side to just the note and reading gigs.
+async function db(method, path, bodyObj, prefer) {
+  const r = await api('db', { token: TOKEN, method, path, body: bodyObj, prefer });
+  if (r.status === 401) { logout('Session expired. Enter the PIN again.'); throw new Error('401'); }
+  if (!r.ok) throw new Error(r.status + ' ' + await r.text());
+  const t = await r.text();
+  try { return JSON.parse(t); } catch (e) { return t; }
+}
+
+function logout(msg) {
+  TOKEN = ''; localStorage.removeItem('familyToken');
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('gate').classList.remove('hidden');
+  if (msg) document.getElementById('gate-err').textContent = msg;
+}
+
+async function submitPin() {
+  const pin = document.getElementById('pin').value.trim();
+  const err = document.getElementById('gate-err');
+  err.textContent = '';
+  const r = await api('family_login', { pin });
+  if (!r.ok) { err.textContent = 'Wrong PIN.'; return; }
+  const j = await r.json();
+  TOKEN = j.token; localStorage.setItem('familyToken', TOKEN);
+  boot();
+}
+document.getElementById('pin').addEventListener('keydown', e => { if (e.key === 'Enter') submitPin(); });
+
+// ── The note ────────────────────────────────────────────────────────────────
+const noteEl = document.getElementById('note');
+const statusEl = document.getElementById('status');
+let saveTimer = null;
+let lastSaved = '';
+
+function setStatus(t) { statusEl.textContent = t; }
+
+async function loadNote() {
+  const rows = await db('GET', 'family_note?id=eq.1&select=content,updated_at');
+  const content = (Array.isArray(rows) && rows[0] && rows[0].content) || '';
+  // Don't stomp on what she's actively typing if a refresh lands mid-edit.
+  if (document.activeElement !== noteEl || noteEl.value === lastSaved) {
+    noteEl.value = content;
+    lastSaved = content;
+  }
+  setStatus('Saved');
+}
+
+// Autosave, exactly like Notes: no button, it just persists what is there.
+// Upsert on the fixed single row, so first-ever save creates it.
+async function saveNow() {
+  const content = noteEl.value;
+  if (content === lastSaved) return;
+  setStatus('Saving…');
+  try {
+    await db('POST', 'family_note',
+      { id: 1, content, updated_at: new Date().toISOString() },
+      'resolution=merge-duplicates,return=minimal');
+    lastSaved = content;
+    const now = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    setStatus('Saved ' + now);
+  } catch (e) {
+    setStatus('Not saved — will retry');
+    // Try again shortly; a dropped save must never be silent.
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveNow, 4000);
+  }
+}
+
+noteEl.addEventListener('input', () => {
+  setStatus('Typing…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveNow, 800);
+});
+// Save immediately when she leaves the field or backgrounds the app, so a
+// half-typed line is never lost to a fast app switch.
+noteEl.addEventListener('blur', saveNow);
+window.addEventListener('pagehide', saveNow);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) saveNow(); else if (TOKEN) loadNote().catch(() => {});
+});
+
+// ── Booked gigs, read-only ────────────────────────────────────────────────────
+// She used to see gigs in the note because the old agent wrote them in. Now
+// they show here instead, so she still has the whole picture without them
+// cluttering the list she controls.
+async function loadGigs() {
+  const box = document.getElementById('gigs');
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = await db('GET',
+      'bookings?select=event_date,start_time,client_name,event_title,status'
+      + '&event_date=gte.' + today + '&order=event_date.asc');
+    const done = ['completed', 'lost', 'cancelled'];
+    const gigs = (Array.isArray(rows) ? rows : [])
+      .filter(b => b.event_date && !done.includes(String(b.status || '').toLowerCase()))
+      .slice(0, 6);
+    if (!gigs.length) { box.innerHTML = '<span class="none">No gigs booked yet.</span>'; return; }
+    box.innerHTML = '🎩 <b>Your gigs:</b> ' + gigs.map(g => {
+      const d = new Date(g.event_date + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
+      const t = g.start_time ? ' ' + g.start_time : '';
+      return d + (g.event_title ? ' ' + g.event_title : '') + t;
+    }).join(' · ');
+  } catch (e) { box.textContent = ''; }
+}
+
+async function boot() {
+  document.getElementById('gate').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  try {
+    await loadNote();
+    await loadGigs();
+  } catch (e) { /* 401 handled in db() */ }
+}
+
+if (TOKEN) boot(); else document.getElementById('pin').focus();
+</script>
+</body>
+</html>

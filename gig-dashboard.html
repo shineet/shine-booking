@@ -1007,6 +1007,7 @@ td { padding: 9px 14px; vertical-align: middle; }
   </div>
 </div>
 
+<script src="lib/family-note.js"></script>
 <script>
 // ── Config ──────────────────────────────────────────────────────────────────
 const SB_URL = 'https://nkhwttlmtidtippylbzs.supabase.co';
@@ -1154,12 +1155,53 @@ async function sbDelete(table, id) {
 let familyByDate = {};
 let familyList = [];
 // Standing directive lines from the note that have no single date ("Shine not
-// to travel the week after 22nd"). The Mac agent stores these as sentinel-
-// dated rows so they ride the existing table without a schema change; the
-// dashboard pulls them back out and always shows them, since a "you're free"
-// answer that ignores them would be wrong.
+// to travel the week after 22nd"). Always shown, since a "you're free" answer
+// that ignores them would be wrong.
 let familyStandingNotes = [];
-const FAMILY_STANDING_DATE = '2099-01-01';
+
+// The shared family list is now the plain-text note edited on family.html,
+// stored in the family_note table and parsed here in the browser (lib/
+// family-note.js) -- no Apple Notes, no Mac agent, always live. This reads it
+// and rebuilds the indexes. Advisory, so callers wrap it in a catch.
+async function loadFamilyFromNote() {
+  let content = '';
+  try {
+    const rows = await sbGet('family_note?id=eq.1&select=content,updated_at');
+    content = (Array.isArray(rows) && rows[0] && rows[0].content) || '';
+    lastFamilySyncedAt = (Array.isArray(rows) && rows[0] && rows[0].updated_at) || null;
+  } catch (e) { content = ''; }
+
+  // Transitional: until the family_note table exists and is seeded, fall back
+  // to the old family_events table (still fed by the Mac agent) so nothing is
+  // lost during the switch. Remove once family.html is the confirmed source.
+  if (!content) { await loadFamilyFromEventsFallback(); return; }
+
+  familyByDate = {};
+  familyList = [];
+  window.FamilyNote.parseEvents(content).forEach(e => {
+    // Gigs live in bookings and are shown from there; skip them here so the
+    // family list never warns about the gig it is describing.
+    const t = e.title.toLowerCase();
+    if (FAMILY_GIG_WORDS.some(w => t.includes(w))) return;
+    (familyByDate[e.date] = familyByDate[e.date] || []).push(e.title);
+    familyList.push({ date: e.date, title: e.title });
+  });
+  familyStandingNotes = window.FamilyNote.parseStanding(content);
+}
+
+async function loadFamilyFromEventsFallback() {
+  const rows = await sbGet('family_events?select=event_date,title,synced_at&order=event_date.asc').catch(() => []);
+  familyByDate = {}; familyList = []; familyStandingNotes = [];
+  (Array.isArray(rows) ? rows : []).forEach(r => {
+    if (r.event_date === '2099-01-01') { familyStandingNotes.push(r.title); return; }
+    const t = String(r.title || '').toLowerCase();
+    if (FAMILY_GIG_WORDS.some(w => t.includes(w))) return;
+    (familyByDate[r.event_date] = familyByDate[r.event_date] || []).push(r.title);
+    familyList.push({ date: r.event_date, title: r.title });
+  });
+  lastFamilySyncedAt = (Array.isArray(rows) ? rows : [])
+    .reduce((mx, r) => (r.synced_at && (!mx || r.synced_at > mx)) ? r.synced_at : mx, null);
+}
 
 // The note now contains the gigs themselves, because the agent writes them
 // back. Without this filter every booked gig would cheerfully warn about
@@ -1171,22 +1213,6 @@ const FAMILY_GIG_WORDS = ['magic', 'show', 'gig', 'performance'];
 // not really a free evening, which a same-day-only check would never show.
 const FAMILY_NEAR_DAYS = 3;
 
-function buildFamilyIndex(rows) {
-  familyByDate = {};
-  familyList = [];
-  familyStandingNotes = [];
-  (Array.isArray(rows) ? rows : []).forEach(r => {
-    // Sentinel-dated rows are standing notes, not events for a day.
-    if (r.event_date === FAMILY_STANDING_DATE) {
-      familyStandingNotes.push(r.title);
-      return;
-    }
-    const t = String(r.title || '').toLowerCase();
-    if (FAMILY_GIG_WORDS.some(w => t.includes(w))) return;
-    (familyByDate[r.event_date] = familyByDate[r.event_date] || []).push(r.title);
-    familyList.push({ date: r.event_date, title: r.title });
-  });
-}
 
 // Both sides are plain YYYY-MM-DD, so parse as UTC and diff there. Going
 // through local time would shift by a day either side of a DST boundary and
@@ -1237,24 +1263,22 @@ function familyClashBadge(dateStr) {
 const CHECK_WINDOW_DAYS = 7;
 let lastFamilySyncedAt = null;
 
-// How current the Family-note data is, in words. The note can only reach here
-// via the Mac agent (Apple Notes has no API and nothing on the web -- iPhone
-// or Mac browser -- can read it directly), so this is the honest measure of
-// freshness: a phone edit shows up only after the Mac next syncs.
+// The family list is read live from the note on every Check Date, so it is
+// always current -- this line just says when it was last edited, for context.
 function familyFreshnessLine() {
   if (!lastFamilySyncedAt) return '';
   const ageMs = Date.now() - Date.parse(lastFamilySyncedAt);
   const mins = Math.max(0, Math.round(ageMs / 60000));
-  const ago = mins < 1 ? 'just now' : mins === 1 ? '1 minute ago' : `${mins} minutes ago`;
-  // Over ~10 minutes almost always means the Mac is asleep, so a phone edit
-  // may not be reflected. Say so rather than quietly showing stale data.
-  const stale = ageMs > 10 * 60000;
-  const colour = stale ? '#e0a800' : 'var(--muted)';
-  const warn = stale
-    ? ' — your Mac may be asleep, so a recent phone edit might not show yet'
-    : '';
-  return `<div style="margin-top:12px;font-size:12px;color:${colour};">`
-    + `👨‍👩‍👧 Family note synced ${ago}${warn}</div>`;
+  let ago;
+  if (mins < 1) ago = 'moments ago';
+  else if (mins === 1) ago = '1 minute ago';
+  else if (mins < 60) ago = `${mins} minutes ago`;
+  else {
+    const hrs = Math.round(mins / 60);
+    ago = hrs === 1 ? '1 hour ago' : `${hrs} hours ago`;
+  }
+  return `<div style="margin-top:12px;font-size:12px;color:var(--muted);">`
+    + `👨‍👩‍👧 Family list (live) · last edited ${ago}</div>`;
 }
 
 async function openCheckDate() {
@@ -1266,10 +1290,7 @@ async function openCheckDate() {
   // trusting whatever was loaded when the page first opened -- the whole point
   // is an up-to-date answer.
   try {
-    const fam = await sbGet('family_events?select=event_date,title,synced_at&order=event_date.asc');
-    buildFamilyIndex(fam);
-    lastFamilySyncedAt = (Array.isArray(fam) ? fam : [])
-      .reduce((mx, r) => (r.synced_at && (!mx || r.synced_at > mx)) ? r.synced_at : mx, null);
+    await loadFamilyFromNote();
   } catch (e) {
     // Advisory only; fall back to whatever the page already had.
   }
@@ -1352,15 +1373,14 @@ async function loadAll() {
   setSyncState('syncing', 'Loading...');
   document.getElementById('refresh-btn').disabled = true;
   try {
-    const [gigs, bookings, contacts, familyRows] = await Promise.all([
+    const [gigs, bookings, contacts] = await Promise.all([
       sbGet('gigs?select=*&order=date.desc.nullslast'),
       sbGet('bookings?select=*'),
       sbGet('clients?select=*'),
       // Advisory only, so a failure here must never take the dashboard down
       // with it -- fall back to no warnings rather than no dashboard.
-      sbGet('family_events?select=event_date,title&order=event_date.asc').catch(() => []),
+      loadFamilyFromNote().catch(() => {}),
     ]);
-    buildFamilyIndex(familyRows);
 
     allGigs     = Array.isArray(gigs) ? gigs : [];
     allContacts = Array.isArray(contacts) ? contacts : [];
