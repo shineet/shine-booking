@@ -1537,6 +1537,10 @@
                     <div class="price-field"><label>Grand Finale</label><input type="number" id="ps-c-finale" placeholder="300"></div>
                 </div>
             </div>
+            <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--muted);cursor:pointer;">
+                <input type="checkbox" id="strolling-offer-finale" checked>
+                Offer the Grand Finale option (uncheck for venues with no room to gather)
+            </label>
         </div>
         <div class="modal-actions">
             <button class="modal-cancel" onclick="closeModal()">Cancel</button>
@@ -4314,10 +4318,14 @@ function buildPricingLink() {
     if (selectedPricingOption === 'corporate-standard')         return base + '?type=corporate&cid=' + currentClientId + extra;
     if (selectedPricingOption === 'private-custom')             return base + '?type=private&cid=' + currentClientId + '&d1=' + (document.getElementById('pc-d1').value||400) + '&d2=' + (document.getElementById('pc-d2').value||500) + '&d3=' + (document.getElementById('pc-d3').value||600) + extra;
     if (selectedPricingOption === 'corporate-custom')           return base + '?type=corporate&cid=' + currentClientId + '&d1=' + (document.getElementById('pc-c1').value||1000) + '&d2=' + (document.getElementById('pc-c2').value||1200) + '&d3=' + (document.getElementById('pc-c3').value||1500) + extra;
-    if (selectedPricingOption === 'strolling-private-standard') return base + '?format=strolling&type=private&cid=' + currentClientId + extra;
-    if (selectedPricingOption === 'strolling-corporate-standard') return base + '?format=strolling&type=corporate&cid=' + currentClientId + extra;
-    if (selectedPricingOption === 'strolling-private-custom')   return base + '?format=strolling&type=private&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-rate').value||400) + '&sf=' + (document.getElementById('ps-finale').value||200) + extra;
-    if (selectedPricingOption === 'strolling-corporate-custom') return base + '?format=strolling&type=corporate&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-c-rate').value||1000) + '&sf=' + (document.getElementById('ps-c-finale').value||300) + extra;
+    // When the "Offer Grand Finale option" box is unchecked, the client only
+    // sees the Strolling Only card (no finale) — for gigs with no room to gather.
+    var nfEl = document.getElementById('strolling-offer-finale');
+    var nf = (nfEl && !nfEl.checked) ? '&nf=1' : '';
+    if (selectedPricingOption === 'strolling-private-standard') return base + '?format=strolling&type=private&cid=' + currentClientId + nf + extra;
+    if (selectedPricingOption === 'strolling-corporate-standard') return base + '?format=strolling&type=corporate&cid=' + currentClientId + nf + extra;
+    if (selectedPricingOption === 'strolling-private-custom')   return base + '?format=strolling&type=private&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-rate').value||400) + '&sf=' + (document.getElementById('ps-finale').value||200) + nf + extra;
+    if (selectedPricingOption === 'strolling-corporate-custom') return base + '?format=strolling&type=corporate&cid=' + currentClientId + '&sr=' + (document.getElementById('ps-c-rate').value||1000) + '&sf=' + (document.getElementById('ps-c-finale').value||300) + nf + extra;
     return '';
 }
 

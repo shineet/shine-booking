@@ -703,6 +703,7 @@
             d3: parseInt(p.get('d3')) || null,
             strollRate: parseInt(p.get('sr')) || null,
             strollFinale: parseInt(p.get('sf')) || null,
+            noFinale: p.get('nf') === '1',
             clientName: p.get('cname') || '',
             eventType: p.get('etype') || ''
         };
@@ -888,9 +889,11 @@
         const onlyTagline = `${durationText} of up-close strolling magic woven throughout your event.`;
         const finaleTagline = `${durationText} of strolling magic, capped off with a 15-minute grand finale for everyone.`;
 
+        // noFinale (nf=1 in the link): only offer Strolling Only — for venues
+        // with no room to gather a crowd for the finale.
         document.getElementById('strolling-cards').innerHTML =
         makeStrollCard(p.type, 'strolling-only', 'Strolling Only', basePrice, onlyTagline, STROLLING_FEATURES.only, false) +
-        makeStrollCard(p.type, 'strolling-finale', 'Strolling + Grand Finale', finalePrice, finaleTagline, STROLLING_FEATURES.finale, true);
+        (p.noFinale ? '' : makeStrollCard(p.type, 'strolling-finale', 'Strolling + Grand Finale', finalePrice, finaleTagline, STROLLING_FEATURES.finale, true));
     }
 
     function makeStrollCard(category, tier, label, price, tagline, features, featured) {
