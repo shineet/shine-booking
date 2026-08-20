@@ -1862,7 +1862,12 @@ function doLogin(pw) {
 }
 function bootDashboard() {
     showView('pipeline');
+    // Deep link for the "Check date" Dock/home-screen launcher: open the app to
+    // #checkdate (or ?checkdate=1) and it jumps straight to the Check Date tool.
     var params = new URLSearchParams(window.location.search);
+    if (window.location.hash === '#checkdate' || params.get('checkdate') === '1') {
+        setTimeout(openCheckDate, 0);
+    }
     var gmailResult = params.get('gmail');
     if (gmailResult) {
         history.replaceState(null, '', window.location.pathname);
