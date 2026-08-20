@@ -2,36 +2,161 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Check Date</title>
-<!-- Own manifest + icon so a Dock/home-screen web app made from THIS page
-     launches straight to the Check Date tool with its own purple icon,
-     instead of inheriting the booking app's manifest (start_url "/"). -->
 <link rel="manifest" href="/checkdate-manifest.json">
 <link rel="apple-touch-icon" href="/icons/checkdate-180.png">
 <link rel="icon" href="/icons/checkdate-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Check Date">
 <meta name="theme-color" content="#6b5ce0">
+<script src="/lib/family-note.js"></script>
 <style>
-  html,body{height:100%;margin:0;background:#14131a;color:#e8e6ef;
-    font-family:-apple-system,system-ui,sans-serif;display:flex;
-    align-items:center;justify-content:center;text-align:center}
-  .c{max-width:360px;padding:24px}
-  img{width:96px;height:96px;border-radius:22px;margin-bottom:16px}
-  h2{margin:0 0 6px}
-  p{color:#9a97ab;font-size:14px;line-height:1.5}
-  a{display:inline-block;margin-top:18px;background:#6b5ce0;color:#fff;
-    text-decoration:none;padding:12px 22px;border-radius:12px;font-weight:600}
+  :root { --bg:#14131a; --card:#1c1b24; --border:#2b2a35; --muted:#9a97ab; --faint:#6f6c80; --accent:#8b7dff; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:#e8e6ef;
+    font-family:-apple-system,system-ui,sans-serif; -webkit-tap-highlight-color:transparent; }
+  .wrap { max-width:520px; margin:0 auto;
+    padding:calc(24px + env(safe-area-inset-top,0px)) 18px calc(24px + env(safe-area-inset-bottom,0px)); }
+  .head { display:flex; align-items:center; gap:10px; margin-bottom:20px; }
+  .head img { width:34px; height:34px; border-radius:9px; }
+  .head h1 { font-size:22px; margin:0; font-weight:700; }
+  .head .re { margin-left:auto; background:var(--card); border:1px solid var(--border);
+    color:var(--muted); width:38px; height:38px; border-radius:10px; font-size:16px; cursor:pointer; }
+  label { display:block; font-size:12px; font-weight:700; letter-spacing:.4px;
+    text-transform:uppercase; color:var(--faint); margin-bottom:8px; }
+  input[type=date] { width:100%; padding:15px 14px; font-size:18px; border-radius:12px;
+    border:1px solid var(--border); background:var(--card); color:#fff; }
+  #cd-result { margin-top:20px; background:var(--card); border:1px solid var(--border);
+    border-radius:14px; padding:16px 16px; font-size:15px; line-height:1.5; min-height:60px; }
+  /* Login overlay */
+  #login { position:fixed; inset:0; background:var(--bg); display:flex;
+    align-items:center; justify-content:center; z-index:50; }
+  #login form { background:var(--card); border:1px solid var(--border); padding:26px;
+    border-radius:14px; width:90%; max-width:320px; }
+  #login .t { font-size:18px; font-weight:600; margin-bottom:6px; }
+  #login .s { color:var(--muted); font-size:13px; margin-bottom:16px; }
+  #login input { width:100%; padding:11px 12px; border-radius:9px; border:1px solid var(--border);
+    background:#0f0f14; color:#fff; font-size:15px; margin-bottom:10px; }
+  #login .msg { color:#ff6b6b; font-size:12px; min-height:16px; margin-bottom:8px; }
+  #login button { width:100%; padding:11px; border:none; border-radius:9px;
+    background:#d4af37; color:#1a1a1a; font-weight:700; font-size:15px; cursor:pointer; }
 </style>
 </head>
 <body>
-  <div class="c">
-    <img src="/icons/checkdate-512.png" alt="Check Date">
-    <h2>Check Date</h2>
-    <p>In Safari, choose <b>File &rarr; Add to Dock</b> to make this a one-click
-       launcher. Once added, it opens straight to the date checker.</p>
-    <a href="/?checkdate=1">Open Check Date now</a>
+  <div class="wrap">
+    <div class="head">
+      <img src="/icons/checkdate-180.png" alt="">
+      <h1>Check Date</h1>
+      <button class="re" onclick="reload()" title="Refresh" aria-label="Refresh">&#8635;</button>
+    </div>
+    <label for="cd-input">Pick a date to check</label>
+    <input type="date" id="cd-input" onchange="runCheckDate()">
+    <div id="cd-result"><span style="color:var(--muted)">Loading the latest…</span></div>
   </div>
+
+  <script>
+  var TOKEN = sessionStorage.getItem('dashToken') || '';
+  var CD_WINDOW = 7;
+  var CD_GIG_WORDS = ['magic', 'show', 'gig', 'performance'];
+  var cdFamilyByDate = {}, cdFamilyList = [], cdStanding = [], cdGigs = [], cdLastEdited = null;
+
+  function cdEsc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function cdDayDelta(fromStr,toStr){ var a=Date.parse(fromStr+'T00:00:00Z'),b=Date.parse(toStr+'T00:00:00Z'); if(isNaN(a)||isNaN(b))return null; return Math.round((b-a)/86400000); }
+  function cdFreshness(){ if(!cdLastEdited)return ''; var m=Math.max(0,Math.round((Date.now()-Date.parse(cdLastEdited))/60000)); var t=m<60?m+'m ago':(m<1440?Math.round(m/60)+'h ago':Math.round(m/1440)+'d ago'); return '<div style="color:var(--faint);font-size:11px;margin-top:12px;">Family note updated '+t+'</div>'; }
+
+  // Data via the same password-gated proxy the dashboard uses.
+  function sbDb(path){
+    return fetch('/api/get-booking',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'db',token:TOKEN,method:'GET',path:path})})
+      .then(function(r){ if(r.status===401){ TOKEN=''; sessionStorage.removeItem('dashToken'); showLogin('Session expired. Log in again.'); throw new Error('401'); } return r.ok?r.json():[]; });
+  }
+
+  function cdLoad(){
+    return Promise.all([
+      sbDb('family_note?id=eq.1&select=content,updated_at'),
+      sbDb('bookings?select=event_date,start_time,client_name,event_title,status&order=event_date.asc')
+    ]).then(function(res){
+      var fam=res[0]||[], bk=res[1]||[];
+      var content=(fam[0]&&fam[0].content)||'';
+      cdLastEdited=(fam[0]&&fam[0].updated_at)||null;
+      cdFamilyByDate={}; cdFamilyList=[];
+      window.FamilyNote.expandEvents(content).forEach(function(e){
+        var t=e.title.toLowerCase();
+        if(CD_GIG_WORDS.some(function(w){return t.indexOf(w)!==-1;}))return;
+        (cdFamilyByDate[e.date]=cdFamilyByDate[e.date]||[]).push(e.span?e.title+' ('+e.span+')':e.title);
+        cdFamilyList.push({date:e.date,title:e.title,start:e.start,end:e.end,span:e.span});
+      });
+      cdStanding=window.FamilyNote.standingNotes(content);
+      var done=['completed','lost','cancelled'];
+      cdGigs=(Array.isArray(bk)?bk:[]).filter(function(b){return b.event_date&&done.indexOf(String(b.status||'').toLowerCase())===-1;})
+        .map(function(b){return {date:b.event_date,label:(b.client_name||b.event_title||'Gig')+(b.start_time?' · '+b.start_time:'')};});
+    });
+  }
+
+  function runCheckDate(){
+    var target=document.getElementById('cd-input').value;
+    var box=document.getElementById('cd-result');
+    if(!target){ box.innerHTML='<span style="color:var(--muted)">Pick a date to check.</span>'+cdFreshness(); return; }
+    var items=[];
+    cdGigs.forEach(function(g){ var d=cdDayDelta(target,g.date); if(d===null||Math.abs(d)>CD_WINDOW)return; items.push({d:d,kind:'gig',label:g.label}); });
+    var seen={};
+    cdFamilyList.slice().sort(function(a,b){return Math.abs(cdDayDelta(target,a.date))-Math.abs(cdDayDelta(target,b.date));}).forEach(function(e){
+      var d=cdDayDelta(target,e.date); if(d===null||Math.abs(d)>CD_WINDOW)return;
+      if(d===0){ items.push({d:0,kind:'family',label:e.span?e.title+' ('+e.span+')':e.title}); return; }
+      if(e.start&&e.end&&target>=e.start&&target<=e.end)return;
+      var key=(e.start||e.date)+'|'+e.title; if(seen[key])return; seen[key]=true;
+      items.push({d:d,kind:'family',label:e.title});
+    });
+    var onDay=items.filter(function(i){return i.d===0;});
+    var near=items.filter(function(i){return i.d!==0;}).sort(function(a,b){return Math.abs(a.d)-Math.abs(b.d);});
+    var gigOnDay=onDay.some(function(i){return i.kind==='gig';});
+    var nice=new Date(target+'T00:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    var html='<div style="font-weight:700;margin-bottom:6px;">'+cdEsc(nice)+'</div>';
+    var standingHere=cdStanding.filter(function(n){return window.FamilyNote.standingApplies(n,target);}).map(function(n){return n.text;});
+    if(standingHere.length) html+='<div style="background:#4a3a00;border:1px solid #7a5c00;border-radius:8px;padding:8px 10px;margin:6px 0;color:#f0d68a;">⚠️ Standing note: '+cdEsc(standingHere.join(' · '))+'</div>';
+    html+=gigOnDay
+      ? '<div style="background:#4a1616;border:1px solid #7a2020;border-radius:8px;padding:8px 10px;margin:6px 0;color:#f2b8b8;">🎩 You have a gig booked that day.</div>'
+      : '<div style="color:#2ec27e;font-weight:600;margin:6px 0;">✓ No gig booked on this date.</div>';
+    function line(i){ var icon=i.kind==='gig'?'🎩':'👨‍👩‍👧'; if(i.d===0)return '<div>'+icon+' '+cdEsc(i.label)+'</div>'; var n=Math.abs(i.d),when=(i.d<0?n+' day(s) before':n+' day(s) after'); return '<div>'+icon+' '+cdEsc(i.label)+' <span style="color:var(--muted);">('+when+')</span></div>'; }
+    if(onDay.length) html+='<div style="margin-top:10px;font-weight:600;">On this day</div><div style="line-height:1.7;">'+onDay.map(line).join('')+'</div>';
+    if(near.length) html+='<div style="margin-top:10px;font-weight:600;">Within '+CD_WINDOW+' days</div><div style="line-height:1.7;">'+near.map(line).join('')+'</div>';
+    if(!onDay.length&&!near.length) html+='<div style="margin-top:10px;color:var(--muted);">Nothing else within '+CD_WINDOW+' days.</div>';
+    html+=cdFreshness();
+    box.innerHTML=html;
+  }
+
+  function start(){
+    document.getElementById('cd-result').innerHTML='<span style="color:var(--muted)">Loading the latest…</span>';
+    cdLoad().then(function(){ runCheckDate(); }).catch(function(e){ if(e.message!=='401') document.getElementById('cd-result').innerHTML='<span style="color:#ff6b6b">Could not load: '+cdEsc(e.message)+'</span>'; });
+  }
+  function reload(){ start(); }
+
+  function showLogin(msg){
+    if(document.getElementById('login')){ if(msg)document.getElementById('login-msg').textContent=msg; return; }
+    var ov=document.createElement('div'); ov.id='login';
+    ov.innerHTML='<form id="login-form"><div class="t">Check Date</div><div class="s">Unlock with your booking password.</div>'
+      +'<input name="username" type="text" autocomplete="username" value="shine" readonly aria-label="Username">'
+      +'<input id="login-pw" name="password" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password">'
+      +'<div class="msg" id="login-msg"></div><button type="submit">Unlock</button></form>';
+    document.body.appendChild(ov);
+    if(msg)document.getElementById('login-msg').textContent=msg;
+    document.getElementById('login-form').addEventListener('submit',function(e){ e.preventDefault(); doLogin(document.getElementById('login-pw').value); });
+    document.getElementById('login-pw').focus();
+  }
+  function doLogin(pw){
+    var m=document.getElementById('login-msg'); m.style.color='#9a97ab'; m.textContent='Checking…';
+    fetch('/api/get-booking',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'login',password:pw})})
+      .then(function(r){return r.json().then(function(d){return {ok:r.ok,d:d};});})
+      .then(function(res){ if(!res.ok||!res.d.token){ m.style.color='#ff6b6b'; m.textContent=res.d.error||'Login failed'; return; }
+        TOKEN=res.d.token; sessionStorage.setItem('dashToken',TOKEN);
+        if(window.PasswordCredential){ try{ navigator.credentials.store(new window.PasswordCredential({id:'shine',name:'Shine Booking',password:pw})); }catch(e){} }
+        var ov=document.getElementById('login'); if(ov)ov.remove(); start();
+      })
+      .catch(function(e){ m.style.color='#ff6b6b'; m.textContent='Error: '+e.message; });
+  }
+
+  if(TOKEN){ start(); } else { showLogin(); }
+  </script>
 </body>
 </html>

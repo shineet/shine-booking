@@ -1,7 +1,7 @@
 {
   "name": "Check Date",
   "short_name": "Check Date",
-  "start_url": "/?checkdate=1",
+  "start_url": "/checkdate.html",
   "scope": "/",
   "display": "standalone",
   "background_color": "#14131a",
