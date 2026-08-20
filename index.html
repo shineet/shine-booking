@@ -1167,7 +1167,10 @@
             font-size: 14px;
         }
         .review-row span { display: none }
-        #new-lead-shell { padding: 14px }
+        /* Bottom padding must clear the fixed tab bar + raised + button, or the
+           last button (Save lead) hides behind it. A bare `padding: 14px` here
+           was resetting the bottom clearance set above — keep it explicit. */
+        #new-lead-shell { padding: 14px 14px calc(96px + env(safe-area-inset-bottom, 0px)) }
 
         /* The top menu used to be one unwrapping row that ran off-screen,
            forcing a horizontal swipe to reach the later buttons. Split into
