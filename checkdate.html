@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check Date</title>
+<!-- Own manifest + icon so a Dock/home-screen web app made from THIS page
+     launches straight to the Check Date tool with its own purple icon,
+     instead of inheriting the booking app's manifest (start_url "/"). -->
+<link rel="manifest" href="/checkdate-manifest.json">
+<link rel="apple-touch-icon" href="/icons/checkdate-180.png">
+<link rel="icon" href="/icons/checkdate-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Check Date">
+<meta name="theme-color" content="#6b5ce0">
+<style>
+  html,body{height:100%;margin:0;background:#14131a;color:#e8e6ef;
+    font-family:-apple-system,system-ui,sans-serif;display:flex;
+    align-items:center;justify-content:center;text-align:center}
+  .c{max-width:360px;padding:24px}
+  img{width:96px;height:96px;border-radius:22px;margin-bottom:16px}
+  h2{margin:0 0 6px}
+  p{color:#9a97ab;font-size:14px;line-height:1.5}
+  a{display:inline-block;margin-top:18px;background:#6b5ce0;color:#fff;
+    text-decoration:none;padding:12px 22px;border-radius:12px;font-weight:600}
+</style>
+</head>
+<body>
+  <div class="c">
+    <img src="/icons/checkdate-512.png" alt="Check Date">
+    <h2>Check Date</h2>
+    <p>In Safari, choose <b>File &rarr; Add to Dock</b> to make this a one-click
+       launcher. Once added, it opens straight to the date checker.</p>
+    <a href="/?checkdate=1">Open Check Date now</a>
+  </div>
+</body>
+</html>

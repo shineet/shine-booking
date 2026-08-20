@@ -1,0 +1,13 @@
+{
+  "name": "Check Date",
+  "short_name": "Check Date",
+  "start_url": "/?checkdate=1",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#14131a",
+  "theme_color": "#6b5ce0",
+  "icons": [
+    { "src": "/icons/checkdate-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/checkdate-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
