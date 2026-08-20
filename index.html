@@ -5430,11 +5430,17 @@ function cdLoad() {
         var content = (fam[0] && fam[0].content) || '';
         cdLastEdited = (fam[0] && fam[0].updated_at) || null;
         cdFamilyByDate = {}; cdFamilyList = [];
-        window.FamilyNote.parseEvents(content).forEach(function (e) {
+        // expandEvents, not parseEvents: a multi-day entry ("Oct 9th - Oct 16th
+        // Barcelona trip") arrives as one row per day, so every date of the
+        // trip is a same-day hit with no range logic needed here.
+        window.FamilyNote.expandEvents(content).forEach(function (e) {
             var t = e.title.toLowerCase();
             if (CD_GIG_WORDS.some(function (w) { return t.indexOf(w) !== -1; })) return;
-            (cdFamilyByDate[e.date] = cdFamilyByDate[e.date] || []).push(e.title);
-            cdFamilyList.push({ date: e.date, title: e.title });
+            (cdFamilyByDate[e.date] = cdFamilyByDate[e.date] || [])
+                .push(e.span ? e.title + ' (' + e.span + ')' : e.title);
+            // start/end/span travel with each row so the code below can tell
+            // that two rows a day apart are one trip, not two events.
+            cdFamilyList.push({ date: e.date, title: e.title, start: e.start, end: e.end, span: e.span });
         });
         cdStanding = window.FamilyNote.standingNotes(content);
         var done = ['completed', 'lost', 'cancelled'];
@@ -5477,9 +5483,24 @@ function runCheckDate() {
         if (d === null || Math.abs(d) > CD_WINDOW) return;
         items.push({ d: d, kind: 'gig', label: g.label });
     });
-    cdFamilyList.forEach(function (e) {
+    // A multi-day entry arrives as one row per day. On the day itself show the
+    // span so it is obvious why a date mid-trip is busy; off the day, drop rows
+    // whose trip already covers the target (or it neighbours itself) and keep
+    // only the closest row of each distinct entry (or it lists itself twice).
+    var cdSeenNear = {};
+    cdFamilyList.slice().sort(function (a, b) {
+        return Math.abs(cdDayDelta(target, a.date)) - Math.abs(cdDayDelta(target, b.date));
+    }).forEach(function (e) {
         var d = cdDayDelta(target, e.date);
         if (d === null || Math.abs(d) > CD_WINDOW) return;
+        if (d === 0) {
+            items.push({ d: 0, kind: 'family', label: e.span ? e.title + ' (' + e.span + ')' : e.title });
+            return;
+        }
+        if (e.start && e.end && target >= e.start && target <= e.end) return;
+        var key = (e.start || e.date) + '|' + e.title;
+        if (cdSeenNear[key]) return;
+        cdSeenNear[key] = true;
         items.push({ d: d, kind: 'family', label: e.title });
     });
     var onDay = items.filter(function (i) { return i.d === 0; });

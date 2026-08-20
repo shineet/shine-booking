@@ -1178,13 +1178,21 @@ async function loadFamilyFromNote() {
 
   familyByDate = {};
   familyList = [];
-  window.FamilyNote.parseEvents(content).forEach(e => {
+  // expandEvents, not parseEvents: a multi-day entry ("Oct 9th - Oct 16th
+  // Barcelona trip") arrives as one row per day, so every date of the trip is a
+  // same-day hit here with no range logic needed below.
+  window.FamilyNote.expandEvents(content).forEach(e => {
     // Gigs live in bookings and are shown from there; skip them here so the
     // family list never warns about the gig it is describing.
     const t = e.title.toLowerCase();
     if (FAMILY_GIG_WORDS.some(w => t.includes(w))) return;
-    (familyByDate[e.date] = familyByDate[e.date] || []).push(e.title);
-    familyList.push({ date: e.date, title: e.title });
+    // The span is worth showing on the day itself ("Barcelona trip (Oct 9–16)")
+    // so it is obvious why a date mid-trip is busy. The nearby line stays plain.
+    (familyByDate[e.date] = familyByDate[e.date] || [])
+      .push(e.span ? `${e.title} (${e.span})` : e.title);
+    // start/end travel with each row so the nearby logic can tell that two rows
+    // a day apart are the same trip rather than two separate events.
+    familyList.push({ date: e.date, title: e.title, start: e.start, end: e.end });
   });
   // Standing notes as ranges, so Check Date only shows one when the date falls
   // inside it (not on every date).
@@ -1238,10 +1246,21 @@ function familyClashBadge(dateStr) {
   // Nearby entries, closest first. Deliberately quieter than the same-day
   // warning and capped at two, because a card that shouts about everything
   // within three days stops being scannable.
+  // A multi-day entry is one row per day, so two guards are needed or a trip
+  // reports itself as its own neighbour: skip any entry already covering this
+  // date, and keep only the closest row of each distinct entry.
+  const seenNear = {};
   const near = familyList
     .map(e => ({ ...e, d: dayDelta(dateStr, e.date) }))
     .filter(e => e.d !== null && e.d !== 0 && Math.abs(e.d) <= FAMILY_NEAR_DAYS)
-    .sort((x, y) => Math.abs(x.d) - Math.abs(y.d));
+    .filter(e => !(e.start && e.end && dateStr >= e.start && dateStr <= e.end))
+    .sort((x, y) => Math.abs(x.d) - Math.abs(y.d))
+    .filter(e => {
+      const key = (e.start || e.date) + '|' + e.title;
+      if (seenNear[key]) return false;
+      seenNear[key] = true;
+      return true;
+    });
 
   if (near.length) {
     const shown = near.slice(0, 2).map(e => {
