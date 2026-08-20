@@ -6,6 +6,19 @@ function last10(phone) {
   return d.length > 10 ? d.slice(-10) : d;
 }
 
+// Placeholder name for a lead who has only ever texted, so there is no name to
+// use yet. Formatted rather than raw E.164 because it sits in the dashboard's
+// name column and gets read at a glance: "+1 512-589-3082", not "+15125893082".
+// Falls back to the raw string for anything that is not a US 10 or 11 digit
+// number, since a short code or an international sender should still produce a
+// usable row rather than an insert that fails.
+function displayNameForNumber(phone) {
+  const d = String(phone || '').replace(/\D/g, '');
+  const ten = d.length === 11 && d.startsWith('1') ? d.slice(1) : d;
+  if (ten.length !== 10) return String(phone || 'Unknown sender');
+  return `+1 ${ten.slice(0, 3)}-${ten.slice(3, 6)}-${ten.slice(6)}`;
+}
+
 // Cheap keyword guard so the personal-phone-forward path (below) doesn't fire an extra
 // Claude call on every ordinary reply — only worth checking when the recent thread
 // actually mentions a call/talk together with a day or time.
@@ -174,6 +187,18 @@ export default async function handler(req, res) {
           method: 'POST',
           headers: { ...supaHeaders, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
           body: JSON.stringify([{
+            // clients.name is NOT NULL and a cold text carries no name, so this
+            // insert MUST supply one. Leaving it out is what lost Stuti's
+            // birthday-party enquiry on 2026-08-20 and Joe P.'s before it:
+            // Postgres rejected the row with 23502, client stayed null, and the
+            // lead never reached the dashboard.
+            //
+            // The number is the right placeholder. It is unique, so two cold
+            // leads never collide; it reads as obviously provisional, so Shine
+            // knows to rename it; and it matches the phone field beside it. A
+            // name guessed out of the message body would be worse than useless
+            // -- "I'm looking for a party entertainer" yields "looking".
+            name: displayNameForNumber(From),
             phone: From, status: 'new', lead_source: 'Inbound SMS',
             last_channel: 'sms', last_activity: new Date().toISOString()
           }])
