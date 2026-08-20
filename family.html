@@ -30,6 +30,19 @@
   }
   header h1 { font-size: 20px; margin: 0; font-weight: 700; }
   #status { margin-left: auto; font-size: 12px; color: var(--muted); }
+  /* A line starting with anything other than the month is silently ignored --
+     "Party on Aug 29th" never reached Check Date and nothing on screen said
+     so. The rule is cheap to state, so state it rather than expect it to be
+     remembered. */
+  #hint {
+    padding: 8px 18px 10px; border-bottom: 1px solid var(--line);
+    font-size: 13px; line-height: 1.5; color: var(--muted);
+  }
+  #hint b { color: var(--ink); font-weight: 600; }
+  #hint code {
+    font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #f0ece0; border-radius: 4px; padding: 1px 5px; color: var(--ink);
+  }
   textarea {
     flex: 1; width: 100%; min-height: 0; border: 0; outline: none; resize: none;
     background: transparent; color: var(--ink);
@@ -62,6 +75,7 @@
       <h1>Family Calendar</h1>
       <span id="status">Loading…</span>
     </header>
+    <div id="hint">Start each line with the <b>month</b> — <code>Aug 29th Party</code>. Trips work too — <code>Oct 9th - Oct 16th Barcelona trip</code>.</div>
     <textarea id="note" placeholder="Type here, one thing per line — like:&#10;Aug 29 dentist 3pm&#10;Sep 6 Onam dinner&#10;Shine not to travel Sep 1 to 5&#10;&#10;It saves itself as you type."
       autocapitalize="sentences" autocomplete="off" spellcheck="true"></textarea>
   </div>
