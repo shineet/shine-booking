@@ -16,8 +16,23 @@
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; background:var(--bg); color:#e8e6ef;
     font-family:-apple-system,system-ui,sans-serif; -webkit-tap-highlight-color:transparent; }
-  .wrap { max-width:520px; margin:0 auto;
+  /* Phone: sit at the top and fill the width. Desktop (see media query): the
+     column grows wider and the whole thing centres in the window instead of
+     hugging the top-left corner. */
+  body { display:flex; flex-direction:column; }
+  .wrap { width:100%; max-width:520px; margin:0 auto;
     padding:calc(24px + env(safe-area-inset-top,0px)) 18px calc(24px + env(safe-area-inset-bottom,0px)); }
+  @media (min-width:700px) {
+    body { justify-content:center; }        /* vertical centre on a tall window */
+    .wrap { max-width:680px; padding-left:32px; padding-right:32px; }
+    .head { margin-bottom:26px; }
+    .head img { width:42px; height:42px; }
+    .head h1 { font-size:30px; }
+    .head .re { width:46px; height:46px; font-size:19px; }
+    label { font-size:13px; margin-bottom:10px; }
+    input[type=date] { font-size:24px; padding:20px 18px; border-radius:14px; }
+    #cd-result { font-size:18px; line-height:1.6; padding:24px 24px; margin-top:26px; border-radius:16px; }
+  }
   .head { display:flex; align-items:center; gap:10px; margin-bottom:20px; }
   .head img { width:34px; height:34px; border-radius:9px; }
   .head h1 { font-size:22px; margin:0; font-weight:700; }
