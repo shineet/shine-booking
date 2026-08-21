@@ -1343,12 +1343,14 @@ function runCheckDate() {
   familyList.forEach(e => {
     const d = dayDelta(target, e.date);
     if (d === null || Math.abs(d) > CHECK_WINDOW_DAYS) return;
-    items.push({ d, kind: 'family', date: e.date, label: e.title });
+    items.push({ d, kind: 'family', date: e.date, label: e.title, away: window.FamilyNote.isAway(e.title) });
   });
 
   const onDay  = items.filter(i => i.d === 0).sort((a, b) => a.kind.localeCompare(b.kind));
   const nearby = items.filter(i => i.d !== 0).sort((a, b) => Math.abs(a.d) - Math.abs(b.d));
   const gigOnDay = onDay.some(i => i.kind === 'gig');
+  const awayOnDay = onDay.some(i => i.kind === 'family' && i.away);
+  const awayLabels = onDay.filter(i => i.kind === 'family' && i.away).map(i => i.label).join(' · ');
 
   const nice = new Date(target + 'T00:00:00').toLocaleDateString('en-US',
     { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -1367,6 +1369,8 @@ function runCheckDate() {
 
   html += gigOnDay
     ? `<div class="family-clash" style="background:#4a1616;border-color:#7a2020;">🎩 You have a gig booked that day.</div>`
+    : awayOnDay
+    ? `<div class="family-clash" style="background:#4a2a00;border-color:#7a4a00;color:#f0c68a;">🚫 You are away / not available this day${awayLabels ? ' — ' + esc(awayLabels) : ''}.</div>`
     : `<div style="color:#2ec27e;font-weight:600;margin:6px 0;">✓ No gig booked on this date.</div>`;
 
   const line = i => {

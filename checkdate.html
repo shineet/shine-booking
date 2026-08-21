@@ -103,7 +103,7 @@
     var seen={};
     cdFamilyList.slice().sort(function(a,b){return Math.abs(cdDayDelta(target,a.date))-Math.abs(cdDayDelta(target,b.date));}).forEach(function(e){
       var d=cdDayDelta(target,e.date); if(d===null||Math.abs(d)>CD_WINDOW)return;
-      if(d===0){ items.push({d:0,kind:'family',label:e.span?e.title+' ('+e.span+')':e.title}); return; }
+      if(d===0){ items.push({d:0,kind:'family',away:window.FamilyNote.isAway(e.title),label:e.span?e.title+' ('+e.span+')':e.title}); return; }
       if(e.start&&e.end&&target>=e.start&&target<=e.end)return;
       var key=(e.start||e.date)+'|'+e.title; if(seen[key])return; seen[key]=true;
       items.push({d:d,kind:'family',label:e.title});
@@ -111,12 +111,16 @@
     var onDay=items.filter(function(i){return i.d===0;});
     var near=items.filter(function(i){return i.d!==0;}).sort(function(a,b){return Math.abs(a.d)-Math.abs(b.d);});
     var gigOnDay=onDay.some(function(i){return i.kind==='gig';});
+    var awayOnDay=onDay.some(function(i){return i.kind==='family'&&i.away;});
+    var awayLabels=onDay.filter(function(i){return i.kind==='family'&&i.away;}).map(function(i){return i.label;}).join(' · ');
     var nice=new Date(target+'T00:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
     var html='<div style="font-weight:700;margin-bottom:6px;">'+cdEsc(nice)+'</div>';
     var standingHere=cdStanding.filter(function(n){return window.FamilyNote.standingApplies(n,target);}).map(function(n){return n.text;});
     if(standingHere.length) html+='<div style="background:#4a3a00;border:1px solid #7a5c00;border-radius:8px;padding:8px 10px;margin:6px 0;color:#f0d68a;">⚠️ Standing note: '+cdEsc(standingHere.join(' · '))+'</div>';
     html+=gigOnDay
       ? '<div style="background:#4a1616;border:1px solid #7a2020;border-radius:8px;padding:8px 10px;margin:6px 0;color:#f2b8b8;">🎩 You have a gig booked that day.</div>'
+      : awayOnDay
+      ? '<div style="background:#4a2a00;border:1px solid #7a4a00;border-radius:8px;padding:8px 10px;margin:6px 0;color:#f0c68a;">🚫 You are away / not available this day'+(awayLabels?' — '+cdEsc(awayLabels):'')+'.</div>'
       : '<div style="color:#2ec27e;font-weight:600;margin:6px 0;">✓ No gig booked on this date.</div>';
     function line(i){ var icon=i.kind==='gig'?'🎩':'👨‍👩‍👧'; if(i.d===0)return '<div>'+icon+' '+cdEsc(i.label)+'</div>'; var n=Math.abs(i.d),when=(i.d<0?n+' day(s) before':n+' day(s) after'); return '<div>'+icon+' '+cdEsc(i.label)+' <span style="color:var(--muted);">('+when+')</span></div>'; }
     if(onDay.length) html+='<div style="margin-top:10px;font-weight:600;">On this day</div><div style="line-height:1.7;">'+onDay.map(line).join('')+'</div>';
