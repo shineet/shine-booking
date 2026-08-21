@@ -15,15 +15,16 @@
   :root { --bg:#14131a; --card:#1c1b24; --border:#2b2a35; --muted:#9a97ab; --faint:#6f6c80; --accent:#8b7dff; }
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; background:var(--bg); color:#e8e6ef;
-    font-family:-apple-system,system-ui,sans-serif; -webkit-tap-highlight-color:transparent; }
-  /* Phone: sit at the top and fill the width. Desktop (see media query): the
-     column grows wider and the whole thing centres in the window instead of
-     hugging the top-left corner. */
-  body { display:flex; flex-direction:column; }
+    font-family:-apple-system,system-ui,sans-serif; -webkit-tap-highlight-color:transparent;
+    overflow-x:hidden; }
+  /* Centre the whole column in the screen -- vertically and horizontally -- on
+     phone and desktop alike, so the date field and result sit in the middle
+     instead of hugging the top. Content here is always short, so centring never
+     hides anything; the safe-area padding keeps it clear of the notch/home bar. */
+  body { display:flex; flex-direction:column; justify-content:center; min-height:100%; }
   .wrap { width:100%; max-width:520px; margin:0 auto;
     padding:calc(24px + env(safe-area-inset-top,0px)) 18px calc(24px + env(safe-area-inset-bottom,0px)); }
   @media (min-width:700px) {
-    body { justify-content:center; }        /* vertical centre on a tall window */
     .wrap { max-width:680px; padding-left:32px; padding-right:32px; }
     .head { margin-bottom:26px; }
     .head img { width:42px; height:42px; }
