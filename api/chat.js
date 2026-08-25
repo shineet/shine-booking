@@ -29,6 +29,71 @@ function firstContactSourceLine(leadSource) {
   return `- I came across this lead's request on ${raw}. Early in the email, naturally mention that I saw their request on ${raw} (that is how I got their details), then continue warmly.`;
 }
 
+// First-contact EMAIL prompt. Shared by the default (web) send path and the
+// native 'first-contact' generation below, so both channels stay identical.
+function buildEmailPrompt(clientName, eventType, leadSource) {
+  return `Write a warm, professional first contact email for this lead:
+Name: ${clientName}
+Event: ${eventType}
+Lead source: ${leadSource || 'unknown'}
+
+Rules:
+- Write as Shine, The Mentalist in first person — never say "Shine will" or refer to yourself in third person
+- Friendly and personal, use their first name
+${firstContactSourceLine(leadSource)}
+- 2-3 short paragraphs
+- Mention you do 45-60 min interactive mentalism and magic shows
+- Tell them you'd love to be part of their ${eventType}
+- Ask ONE natural question about their venue or what kind of atmosphere they're going for
+- Do NOT ask about date, number of guests, or pricing
+- Signature must be exactly:
+  Shine, The Mentalist
+  +1 (737) 271-5308
+  www.texasmentalist.com
+- First line must be: Subject: [subject line]
+- Then blank line
+- Then email body`;
+}
+
+// First-contact SMS system prompt. Canonical copy lives here so the native app
+// does not carry the brand voice in Swift; the web index.html still has its own
+// copy for now and should be pointed at this mode when it is retired.
+const FIRST_CONTACT_SMS_SYSTEM = `You are writing a first-contact SMS on behalf of Shine, The Mentalist (www.texasmentalist.com) — a professional mentalism and magic show performer in Texas.
+
+Write in Shine's voice — warm, intriguing, not salesy. The client got reached out to by multiple performers — the goal is to spark curiosity and get a reply, not to close the deal.
+
+Follow this structure:
+1. "Hi [First name]!"
+2. Acknowledge how the lead came in, based on the "Lead source" line in the details:
+   - If it is a platform where they posted a request (Bark, GigSalad, TheBash, Thumbtack, Instagram, WhatsApp, or any named app/site): "This is Shine (www.texasmentalist.com) — got your details from [that platform]."
+   - If it is my own website, a direct inquiry, or a referral: do NOT say "got your details from" anything. Instead warmly thank them for reaching out directly, e.g. "This is Shine (www.texasmentalist.com) — thanks so much for reaching out to me directly!"
+3. The intrigue hook — one or two sentences that describe what Shine does in a way that creates genuine curiosity. Mentalism is the main focus (mind reading, predictions, psychological influence) but naturally weave in that he also does jaw-dropping visual magic. Base it on: "I read minds, predict choices before they happen, and mix in visual magic that makes the impossible feel real — all live, in the room, with your guests as the stars." Adapt naturally to the event type. Keep it vivid and specific — avoid generic phrases like "fun show" or "great entertainment".
+4. "Do you have a few minutes to chat today or tomorrow?"
+5. Signature: "- Shine, The Mentalist | +1 (737) 271-5308"
+
+Rules:
+- Use only the client's first name in the greeting
+- Use the "Lead source" from the details to decide step 2. A website/direct/referral lead is someone who came to me, so thank them for reaching out; never tell them I "got their details from" my own website.
+- Do NOT include a review link in the first message
+- Do NOT mention pricing
+- Keep it concise and punchy — readable in one glance on a phone screen
+- Return ONLY the SMS text, nothing else. No quotes, no commentary.`;
+
+async function anthropicMessage(payload) {
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await r.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.content[0].text;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -36,6 +101,44 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   const mode = req.query.mode || 'default';
+
+  // ── First-contact generation (native app) ─────────────────────────────────
+  // Builds BOTH the SMS and the email server-side from the lead's fields, so
+  // the native app never carries the prompt. Returns the drafts for review; the
+  // actual send goes through the default mode below with smsOverride/emailOverride.
+  if (req.body.action === 'first-contact') {
+    try {
+      const { clientName, eventType, venue, otherEntertainment, leadSource, eventDate, guests, notes } = req.body;
+      if (!clientName || !eventType) { res.status(400).json({ error: 'clientName and eventType are required' }); return; }
+
+      const smsUser = `New lead:
+Name: ${clientName}
+Event: ${eventType || 'not specified'}
+Date: ${eventDate || 'not specified'}
+Guests: ${guests || 'not specified'}
+Venue: ${venue || 'not specified'}
+Other entertainment: ${otherEntertainment || 'not specified'}
+Lead source: ${leadSource || 'unknown'}
+Notes: ${notes || 'none'}`;
+
+      const [smsMessage, emailFull] = await Promise.all([
+        anthropicMessage({ model: 'claude-sonnet-4-6', max_tokens: 200,
+          system: FIRST_CONTACT_SMS_SYSTEM, messages: [{ role: 'user', content: smsUser }] }),
+        anthropicMessage({ model: 'claude-sonnet-4-6', max_tokens: 500,
+          messages: [{ role: 'user', content: buildEmailPrompt(clientName, eventType, leadSource) }] }),
+      ]);
+
+      const emailLines = emailFull.split('\n');
+      const emailSubject = emailLines[0].replace('Subject:', '').trim();
+      const emailBody = emailLines.slice(2).join('\n').trim();
+
+      res.status(200).json({ smsMessage: smsMessage.trim(), emailSubject, emailBody });
+    } catch (e) {
+      console.error('first-contact error:', e);
+      res.status(500).json({ error: e.message });
+    }
+    return;
+  }
 
   // ── Compose mode (free-form send) ─────────────────────────────────────────
   if (req.body.action === 'compose') {
@@ -221,27 +324,7 @@ export default async function handler(req, res) {
       emailSubject = lines[0].replace('Subject:', '').trim();
       emailBody = lines.slice(2).join('\n').trim();
     } else {
-      const emailPrompt = `Write a warm, professional first contact email for this lead:
-Name: ${clientName}
-Event: ${eventType}
-Lead source: ${leadSource || 'unknown'}
-
-Rules:
-- Write as Shine, The Mentalist in first person — never say "Shine will" or refer to yourself in third person
-- Friendly and personal, use their first name
-${firstContactSourceLine(leadSource)}
-- 2-3 short paragraphs
-- Mention you do 45-60 min interactive mentalism and magic shows
-- Tell them you'd love to be part of their ${eventType}
-- Ask ONE natural question about their venue or what kind of atmosphere they're going for
-- Do NOT ask about date, number of guests, or pricing
-- Signature must be exactly:
-  Shine, The Mentalist
-  +1 (737) 271-5308
-  www.texasmentalist.com
-- First line must be: Subject: [subject line]
-- Then blank line
-- Then email body`;
+      const emailPrompt = buildEmailPrompt(clientName, eventType, leadSource);
 
       const emailResponse = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
