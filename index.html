@@ -4726,7 +4726,9 @@ Write in Shine's voice — warm, intriguing, not salesy. The client got reached 
 
 Follow this structure:
 1. "Hi [First name]!"
-2. "This is Shine (www.texasmentalist.com) — got your details from [SOURCE]."
+2. Acknowledge how the lead came in, based on the "Lead source" line in the details below:
+   - If it is a platform where they posted a request (Bark, GigSalad, TheBash, Thumbtack, Instagram, WhatsApp, or any named app/site): "This is Shine (www.texasmentalist.com) — got your details from [that platform]."
+   - If it is my own website, a direct inquiry, or a referral: do NOT say "got your details from" anything. Instead warmly thank them for reaching out directly, e.g. "This is Shine (www.texasmentalist.com) — thanks so much for reaching out to me directly!"
 3. The intrigue hook — one or two sentences that describe what Shine does in a way that creates genuine curiosity. Mentalism is the main focus (mind reading, predictions, psychological influence) but naturally weave in that he also does jaw-dropping visual magic — objects visually transform, vanish, or appear in impossible places. Base it on this core: "I read minds, predict choices before they happen, and mix in visual magic that makes the impossible feel real — all live, in the room, with your guests as the stars." Adapt this naturally to the event type. Examples:
    - Bachelorette: make it about the bride being the centerpiece, guests never seeing it coming — mind reading mixed with visual moments they'll be talking about all night
    - Birthday: make it about the guest of honour being the star, with unforgettable mind reading and visual magic woven together
@@ -4737,7 +4739,7 @@ Follow this structure:
 
 Rules:
 - Use only the client's first name in the greeting
-- Replace [SOURCE] with the actual lead source (Bark, GigSalad, TheBash, Website, Referral, etc.)
+- Use the "Lead source" from the details to decide step 2. A website/direct/referral lead is someone who came to me, so thank them for reaching out; never tell them I "got their details from" my own website.
 - Do NOT include a review link in the first message
 - Do NOT mention pricing
 - Keep it concise and punchy — readable in one glance on a phone screen
@@ -4957,7 +4959,7 @@ function saveLeadOnly() {
 }
 
 function buildPrompt(d) {
-    return 'Bark lead:\nName: ' + d.name + '\nEvent: ' + (d.eventType||'not specified') + '\nDate: ' + formatDate(d.date) + '\nGuests: ' + (d.guests||'not specified') + '\nVenue: ' + (d.venue||'not specified') + '\nOther entertainment: ' + (d.otherEntertainment||'not specified') + '\nNotes: ' + (d.notes||'none');
+    return 'New lead:\nName: ' + d.name + '\nEvent: ' + (d.eventType||'not specified') + '\nDate: ' + formatDate(d.date) + '\nGuests: ' + (d.guests||'not specified') + '\nVenue: ' + (d.venue||'not specified') + '\nOther entertainment: ' + (d.otherEntertainment||'not specified') + '\nLead source: ' + (d.leadSource || 'unknown') + '\nNotes: ' + (d.notes||'none');
 }
 
 function updateCharCount() {
@@ -4981,7 +4983,7 @@ function generateMessages() {
     showStatus('Claude is writing personalized SMS and email...', 'loading');
     fetch('/api/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 200, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: buildPrompt(d) }], clientName: d.name, eventType: d.eventType })
+        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 200, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: buildPrompt(d) }], clientName: d.name, eventType: d.eventType, leadSource: d.leadSource })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {

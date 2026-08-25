@@ -11,6 +11,24 @@ function normalizePhone(phone) {
   return phone;
 }
 
+// How the first-contact message should acknowledge where the lead came from.
+// Platform leads (Bark, GigSalad, etc.) posted a public request, so we say how
+// we got their details. Website/direct/referral leads came to us, so we thank
+// them for reaching out and never claim we "found" them somewhere.
+function firstContactSourceLine(leadSource) {
+  const raw = (leadSource || '').trim();
+  const s = raw.toLowerCase();
+  const direct = ['', 'website', 'website form', 'website inquiry', 'direct', 'referral'];
+  if (direct.includes(s)) {
+    const how = s === 'referral' ? 'through a referral' : 'directly through my website';
+    return `- This lead reached out to me ${how}. Open by warmly thanking them for contacting me directly. Do NOT say I "found" or "got their details from" any platform.`;
+  }
+  if (s === 'direct mail') {
+    return `- Keep the opening a warm, direct hello. Do NOT claim I found their request on a platform, and do NOT thank them for contacting me (they did not reach out to me).`;
+  }
+  return `- I came across this lead's request on ${raw}. Early in the email, naturally mention that I saw their request on ${raw} (that is how I got their details), then continue warmly.`;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -203,13 +221,15 @@ export default async function handler(req, res) {
       emailSubject = lines[0].replace('Subject:', '').trim();
       emailBody = lines.slice(2).join('\n').trim();
     } else {
-      const emailPrompt = `Write a warm, professional first contact email for this Bark lead:
+      const emailPrompt = `Write a warm, professional first contact email for this lead:
 Name: ${clientName}
 Event: ${eventType}
+Lead source: ${leadSource || 'unknown'}
 
 Rules:
 - Write as Shine, The Mentalist in first person — never say "Shine will" or refer to yourself in third person
 - Friendly and personal, use their first name
+${firstContactSourceLine(leadSource)}
 - 2-3 short paragraphs
 - Mention you do 45-60 min interactive mentalism and magic shows
 - Tell them you'd love to be part of their ${eventType}
