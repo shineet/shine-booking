@@ -1,3 +1,5 @@
+import { notifyNewReply } from '../lib/apns.js';
+
 // Last 10 digits of any phone format — used to match an inbound E.164 number
 // against client records that may have been stored in a non-normalized format.
 function last10(phone) {
@@ -460,6 +462,11 @@ Call/meeting detection (separate from the actual performance date):
             });
           } catch(notifyErr) {
             console.error('Pending-review notification failed:', notifyErr.message);
+          }
+          try {
+            await notifyNewReply({ clientName: client.name || From, channel: 'sms' });
+          } catch(pushErr) {
+            console.error('Push notify failed:', pushErr.message);
           }
         }
 

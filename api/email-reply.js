@@ -4,6 +4,8 @@
 // and Postgres eq. is case-sensitive, so a same-address reply silently failed to
 // match the existing client and created a duplicate lead instead. % and _ are
 // escaped since ilike treats them as wildcards.
+import { notifyNewReply } from '../lib/apns.js';
+
 function emailIlikeParam(email) {
   return encodeURIComponent(String(email || '').trim().replace(/[%_\\]/g, m => '\\' + m));
 }
@@ -950,6 +952,11 @@ Only include this block once. Do not mention this block or its contents in the v
           } catch(notifyErr) {
             console.error('Pending-review notification failed:', notifyErr.message);
           }
+          try {
+            await notifyNewReply({ clientName: client.name || fromEmail, channel: 'email' });
+          } catch(pushErr) {
+            console.error('Push notify failed:', pushErr.message);
+          }
         }
 
         // Client confirmed booking intent — send thank-you + intake questionnaire
@@ -1086,6 +1093,11 @@ Only include this block once. Do not mention this block or its contents in the v
             });
           } catch(notifyErr) {
             console.error('New-lead notification failed:', notifyErr.message);
+          }
+          try {
+            await notifyNewReply({ clientName: leadName || fromEmail, channel: 'email' });
+          } catch(pushErr) {
+            console.error('Push notify failed:', pushErr.message);
           }
         }
       } catch(e) {

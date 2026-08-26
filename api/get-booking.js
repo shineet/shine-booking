@@ -454,6 +454,32 @@ export default async function handler(req, res) {
       return;
     }
 
+    // Register (or refresh) an APNs device token for push notifications. Gated
+    // on the dashboard token so only the signed-in app can register a device.
+    // Upsert on the token itself so re-registering the same device is idempotent.
+    if (body.action === 'register-push') {
+      if (!tokenValid(body.token)) { res.status(401).json({ error: 'Unauthorized' }); return; }
+      const deviceToken = String(body.deviceToken || '').trim();
+      if (!deviceToken) { res.status(400).json({ error: 'deviceToken required' }); return; }
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/device_tokens?on_conflict=token`, {
+        method: 'POST',
+        headers: {
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates',
+        },
+        body: JSON.stringify([{
+          token: deviceToken,
+          platform: body.platform || 'ios',
+          environment: body.environment || 'sandbox',
+          last_seen: new Date().toISOString(),
+        }]),
+      });
+      res.status(200).json({ success: true });
+      return;
+    }
+
     res.status(400).json({ error: 'Unknown action' });
     return;
   }
