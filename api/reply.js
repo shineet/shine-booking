@@ -97,6 +97,16 @@ export default async function handler(req, res) {
 
     // If Shine is replying from his personal phone, route to the last forwarded client
     if (From === '+16128657681') {
+      // Carrier opt-out/opt-in keywords (STOP, START, HELP, ...) are handled by the
+      // carrier/Twilio for the sender's own number and mean nothing to a client. If
+      // Shine texts one on its own (e.g. testing opt-out), do NOT relay it to the
+      // last client -- otherwise a stray "START"/"STOP" lands in their thread.
+      const KEYWORD = /^(stop|stopall|unstop|unsubscribe|cancel|end|quit|start|yes|no|help|info)$/i;
+      if (KEYWORD.test(String(Body).trim())) {
+        res.setHeader('Content-Type', 'text/xml');
+        res.status(200).send('<Response></Response>');
+        return;
+      }
       try {
         const settingsRes = await fetch(
           `${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1&select=last_forwarded_sms_phone,last_forwarded_sms_client_id`,
