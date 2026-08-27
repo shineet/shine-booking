@@ -3,6 +3,8 @@
 // POST { action: 'send', clientId, clientName, clientEmail, eventType, fee }
 // POST { action: 'submit', bookingId, answers }
 
+import { notify } from '../lib/apns.js';
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -224,13 +226,26 @@ export default async function handler(req, res) {
   } else if (action === 'submit') {
     // ── formerly submit-intake.js ─────────────────────────────────────────────
     try {
-      const { bookingId, answers } = req.body;
+      const { bookingId, answers, draft } = req.body;
       if (!bookingId) return res.status(400).json({ error: 'Missing booking id' });
 
-      const venueAddress = answers.q_address || null;
-      const startTime    = normalizeTime(answers.q_start_time);
+      // Save the answers. Only overwrite venue/start time when the client
+      // actually provided them, so a partial save can't wipe details already on
+      // the booking.
+      const bookingUpdate = { intake_answers: answers };
+      if (answers.q_address) bookingUpdate.venue_address = answers.q_address;
+      const startTime = normalizeTime(answers.q_start_time);
+      if (startTime) bookingUpdate.start_time = startTime;
 
-      // Save answers to booking
+      if (draft) {
+        // "Save and finish later": keep it partial. Do NOT mark completed,
+        // advance the lead, or notify -- the client is still working on it.
+        bookingUpdate.intake_status = 'partial';
+      } else {
+        bookingUpdate.intake_status = 'completed';
+        bookingUpdate.intake_completed_at = new Date().toISOString();
+      }
+
       await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${bookingId}`, {
         method: 'PATCH',
         headers: {
@@ -238,14 +253,11 @@ export default async function handler(req, res) {
           'apikey': process.env.SUPABASE_SECRET_KEY,
           'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
         },
-        body: JSON.stringify({
-          intake_status:       'completed',
-          intake_answers:      answers,
-          intake_completed_at: new Date().toISOString(),
-          venue_address:       venueAddress,
-          start_time:          startTime
-        })
+        body: JSON.stringify(bookingUpdate)
       });
+
+      // A draft stops here. Everything below is a real submit only.
+      if (draft) return res.status(200).json({ success: true, draft: true });
 
       // Fetch booking for notification + client update
       const bookingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${bookingId}&limit=1`, {
@@ -289,6 +301,14 @@ export default async function handler(req, res) {
           text:    `${booking?.client_name || 'A client'} completed their event questionnaire!\n\n${answersText}\n\nThe contract is now ready to send with these details pre-filled — open the app to review and send.\n\nshine-booking.vercel.app`
         })
       });
+
+      // Push to the app too (email alone is easy to miss).
+      try {
+        await notify({
+          title: 'Questionnaire completed',
+          body: `${booking?.client_name || 'A client'} finished their intake — ready for contract.`,
+        });
+      } catch (pushErr) { console.error('Intake completion push failed:', pushErr.message); }
 
       return res.status(200).json({ success: true });
 
