@@ -55,7 +55,7 @@ async function detectAndSaveCallSuggestion(clientId, supaHeaders) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-5',
         max_tokens: 60,
         system: `Today's date is ${today}. You are scanning a text conversation to check whether a specific date AND a specific time have been mutually confirmed by both people for a phone call or meeting (NOT the actual event/performance date itself). Resolve relative dates ("tomorrow", "Thursday") against today's date. If both a date and time are clearly settled by both sides, respond with EXACTLY this and nothing else: [CALL_SCHEDULED: YYYY-MM-DD|H:MM AM/PM|short title]. Otherwise respond with exactly: NONE`,
         messages: [{ role: 'user', content: convoText }]
@@ -360,7 +360,7 @@ Call/meeting detection (separate from the actual performance date):
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1024, system: finalSystemPrompt, messages: [{ role: 'user', content: userContent }] })
+      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 1024, system: finalSystemPrompt, messages: [{ role: 'user', content: userContent }] })
     });
 
     const claudeData = await claudeRes.json();

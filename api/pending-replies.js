@@ -520,7 +520,7 @@ Hours since last contact: ${hoursAgo}` + (await fetchLeadConversation(clientId))
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
+          model: 'claude-sonnet-5',
           max_tokens: 300,
           system: systemPrompt + (await guidanceSuffix()),
           messages: [{ role: 'user', content: userPrompt }],
@@ -614,7 +614,7 @@ PRICING:
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
+          model: 'claude-sonnet-5',
           max_tokens: 1024,
           system: systemPrompt + (await guidanceSuffix()) + channelBlock + instrBlock,
           messages: [{ role: 'user', content: userPrompt }],
@@ -785,8 +785,8 @@ PRICING:
         } catch(e) { console.error('Regenerate call failed:', e.message); return null; }
       }
 
-      let text = await callClaude('claude-sonnet-4-6');
-      if (!text) text = await callClaude('claude-opus-4-8');
+      let text = await callClaude('claude-sonnet-5');
+      if (!text) text = await callClaude('claude-opus-5');
       if (!text) { res.status(200).json({ error: 'Could not generate a new draft — try again.' }); return; }
 
       const newDraft = text
@@ -897,7 +897,7 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
       // Single fast pass on Opus 4.8 (testing 2026-07-13: research now persists per lead via
       // localStorage, so it only runs once per lead, making the extra cost/latency worth it for
       // quality). No fallback: two research passes back-to-back risk the 60s function limit.
-      const r = await runResearch('claude-opus-4-8');
+      const r = await runResearch('claude-opus-5');
       const finalText = r.text; const refused = r.ref;
 
       if (refused) { res.status(200).json({ error: 'The AI declined this one (rare false positive). Try again, or research manually.' }); return; }
@@ -1025,7 +1025,7 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
       // call. Going Sonnet-first risked a refusal on payment-heavy corporate leads, which then
       // fell back to Opus = two stacked calls (~40s+) that the browser dropped ("Network issue"
       // client-side though the server returned 200). Sonnet is only a last-resort if Opus errors.
-      let dr = await callDraft('claude-opus-4-8');
+      let dr = await callDraft('claude-opus-5');
       if (!dr.text && !dr.ref) dr = await callDraft('claude-sonnet-5');
       if (dr.ref) { res.status(200).json({ error: 'The AI declined this draft (rare). Try again.' }); return; }
       if (!dr.text) { res.status(200).json({ error: 'Could not draft the messages — try again.' }); return; }
@@ -1100,7 +1100,7 @@ HARD STYLE RULE: absolutely no em dashes (—). Use commas, periods, or "to".`;
         const resp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({ model: 'claude-opus-4-8', max_tokens: 900, system: CALLPREP_SYSTEM, messages: [{ role: 'user', content: userPrompt }] })
+          body: JSON.stringify({ model: 'claude-opus-5', max_tokens: 900, system: CALLPREP_SYSTEM, messages: [{ role: 'user', content: userPrompt }] })
         });
         const data = await resp.json();
         if (!resp.ok || data.error) throw new Error(data && data.error && data.error.message || 'Model error');
@@ -1155,7 +1155,7 @@ Order items most urgent first (high, then medium, then low). Omit any lead that 
         const resp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({ model: 'claude-opus-4-8', max_tokens: Math.min(4000, 500 + leads.length * 150), system: TRIAGE_SYSTEM, messages: [{ role: 'user', content: userPrompt }] })
+          body: JSON.stringify({ model: 'claude-opus-5', max_tokens: Math.min(4000, 500 + leads.length * 150), system: TRIAGE_SYSTEM, messages: [{ role: 'user', content: userPrompt }] })
         });
         const data = await resp.json();
         if (!resp.ok || data.error) throw new Error(data && data.error && data.error.message || 'Model error');
@@ -1244,7 +1244,7 @@ Depth over breadth: 3-4 well-verified leads with real contact info actually chec
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
             body: JSON.stringify({
-              model: 'claude-opus-4-8', max_tokens: 4000, system: FINDLEADS_SYSTEM,
+              model: 'claude-opus-5', max_tokens: 4000, system: FINDLEADS_SYSTEM,
               tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 8 }],
               messages
             })
@@ -1567,7 +1567,7 @@ RULES:
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-6', max_tokens: 300,
+            model: 'claude-sonnet-5', max_tokens: 300,
             system: systemPrompt + (await guidanceSuffix()) + (channel === 'email' ? '\n\nFORMAT OVERRIDE: this is an EMAIL, one short paragraph is fine, ignore any SMS length instinct.' : '\n\nFORMAT: this is an SMS. Keep it feeling like a real text, not capped at a fixed character count -- write as long as it naturally needs to be for a warm check-in.'),
             messages: [{ role: 'user', content: userPrompt }]
           })
@@ -1620,7 +1620,7 @@ RULES:
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-6', max_tokens: 300,
+            model: 'claude-sonnet-5', max_tokens: 300,
             system: systemPrompt + (await guidanceSuffix()) + (channel === 'email'
               ? '\n\nFORMAT: this is an EMAIL. One or two short paragraphs is fine.'
               : '\n\nFORMAT: this is an SMS. Keep it feeling like a real text -- short, but the review link must still be included on its own line.'),

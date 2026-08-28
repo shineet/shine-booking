@@ -122,9 +122,9 @@ Lead source: ${leadSource || 'unknown'}
 Notes: ${notes || 'none'}`;
 
       const [smsMessage, emailFull] = await Promise.all([
-        anthropicMessage({ model: 'claude-sonnet-4-6', max_tokens: 200,
+        anthropicMessage({ model: 'claude-sonnet-5', max_tokens: 200,
           system: FIRST_CONTACT_SMS_SYSTEM, messages: [{ role: 'user', content: smsUser }] }),
-        anthropicMessage({ model: 'claude-sonnet-4-6', max_tokens: 500,
+        anthropicMessage({ model: 'claude-sonnet-5', max_tokens: 500,
           messages: [{ role: 'user', content: buildEmailPrompt(clientName, eventType, leadSource) }] }),
       ]);
 
@@ -334,7 +334,7 @@ Notes: ${notes || 'none'}`;
           'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
+          model: 'claude-sonnet-5',
           max_tokens: 500,
           messages: [{ role: 'user', content: emailPrompt }]
         })

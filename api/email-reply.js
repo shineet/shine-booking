@@ -834,10 +834,10 @@ Only include this block once. Do not mention this block or its contents in the v
       }
     }
 
-    let result = await callClaude('claude-sonnet-4-6');
+    let result = await callClaude('claude-sonnet-5');
     if (!result.text) {
       console.error('Sonnet did not return a reply:', result.reason, '-- retrying on Opus 4.8');
-      result = await callClaude('claude-opus-4-8');
+      result = await callClaude('claude-opus-5');
     }
     if (!result.text) {
       console.error('Both models failed to return a reply:', result.reason);
