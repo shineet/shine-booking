@@ -208,8 +208,12 @@ async function mergeGigsIntoNote() {
     if (window.FamilyNote.hasGigOn(content, g.event_date)) return; // already written
     const [y, m, d] = g.event_date.split('-').map(Number);
     const title = g.event_title && g.event_title.trim() ? g.event_title.trim() : 'Magic Show';
+    const client = (g.client_name || '').trim();
+    // Always surface who the gig is for; skip only when the title already names them.
+    const label = (client && !title.toLowerCase().includes(client.toLowerCase()))
+      ? `${title} for ${client}` : title;
     const time = g.start_time ? ' at ' + g.start_time : '';
-    const line = `${MONTH_ABBR[m - 1]} ${d} ${title}${time}`;
+    const line = `${MONTH_ABBR[m - 1]} ${d} ${label}${time}`;
     content = window.FamilyNote.insertByDate(content, g.event_date, line);
     changed = true;
   });
