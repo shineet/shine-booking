@@ -510,7 +510,7 @@ Event: ${eventType || 'not specified'}
 Date: ${eventDate || 'not specified'}
 Venue: ${venue || 'not specified'}
 Guests: ${guests || 'not specified'}
-Hours since last contact: ${hoursAgo}`;
+Hours since last contact: ${hoursAgo}` + (await fetchLeadConversation(clientId));
 
       const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -567,7 +567,7 @@ Hours since last contact: ${hoursAgo}`;
 
     // POST action=generate-reply -> draft a contextual reply for the compose modal
     if (req.method === 'POST' && req.body.action === 'generate-reply') {
-      const { clientName, eventType, eventDate, venue, guests, status, notes, instruction, channel } = req.body;
+      const { clientId, clientName, eventType, eventDate, venue, guests, status, notes, instruction, channel } = req.body;
 
       const systemPrompt = `You are writing a reply SMS on behalf of Shine, The Mentalist — a professional mentalism and magic performer in Texas.
 
@@ -595,7 +595,7 @@ PRICING:
         guests ? `Guests: ${guests}` : '',
         status ? `Status: ${status}` : '',
         notes ? `Notes: ${notes}` : ''
-      ].filter(Boolean).join('\n');
+      ].filter(Boolean).join('\n') + (await fetchLeadConversation(clientId));
 
       // If composing an email, use the email signoff instead of the SMS one above.
       const channelBlock = channel === 'email'
@@ -851,7 +851,7 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
         lead.guests ? `Guests: ${lead.guests}` : '',
         lead.lead_source ? `Source: ${lead.lead_source}` : '',
         lead.notes ? `Notes / their message: ${lead.notes}` : ''
-      ].filter(Boolean).join('\n') + (await fetchLeadConversation(lead.clientId));
+      ].filter(Boolean).join('\n') + (await fetchLeadConversation(lead.clientId || lead.id));
 
       // Server-side web search: Claude runs the searches itself. Loop on pause_turn
       // (the server-tool loop caps and pauses; re-send to resume). Kept fast + bounded so
@@ -987,7 +987,7 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
         rc.affordability ? `Affordability: ${rc.affordability}` : '',
         rc.recommendedAnchor ? `Recommended anchor price: ${rc.recommendedAnchor}` : '',
         rc.fit ? `Fit/strategy: ${rc.fit}` : ''
-      ].filter(Boolean).join('\n') + (await fetchLeadConversation(lead.clientId));
+      ].filter(Boolean).join('\n') + (await fetchLeadConversation(lead.clientId || lead.id));
 
       // Iterative refinement: if Shine sent feedback on a current draft, include the draft
       // + his earlier feedback so the revision builds on what's already there.
@@ -1093,7 +1093,7 @@ HARD STYLE RULE: absolutely no em dashes (—). Use commas, periods, or "to".`;
               rc.fit ? `Fit/strategy: ${rc.fit}` : ''
             ].filter(Boolean).join('\n')
           : '(No prior research on file for this lead.)'
-      ].filter(Boolean).join('\n') + (await fetchLeadConversation(lead.clientId));
+      ].filter(Boolean).join('\n') + (await fetchLeadConversation(lead.clientId || lead.id));
 
       let text = '';
       try {
@@ -1588,7 +1588,7 @@ RULES:
     // review, optionally mentioning that the remaining-balance invoice is attached/included.
     // Triggered manually from the Gig Dashboard once a gig is marked Done.
     if (req.method === 'POST' && req.body.action === 'thank-you-draft') {
-      const { clientName, eventType, eventDate, channel, reviewLink, includeBalance, balanceAmount, instruction } = req.body;
+      const { clientId, clientName, eventType, eventDate, channel, reviewLink, includeBalance, balanceAmount, instruction } = req.body;
       if (!reviewLink) { res.status(400).json({ error: 'Missing reviewLink' }); return; }
 
       const balanceLine = includeBalance
@@ -1613,7 +1613,7 @@ RULES:
 - Return ONLY the message body, no subject line, no commentary.
 - Absolutely no em dashes.`;
 
-      const userPrompt = `Client: ${clientName || 'there'}`;
+      const userPrompt = `Client: ${clientName || 'there'}` + (await fetchLeadConversation(clientId));
 
       try {
         const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {

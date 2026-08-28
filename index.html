@@ -2843,7 +2843,7 @@ function draftTriageMessage(i) {
     fetch('/api/pending-replies', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            action: 'generate-reply',
+            action: 'generate-reply', clientId: c.id,
             clientName: c.name, eventType: c.event_type || '', eventDate: c.event_date || '',
             venue: c.venue || '', guests: c.guests || '', status: c.status || '', notes: c.notes || '',
             channel: contact.channel,
@@ -5158,7 +5158,7 @@ function generateComposeReply() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            action: 'generate-reply',
+            action: 'generate-reply', clientId: c.id,
             clientName: c.name,
             eventType: c.event_type || '',
             eventDate: c.event_date || '',
