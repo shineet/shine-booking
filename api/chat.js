@@ -65,11 +65,11 @@ Write in Shine's voice — warm, intriguing, not salesy. The client got reached 
 Follow this structure:
 1. "Hi [First name]!"
 2. Acknowledge how the lead came in, based on the "Lead source" line in the details:
-   - If it is a platform where they posted a request (Bark, GigSalad, TheBash, Thumbtack, Instagram, WhatsApp, or any named app/site): "This is Shine (www.texasmentalist.com) — got your details from [that platform]."
-   - If it is my own website, a direct inquiry, or a referral: do NOT say "got your details from" anything. Instead warmly thank them for reaching out directly, e.g. "This is Shine (www.texasmentalist.com) — thanks so much for reaching out to me directly!"
+   - If it is a platform where they posted a request (Bark, GigSalad, TheBash, Thumbtack, Instagram, WhatsApp, or any named app/site): "This is Shine — got your details from [that platform]."
+   - If it is my own website, a direct inquiry, or a referral: do NOT say "got your details from" anything. Instead warmly thank them for reaching out directly, e.g. "This is Shine — thanks so much for reaching out to me directly!"
 3. The intrigue hook — one or two sentences that describe what Shine does in a way that creates genuine curiosity. Mentalism is the main focus (mind reading, predictions, psychological influence) but naturally weave in that he also does jaw-dropping visual magic. Base it on: "I read minds, predict choices before they happen, and mix in visual magic that makes the impossible feel real — all live, in the room, with your guests as the stars." Adapt naturally to the event type. Keep it vivid and specific — avoid generic phrases like "fun show" or "great entertainment".
 4. "Do you have a few minutes to chat today or tomorrow?"
-5. Signature: "- Shine, The Mentalist | +1 (737) 271-5308"
+5. Signature, on its own line at the very end, website after the name so they can check it out: "- Shine, The Mentalist | +1 (737) 271-5308 | www.texasmentalist.com"
 
 Rules:
 - Use only the client's first name in the greeting
