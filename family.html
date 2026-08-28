@@ -210,8 +210,12 @@ async function mergeGigsIntoNote() {
     const title = g.event_title && g.event_title.trim() ? g.event_title.trim() : 'Magic Show';
     const client = (g.client_name || '').trim();
     // Always surface who the gig is for; skip only when the title already names them.
-    const label = (client && !title.toLowerCase().includes(client.toLowerCase()))
+    const base = (client && !title.toLowerCase().includes(client.toLowerCase()))
       ? `${title} for ${client}` : title;
+    // The line must contain a gig word or hasGigOn can't dedupe it, so an event
+    // titled e.g. "Annual Gala" would be re-appended on every load.
+    const GIG_WORDS = ['magic', 'show', 'gig', 'performance'];
+    const label = GIG_WORDS.some(w => base.toLowerCase().includes(w)) ? base : `Gig: ${base}`;
     const time = g.start_time ? ' at ' + g.start_time : '';
     const line = `${MONTH_ABBR[m - 1]} ${d} ${label}${time}`;
     content = window.FamilyNote.insertByDate(content, g.event_date, line);

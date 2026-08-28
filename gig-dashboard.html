@@ -2551,6 +2551,7 @@ async function regenerateThankYouDraft() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action:         'thank-you-draft',
+        clientId:       thankYouCtx.clientId,
         clientName:     thankYouCtx.clientName,
         eventType:      thankYouCtx.eventName,
         eventDate:      thankYouCtx.eventDate,
