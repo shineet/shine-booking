@@ -288,6 +288,33 @@ Rules:
 // Give the research action (Claude + web search) room to finish server-side.
 export const config = { maxDuration: 60 };
 
+// Time-awareness for drafts: tells the model today's date (Austin time) and how
+// far off the event is, with an explicit rule so it never says "I'll be in touch
+// closer to the date" when the show is days away.
+function eventTimingBlock(eventDateISO) {
+  const todayISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+  const todayLabel = new Date().toLocaleDateString('en-US', { timeZone: 'America/Chicago', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  let out = `\n\nTODAY IS ${todayLabel} (${todayISO}). Use this as the source of truth for timing — never guess the current date.`;
+  if (eventDateISO) {
+    const ev = new Date(String(eventDateISO) + 'T00:00:00');
+    const today = new Date(todayISO + 'T00:00:00');
+    if (!isNaN(ev.getTime())) {
+      const days = Math.round((ev.getTime() - today.getTime()) / 86400000);
+      const when = days < 0 ? `The event already happened (${Math.abs(days)} day(s) ago).`
+        : days === 0 ? `The event is TODAY.`
+        : days === 1 ? `The event is TOMORROW.`
+        : `The event is in ${days} days.`;
+      out += ` ${when}`;
+      if (days >= 0 && days <= 7) {
+        out += ` TIMING RULE: the event is imminent — do NOT defer or say anything like "I'll be in touch closer to the date" or "reach out as it gets closer." It IS close. Reflect that: confirm final logistics/details if relevant, or simply say you're all set and looking forward to it, referencing the day.`;
+      } else if (days > 7) {
+        out += ` It's still a while out, so light deferral ("I'll be in touch as it gets closer") is fine if appropriate.`;
+      }
+    }
+  }
+  return out;
+}
+
 // Pull the lead's actual conversation (what they messaged Shine) so research + drafts
 // factor in their own words, not just the notes field. Inbound + outbound, oldest first.
 async function fetchLeadConversation(clientId) {
@@ -510,7 +537,7 @@ Event: ${eventType || 'not specified'}
 Date: ${eventDate || 'not specified'}
 Venue: ${venue || 'not specified'}
 Guests: ${guests || 'not specified'}
-Hours since last contact: ${hoursAgo}` + (await fetchLeadConversation(clientId));
+Hours since last contact: ${hoursAgo}` + eventTimingBlock(eventDate) + (await fetchLeadConversation(clientId));
 
       const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -595,7 +622,7 @@ PRICING:
         guests ? `Guests: ${guests}` : '',
         status ? `Status: ${status}` : '',
         notes ? `Notes: ${notes}` : ''
-      ].filter(Boolean).join('\n') + (await fetchLeadConversation(clientId));
+      ].filter(Boolean).join('\n') + eventTimingBlock(eventDate) + (await fetchLeadConversation(clientId));
 
       // If composing an email, use the email signoff instead of the SMS one above.
       const channelBlock = channel === 'email'
