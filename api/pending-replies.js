@@ -618,14 +618,20 @@ Hours since last contact: ${hoursAgo}` + eventTimingBlock(eventDate) + (await fe
     if (req.method === 'POST' && req.body.action === 'generate-reply') {
       const { clientId, clientName, eventType, eventDate, venue, guests, status, notes, instruction, channel } = req.body;
 
-      const systemPrompt = `You are writing a reply SMS on behalf of Shine, The Mentalist — a professional mentalism and magic performer in Texas.
+      // Built on the SAME voice as every other reply path.
+      //
+      // This prompt used to be written from scratch, which made it the fifth
+      // copy of Shine's voice and the one that drifted: it opened "You are
+      // writing a reply SMS" even when composing an email, and it asserted
+      // "NOT a first introduction" -- so the one screen used to answer a brand
+      // new website lead was told the opposite of the truth, and none of the
+      // rules about thanking, layout or format positioning reached it.
+      const baseVoice = channel === 'email' ? EMAIL_VOICE : SMS_VOICE;
+      const systemPrompt = baseVoice + `
 
-RULES:
-- This is a reply to a client who has already been in contact, NOT a first introduction
-- Warm, direct, natural tone — not salesy
-- Default to short, like a real text, but it's fine to run longer when the content genuinely needs it (e.g. explaining pricing/packages in real detail, or this client has no email on file so the text has to carry the whole thing). Never pad for its own sake. Hard technical ceiling: stay well under 1500 characters — carriers reject SMS bodies over 1600, so never approach that
-- Sign off as: - Shine | +1 (737) 271-5308
-- Return ONLY the message text, no commentary
+THIS DRAFT:
+- The client's details and the whole conversation so far are given below. If there is no prior conversation, this IS my first reply to them: open by thanking them for getting in touch, in my own words, about their actual event
+- Everything they have already told me is below. Never ask for any of it back
 
 PRICING:
 - Shine's minimum rate is $350 for any show
@@ -648,8 +654,8 @@ PRICING:
 
       // If composing an email, use the email signoff instead of the SMS one above.
       const channelBlock = channel === 'email'
-        ? '\n\nFORMAT OVERRIDE: This is an EMAIL, not an SMS. Use one or two short paragraphs; sign off as "Shine, The Mentalist" with the phone and website.'
-        : '';
+        ? '\n\nThis is an EMAIL. Greeting on its own line, body starting on the next line, sign-off on its own line at the end as "Shine, The Mentalist" with the phone and website.'
+        : '\n\nThis is an SMS. Sign off as: - Shine | +1 (737) 271-5308';
       // Per-draft steering the owner typed for THIS message.
       const instrBlock = (instruction && String(instruction).trim())
         ? `\n\nSHINE'S INSTRUCTION FOR THIS DRAFT (highest priority — follow this; never invent availability):\n${String(instruction).trim()}`
