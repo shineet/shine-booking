@@ -778,7 +778,18 @@ PRICING:
             { headers: sbHeaders }
           );
           const hRows = await hRes.json();
-          if (Array.isArray(hRows)) history = hRows.map(m => ({ role: m.direction === 'inbound' ? 'user' : 'assistant', content: m.content }));
+          if (Array.isArray(hRows)) {
+            history = hRows
+              // An empty or null message body makes Anthropic reject the whole
+              // request ("content must not be empty"), which killed the draft
+              // for reasons nothing on screen could explain. One blank row in a
+              // conversation was enough.
+              .map(m => ({
+                role: m.direction === 'inbound' ? 'user' : 'assistant',
+                content: typeof m.content === 'string' ? m.content.trim() : ''
+              }))
+              .filter(m => m.content.length > 0);
+          }
         } catch(e) { console.error('Regenerate history fetch failed:', e.message); }
       }
 
@@ -798,6 +809,12 @@ PRICING:
         : '';
       const systemPrompt = baseVoice + (await guidanceSuffix()) + instrBlock;
 
+      // Why the last attempt failed, kept so the app can say something better
+      // than "try again". A redraft that fails silently is indistinguishable
+      // from one that is slow, and "try again" on a request that will fail the
+      // same way every time is the worst advice available.
+      let lastReason = '';
+
       async function callClaude(model) {
         try {
           const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -806,15 +823,37 @@ PRICING:
             body: JSON.stringify({ model, max_tokens: 1024, system: systemPrompt, messages: msgs })
           });
           const txt = await resp.text();
-          let data; try { data = JSON.parse(txt); } catch(e) { return null; }
-          if (!resp.ok || data.error) { console.error('Regenerate model error:', data && data.error && data.error.message); return null; }
-          return (data.content && data.content[0] && data.content[0].text) ? data.content[0].text : null;
-        } catch(e) { console.error('Regenerate call failed:', e.message); return null; }
+          let data;
+          try { data = JSON.parse(txt); }
+          catch(e) {
+            // Previously returned null with no log at all, so a non-JSON reply
+            // -- a gateway error page, an empty body -- vanished without trace.
+            lastReason = `${model}: non-JSON reply (${resp.status}) ${txt.slice(0, 160)}`;
+            console.error('Regenerate non-JSON reply:', resp.status, txt.slice(0, 300));
+            return null;
+          }
+          if (!resp.ok || data.error) {
+            lastReason = `${model}: ${(data && data.error && data.error.message) || resp.status}`;
+            console.error('Regenerate model error:', resp.status, lastReason);
+            return null;
+          }
+          const out = (data.content && data.content[0] && data.content[0].text) ? data.content[0].text : null;
+          if (!out) lastReason = `${model}: empty completion`;
+          return out;
+        } catch(e) {
+          lastReason = `${model}: ${e.message}`;
+          console.error('Regenerate call failed:', e.message);
+          return null;
+        }
       }
 
       let text = await callClaude('claude-sonnet-5');
       if (!text) text = await callClaude('claude-opus-5');
-      if (!text) { res.status(200).json({ error: 'Could not generate a new draft — try again.' }); return; }
+      if (!text) {
+        console.error('Regenerate gave up. messages:', msgs.length, 'reason:', lastReason);
+        res.status(200).json({ error: `Could not generate a new draft. ${lastReason || 'No reason reported.'}` });
+        return;
+      }
 
       const newDraft = text
         .replace('[BOOKING_INTENT]', '')
