@@ -92,6 +92,54 @@ function extractMimePart(rawEmail, mime) {
 // Content-Transfer-Encoding. Returns '' if no text/plain part is found.
 function extractPlainText(rawEmail) { return extractMimePart(rawEmail, 'text/plain'); }
 
+// ── Attachments ──────────────────────────────────────────────────────────────
+// The app cannot show a client's attached file: the webhook receives the raw
+// MIME but nothing stores the bytes anywhere. Shine hit this with a document he
+// could see referenced in the app and nowhere else, and had no way to tell
+// whether he had missed something or the client had forgotten to attach it.
+//
+// Storing files is a bigger job. NAMING them is not, and it answers the actual
+// question -- "is there a file, and what is it" -- because the Cloudflare Worker
+// already forwards a full copy of every email to Gmail, where the file itself is
+// waiting.
+//
+// Only Content-Disposition: attachment is reported. Inline parts are almost
+// always signature logos (image001.png and friends), and listing those on every
+// corporate email would bury the one line that matters under noise.
+function attachmentNames(rawEmail) {
+  if (!rawEmail) return [];
+  const names = [];
+  const seen = new Set();
+
+  // Headers wrap across lines, so unfold before matching.
+  const unfolded = String(rawEmail).replace(/\r?\n[ \t]+/g, ' ');
+  const dispositions = unfolded.match(/Content-Disposition:\s*attachment[^\n]*/gi) || [];
+
+  for (const line of dispositions) {
+    // filename="x.pdf", filename=x.pdf, or RFC 2231 filename*=UTF-8''x%20y.pdf
+    let m = line.match(/filename\*?=(?:"([^"]+)"|'[^']*'([^;\s]+)|([^;\s]+))/i);
+    if (!m) continue;
+    let name = m[1] || m[2] || m[3] || '';
+    try { name = decodeURIComponent(name); } catch { /* leave it as sent */ }
+    name = name.replace(/^UTF-8''/i, '').trim();
+    if (!name || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    names.push(name.slice(0, 120));
+    if (names.length >= 8) break;   // a line, not an inventory
+  }
+  return names;
+}
+
+/// Appends a visible note naming the files. Deliberately part of the message
+/// body rather than a new column: it shows up everywhere a message already
+/// shows -- app, dashboard, AI context -- with no migration and no app rebuild.
+function withAttachmentNote(bodyText, rawEmail) {
+  const names = attachmentNames(rawEmail);
+  if (!names.length) return bodyText;
+  const label = names.length === 1 ? 'Attachment' : 'Attachments';
+  return `${bodyText}\n\n📎 ${label}: ${names.join(', ')}\n(the file itself is in Gmail, not the app)`;
+}
+
 // Same, but for the text/html part (e.g. Amy's reply had only an HTML part, no
 // text/plain alternative, so the plain extractor came back empty).
 function extractHtmlPart(rawEmail) { return extractMimePart(rawEmail, 'text/html'); }
@@ -549,7 +597,7 @@ export default async function handler(req, res) {
                   client_id: manualClient.id,
                   channel: 'email',
                   direction: 'outbound',
-                  content: manualBody || `[Email with subject: ${subject}]`,
+                  content: withAttachmentNote(manualBody || `[Email with subject: ${subject}]`, rawEmail),
                   status: 'sent',
                   to_address: toEmail,
                   email_subject: subject
@@ -586,6 +634,7 @@ export default async function handler(req, res) {
       if (headerEnd > -1) emailBody = normalizeBody(rawEmail.substring(headerEnd).trim().substring(0, 1000));
     }
     if (!emailBody) emailBody = `Client sent an email with subject: ${subject}`;
+    emailBody = withAttachmentNote(emailBody, rawEmail);
     // Strip the quoted-previous-message chain the client's mail client tacked on
     // (reply history, ">"-quotes, signature block) before it ever reaches storage --
     // this was showing up as "junk" in the dashboard's conversation view, and bloating
