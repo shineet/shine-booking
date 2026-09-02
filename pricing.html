@@ -705,7 +705,20 @@
             strollFinale: parseInt(p.get('sf')) || null,
             noFinale: p.get('nf') === '1',
             clientName: p.get('cname') || '',
-            eventType: p.get('etype') || ''
+            eventType: p.get('etype') || '',
+            // Custom quote: up to three options priced by hand, for a brief the
+            // standard packages do not fit -- a DMC asking for "two price
+            // options", one with roaming and one without, is the case this was
+            // built for. Each option carries its own title, price and feature
+            // lines (pipe separated).
+            quote: p.get('quote') === '1',
+            quoteOptions: [1, 2, 3].map(function (i) {
+                return {
+                    title: p.get('q' + i + 't') || '',
+                    price: parseInt(p.get('q' + i + 'p')) || 0,
+                    features: (p.get('q' + i + 'f') || '').split('|').filter(function (f) { return f.trim(); })
+                };
+            }).filter(function (o) { return o.title && o.price > 0; })
         };
     }
 
@@ -743,6 +756,11 @@
 
     function render() {
         const p = getParams();
+
+        if (p.quote && p.quoteOptions.length) {
+            renderQuote(p);
+            return;
+        }
 
         if (p.format === 'strolling') {
             renderStrolling(p);
@@ -819,6 +837,31 @@
     }
 
     let strollingParams = null;
+
+    /// Hand-priced options, shown side by side so they can be compared.
+    ///
+    /// Deliberately no "most popular" badge: these are a response to a specific
+    /// brief, not a menu, and nudging toward one of two options a client asked
+    /// to compare would read as a sales tactic rather than a quote.
+    function renderQuote(p) {
+        const section = document.getElementById('corporate-section');
+        section.style.display = 'block';
+        section.querySelector('.section-title').textContent =
+            p.quoteOptions.length > 1 ? 'Your options' : 'Your quote';
+        document.getElementById('corporate-cards').innerHTML = p.quoteOptions.map(function (o, i) {
+            return makeCard('corporate', 'quote' + (i + 1), o.title, o.price, '',
+                            o.features, false, p.quoteOptions.length === 1);
+        }).join('');
+        document.getElementById('subtitle').textContent =
+            buildSubtitle(p, 'Prepared for your event · Texas');
+        const ctaEl = document.getElementById('cta-line');
+        if (ctaEl) {
+            ctaEl.textContent = p.quoteOptions.length > 1
+                ? 'Two ways to do this. Pick whichever fits the evening.'
+                : 'This is the package we discussed. Reserve your date below.';
+        }
+        directBook = p.quoteOptions.length === 1;
+    }
 
     function renderStrolling(p) {
         strollingParams = p;
