@@ -1050,19 +1050,27 @@ If a CURRENT DRAFT and feedback from Shine are shown below, you are REVISING: ch
 
 This lead has an email on file, so draft BOTH an email and an SMS. The email is the primary, more detailed message, one or two short paragraphs. The SMS should be noticeably shorter and more condensed than the email, a natural-sounding text pointing to and complementing it, not a copy-paste of the same content, but it does NOT need to be capped at ~160 chars — let it run a bit longer if there's a bit more worth saying in the moment. (If Shine wants a bare one-line reminder text for a specific lead, he can just edit the SMS himself before sending.)
 
+THE TEXT IS LAID OUT TOO, it is not one run-on blob. Use real line breaks (\n):
+- "Hi Christian," on its own line
+- blank line
+- the message itself, starting with a capital letter, in one or two short paragraphs
+- blank line
+- the sign-off on its own lines at the end: "Shine, The Mentalist" then "texasmentalist.com"
+A text with the greeting, the pitch and the question all welded into a single paragraph reads like a mass send, which is the one thing a first message must not do.
+
 Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \`\`\`) and nothing else, with exactly these string fields:
 {
   "note": "1-2 short sentences replying to Shine's feedback/question, or \\"\\" on a first draft",
   "emailSubject": "the email subject line",
   "emailBody": "the full email body, signed 'Shine, The Mentalist / texasmentalist.com / 737-271-5308'",
-  "sms": "a shorter, condensed text version, still noticeably briefer than the email"
+  "sms": "a shorter, condensed text version, still noticeably briefer than the email, with real line breaks: greeting line, blank line, body, blank line, sign-off with name and website"
 }`;
 
       const DRAFT_SYSTEM_SMS_ONLY_TAIL = `
 
 This lead has NO email on file, only a phone number, so SMS is the only way to reach them. Draft ONLY a text message, leave emailSubject and emailBody as empty strings. This is the first message they'll get from you, so the text needs to do the whole job an email would have, not just nudge toward one. Hard technical ceiling: stay well under 1500 characters even so — carriers reject SMS bodies over 1600.
 
-Because this is a first-touch cold text, be slightly warmer than a normal quick SMS reply, a genuine, personal opening line, not "Hi, saw your inquiry." ${sourceLabel ? `Open by naturally mentioning you saw their event inquiry on ${sourceLabel} (referencing their actual event details, not a generic form) so it's obviously not spam.` : `Open by naturally referencing their actual event details so it's obviously not spam.`} It's fine to run longer than a typical quick nudge if the message needs it, but keep it reading like a real text, not an email crammed into a text box. End with a short sign-off that includes the website, for example "- Shine, texasmentalist.com".
+Because this is a first-touch cold text, be slightly warmer than a normal quick SMS reply, a genuine, personal opening line, not "Hi, saw your inquiry." ${sourceLabel ? `Open by naturally mentioning you saw their event inquiry on ${sourceLabel} (referencing their actual event details, not a generic form) so it's obviously not spam.` : `Open by naturally referencing their actual event details so it's obviously not spam.`} It's fine to run longer than a typical quick nudge if the message needs it, but keep it reading like a real text, not an email crammed into a text box. End with a sign-off on its OWN line, after a blank line: "Shine, The Mentalist" then "texasmentalist.com". Lay the whole text out with real line breaks (\n) — greeting on its own line, blank line, body, blank line, sign-off — never one run-on paragraph.
 
 Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \`\`\`) and nothing else, with exactly these string fields:
 {
