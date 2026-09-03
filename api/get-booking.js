@@ -431,43 +431,6 @@ export default async function handler(req, res) {
 
     // Delete a client + its messages/bookings (was api/delete-client.js; merged here
     // and now token-protected). FK order: messages -> bookings -> client.
-    // TEMPORARY -- backfill Michela's three texts of 2026-09-03, lost when the
-    // inbound save sat on the far side of a Claude call that threw (fixed in
-    // e9a3047). Takes NO input beyond the secret: the phone number and the three
-    // message bodies are fixed below, so the worst this can do if found is write
-    // the same three rows twice -- and it checks for that too. REMOVE after use.
-    if (body.action === 'backfill-once') {
-      if (body.secret !== 'xenJB11OCeSzYkEjj_nW1OJ79R5qtx97') { res.status(401).json({ error: 'Unauthorized' }); return; }
-      const digits = '2105013400';
-      const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?phone=like.*${digits}&select=id,name,phone`, { headers: SB_HDR() });
-      const clients = await cRes.json();
-      if (!Array.isArray(clients) || !clients[0]) { res.status(404).json({ error: 'No client for that number', got: clients }); return; }
-      const client = clients[0];
-      const existing = await (await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${client.id}&select=id,direction,content`, { headers: SB_HDR() })).json();
-      const bodies = [
-        'hi! My name is Michela! Im interested in booking for my Halloween Party in Austin',
-        'It would be october 31st, around 10pm at my house (located in north austin) \u{1F60A}',
-        'im expecting around 20 - 30 people at this time',
-      ];
-      const already = Array.isArray(existing) ? existing.map(m => String(m.content || '')) : [];
-      const rows = bodies
-        .map((content, i) => ({
-          client_id: client.id, channel: 'sms', direction: 'inbound', content,
-          status: 'received', to_address: null,
-          // 3:28pm Central, seconds apart so the dashboard's created_at sort
-          // keeps them in the order she actually sent them.
-          created_at: new Date(Date.UTC(2026, 8, 3, 20, 28, i * 2)).toISOString(),
-        }))
-        .filter(r => !already.includes(r.content));
-      if (!rows.length) { res.status(200).json({ ok: true, inserted: 0, note: 'already present', client }); return; }
-      const insRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
-        method: 'POST', headers: { ...SB_HDR(), 'Prefer': 'return=representation' }, body: JSON.stringify(rows),
-      });
-      const insText = await insRes.text();
-      res.status(insRes.ok ? 200 : 500).json({ ok: insRes.ok, client, inserted: rows.length, body: insText.slice(0, 500) });
-      return;
-    }
-
     if (body.action === 'delete-client') {
       if (!tokenValid(body.token)) { res.status(401).json({ error: 'Unauthorized' }); return; }
       const clientId = body.clientId;
