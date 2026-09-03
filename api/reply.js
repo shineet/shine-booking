@@ -257,6 +257,41 @@ export default async function handler(req, res) {
       }
     }
 
+    // Save what they actually said, NOW, before anything that can fail.
+    //
+    // This used to happen ~200 lines further down, after the Claude call. That
+    // call can throw for entirely ordinary reasons (an API error, an overload,
+    // an unexpected response shape) and the outer catch swallows it and still
+    // returns 200 to Twilio. The client row is created above, so the result was
+    // a lead in the dashboard with no messages under it, no error surfaced
+    // anywhere, and Shine reading the text on his phone while the app showed an
+    // empty conversation.
+    //
+    // Their words are the one thing here that cannot be regenerated. The reply
+    // can be retried, the status can be recomputed; the inbound message is
+    // theirs and arrives exactly once. It gets written first.
+    const inboundTs = new Date();
+    let inboundSaved = false;
+    if (client) {
+      try {
+        const inboundRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+          body: JSON.stringify([{
+            client_id: client.id, channel: 'sms', direction: 'inbound',
+            content: Body, status: 'received', to_address: null,
+            created_at: inboundTs.toISOString()
+          }])
+        });
+        inboundSaved = inboundRes.ok;
+        if (!inboundRes.ok) {
+          console.error('Inbound message insert failed:', inboundRes.status, await inboundRes.text());
+        }
+      } catch(e) {
+        console.error('Inbound message insert failed:', e.message);
+      }
+    }
+
     // Forward incoming SMS to Shine's personal phone and record who sent it — failure safe
     try {
       const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
@@ -444,26 +479,31 @@ Call/meeting detection (separate from the actual performance date):
         // in the dashboard's query (order=created_at.asc only), a tie's relative
         // order is undefined -- which is exactly how Joe's reply ended up
         // rendered ABOVE the AI's response that was actually written to answer it.
-        const inboundTs = new Date();
         const outboundTs = new Date(inboundTs.getTime() + 500);
         // A closing acknowledgment ("thanks", "see you tonight") gets logged as
         // inbound-only -- no outbound draft/pending-review row, since there's
         // nothing to send or review. Keeps the thread from ending on a
         // needless AI reply just to have the last word.
-        const rowsToInsert = noReplyNeeded
-          ? [{ client_id: client.id, channel: 'sms', direction: 'inbound', content: Body, status: 'received', to_address: null, created_at: inboundTs.toISOString() }]
-          : [
-              { client_id: client.id, channel: 'sms', direction: 'inbound', content: Body, status: 'received', to_address: null, created_at: inboundTs.toISOString() },
-              { client_id: client.id, channel: 'sms', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: From, created_at: outboundTs.toISOString() }
-            ];
-        const messagesRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
-          body: JSON.stringify(rowsToInsert)
-        });
-        if (!messagesRes.ok) {
-          const errBody = await messagesRes.text();
-          console.error('Messages insert failed:', messagesRes.status, errBody);
+        // The inbound row is already in, written before the Claude call. It is
+        // repeated here only if that write failed, so a later success still
+        // captures their message rather than losing it to an earlier outage.
+        const rowsToInsert = [];
+        if (!inboundSaved) {
+          rowsToInsert.push({ client_id: client.id, channel: 'sms', direction: 'inbound', content: Body, status: 'received', to_address: null, created_at: inboundTs.toISOString() });
+        }
+        if (!noReplyNeeded) {
+          rowsToInsert.push({ client_id: client.id, channel: 'sms', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: From, created_at: outboundTs.toISOString() });
+        }
+        if (rowsToInsert.length) {
+          const messagesRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+            body: JSON.stringify(rowsToInsert)
+          });
+          if (!messagesRes.ok) {
+            const errBody = await messagesRes.text();
+            console.error('Messages insert failed:', messagesRes.status, errBody);
+          }
         }
 
         if (reviewMode && !noReplyNeeded) {
