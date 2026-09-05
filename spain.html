@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Spain">
+<meta name="theme-color" content="#faf8f2">
+<title>Spain</title>
+<style>
+  :root {
+    --bg:#faf8f2; --card:#fffdf8; --ink:#2b2b2b; --muted:#8a8578;
+    --line:#e7e2d6; --accent:#c0562e; --good:#3f7d4e;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 40px);
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 0 14px; }
+
+  header { padding: 16px 0 10px; display: flex; align-items: baseline; gap: 10px; }
+  header h1 { font-size: 24px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  header .sub { color: var(--muted); font-size: 14px; }
+  #status { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+  .who {
+    display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted);
+    padding: 0 0 12px; border-bottom: 1px solid var(--line); margin-bottom: 14px;
+  }
+  .who b { color: var(--ink); font-weight: 600; }
+  .linkish { color: var(--accent); font-weight: 600; background: none; border: 0; padding: 0; font-size: 13px; }
+
+  .day { background: var(--card); border: 1px solid var(--line); border-radius: 16px; margin-bottom: 14px; overflow: hidden; }
+  .day-head { display: flex; align-items: baseline; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
+  .day-head .d { font-weight: 700; font-size: 16px; }
+  .day-head .city { color: var(--accent); font-weight: 600; font-size: 14px; }
+  .day-head .n { margin-left: auto; font-size: 12px; color: var(--muted); }
+
+  .item { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); align-items: flex-start; }
+  .item:last-child { border-bottom: 0; }
+  .item .t { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); min-width: 52px; padding-top: 2px; }
+  .item .body { flex: 1; min-width: 0; }
+  .item .title { font-weight: 600; }
+  .item .detail, .item .by { font-size: 13px; color: var(--muted); }
+  .item .detail { white-space: pre-wrap; word-break: break-word; }
+  .item.booked .title { color: var(--good); }
+  .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .map { font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 600; }
+  .add { display: block; width: 100%; text-align: left; padding: 11px 14px; background: none; border: 0; color: var(--accent); font-size: 15px; font-weight: 600; }
+  .empty { padding: 12px 14px; color: var(--muted); font-size: 14px; }
+
+  /* Editor sheet */
+  #sheet { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: flex-end; z-index: 20; }
+  #sheet.open { display: flex; }
+  #sheet .panel {
+    background: var(--card); width: 100%; max-height: 92vh; overflow: auto;
+    border-radius: 18px 18px 0 0; padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
+    max-width: 680px; margin: 0 auto;
+  }
+  #sheet h3 { margin: 0 0 12px; font-size: 17px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  input[type=text], textarea, select {
+    width: 100%; font: 16px/1.5 inherit; padding: 10px 12px;
+    border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink);
+  }
+  textarea { min-height: 76px; resize: vertical; }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 15px; }
+  .check input { width: 20px; height: 20px; }
+  .actions { display: flex; gap: 10px; margin-top: 16px; }
+  button.primary { flex: 1; background: var(--accent); color: #fff; border: 0; border-radius: 12px; padding: 13px; font-size: 16px; font-weight: 600; }
+  button.ghost { background: none; border: 1px solid var(--line); border-radius: 12px; padding: 13px 16px; font-size: 16px; color: var(--ink); }
+  button.danger { background: none; border: 0; color: #b03a2e; font-size: 15px; padding: 13px 4px; font-weight: 600; }
+
+  /* PIN gate */
+  #gate { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column;
+          align-items: center; justify-content: center; gap: 14px; padding: 24px; z-index: 30; }
+  #gate h2 { margin: 0; font-weight: 700; }
+  #gate p { margin: 0; color: var(--muted); font-size: 14px; text-align: center; }
+  #gate input { font-size: 20px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px;
+                text-align: center; width: 200px; letter-spacing: 4px; }
+  #gate button { font-size: 16px; padding: 12px 28px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 600; }
+  .err { color: #b03a2e; font-size: 13px; min-height: 16px; }
+  .hidden { display: none !important; }
+  .offline { background: #fdf3e7; border: 1px solid #e8d5bb; color: #8a5a2b; border-radius: 10px;
+             padding: 8px 12px; font-size: 13px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<div id="app" class="wrap hidden">
+  <header>
+    <h1>Spain</h1>
+    <span class="sub" id="range"></span>
+    <span id="status"></span>
+  </header>
+
+  <div class="who">
+    <span>You are <b id="me">—</b></span>
+    <button class="linkish" onclick="askName()">change</button>
+    <span style="margin-left:auto"></span>
+    <button class="linkish" onclick="shiftDates()">trip dates</button>
+  </div>
+
+  <div id="stale" class="offline hidden"></div>
+  <div id="days"></div>
+</div>
+
+<div id="sheet" onclick="if(event.target===this) closeSheet()">
+  <div class="panel">
+    <h3 id="sheet-title">Add to the plan</h3>
+    <div class="row">
+      <div>
+        <label for="f-time">Time</label>
+        <input id="f-time" type="text" inputmode="numeric" placeholder="09:30 or Morning" autocomplete="off">
+      </div>
+      <div>
+        <label for="f-cat">Kind</label>
+        <select id="f-cat">
+          <option value="plan">Plan</option>
+          <option value="food">Food</option>
+          <option value="travel">Travel</option>
+          <option value="stay">Stay</option>
+          <option value="note">Note</option>
+        </select>
+      </div>
+    </div>
+    <label for="f-title">What</label>
+    <input id="f-title" type="text" placeholder="Prado Museum" autocomplete="off">
+    <label for="f-place">Place, for the map link</label>
+    <input id="f-place" type="text" placeholder="Museo del Prado, Madrid" autocomplete="off">
+    <label for="f-detail">Notes</label>
+    <textarea id="f-detail" placeholder="Tickets booked, meet in the lobby at 9…"></textarea>
+    <label class="check"><input id="f-booked" type="checkbox"> Booked and paid</label>
+    <div class="actions">
+      <button class="ghost" onclick="closeSheet()">Cancel</button>
+      <button class="primary" onclick="saveItem()">Save</button>
+    </div>
+    <div style="text-align:center"><button class="danger hidden" id="f-del" onclick="deleteItem()">Delete this</button></div>
+    <div class="err" id="sheet-err"></div>
+  </div>
+</div>
+
+<div id="gate">
+  <h2>Spain</h2>
+  <p>Enter the trip PIN</p>
+  <input id="pin" type="tel" inputmode="numeric" autocomplete="off" placeholder="••••">
+  <button onclick="submitPin()">Open</button>
+  <div class="err" id="gate-err"></div>
+</div>
+
+<script>
+const API = '/api/get-booking';
+const TRIP = 'spain';
+const CACHE = 'spainPlanCache';
+let TOKEN = localStorage.getItem('tripToken') || '';
+let NAME  = localStorage.getItem('tripName') || '';
+let days = [], items = [], editing = null, editingDay = null;
+
+// ── Server ──────────────────────────────────────────────────────────────────
+async function api(action, extra) {
+  return fetch(API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ action }, extra || {})),
+  });
+}
+
+// Everything goes through the server proxy. The browser never holds a Supabase
+// key, and the trip token is scoped server-side to these two tables only.
+async function db(method, path, bodyObj, prefer) {
+  const r = await api('db', { token: TOKEN, method, path, body: bodyObj, prefer });
+  if (r.status === 401) { logout('That PIN no longer works. Enter it again.'); throw new Error('401'); }
+  if (!r.ok) throw new Error(r.status + ' ' + await r.text());
+  const t = await r.text();
+  try { return JSON.parse(t); } catch (e) { return t; }
+}
+
+function logout(msg) {
+  TOKEN = ''; localStorage.removeItem('tripToken');
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('gate').classList.remove('hidden');
+  if (msg) document.getElementById('gate-err').textContent = msg;
+}
+
+async function submitPin() {
+  const pin = document.getElementById('pin').value.trim();
+  const err = document.getElementById('gate-err');
+  err.textContent = '';
+  let r;
+  try { r = await api('trip_login', { pin }); }
+  catch (e) { err.textContent = 'No connection.'; return; }
+  if (!r.ok) { err.textContent = 'Wrong PIN.'; return; }
+  TOKEN = (await r.json()).token;
+  localStorage.setItem('tripToken', TOKEN);
+  boot();
+}
+document.getElementById('pin').addEventListener('keydown', e => { if (e.key === 'Enter') submitPin(); });
+
+// ── Who is editing ──────────────────────────────────────────────────────────
+// Asked once and kept locally. Eight people editing one plan is unreadable
+// without knowing who put a thing there, and a name is cheaper than accounts.
+function askName() {
+  const n = prompt('Your name, so the others know who added what', NAME || '');
+  if (n === null) return;
+  NAME = n.trim().slice(0, 24);
+  localStorage.setItem('tripName', NAME);
+  document.getElementById('me').textContent = NAME || '—';
+}
+
+// ── Loading ─────────────────────────────────────────────────────────────────
+function setStatus(t) { document.getElementById('status').textContent = t; }
+
+function cacheWrite() {
+  try { localStorage.setItem(CACHE, JSON.stringify({ at: Date.now(), days, items })); } catch (e) {}
+}
+
+// Renders whatever was last seen before going near the network, so the plan is
+// readable on a bad connection abroad instead of showing an empty page.
+function cacheRead() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE) || 'null');
+    if (!c || !Array.isArray(c.days)) return false;
+    days = c.days; items = c.items || [];
+    render();
+    showStale(c.at);
+    return true;
+  } catch (e) { return false; }
+}
+
+function showStale(at) {
+  const el = document.getElementById('stale');
+  if (!at) { el.classList.add('hidden'); return; }
+  const mins = Math.round((Date.now() - at) / 60000);
+  if (mins < 2) { el.classList.add('hidden'); return; }
+  el.textContent = 'Showing the plan as of ' + (mins < 60 ? mins + ' minutes' : Math.round(mins / 60) + ' hours') + ' ago. Not connected.';
+  el.classList.remove('hidden');
+}
+
+async function load(quiet) {
+  if (!quiet) setStatus('Loading…');
+  try {
+    const [d, i] = await Promise.all([
+      db('GET', `trip_days?trip=eq.${TRIP}&order=sort_index.asc`),
+      db('GET', `trip_items?trip=eq.${TRIP}&order=at_time.asc,sort_index.asc`),
+    ]);
+    days = d || []; items = i || [];
+    cacheWrite();
+    document.getElementById('stale').classList.add('hidden');
+    render();
+    setStatus('Up to date');
+  } catch (e) {
+    if (String(e.message) === '401') return;
+    setStatus('Offline');
+    showStale(JSON.parse(localStorage.getItem(CACHE) || '{}').at);
+  }
+}
+
+// ── Rendering ───────────────────────────────────────────────────────────────
+function fmtDay(iso) {
+  const dt = new Date(iso + 'T12:00:00');
+  return dt.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+function render() {
+  const host = document.getElementById('days');
+  host.textContent = '';
+
+  if (days.length) {
+    const a = fmtDay(days[0].date), b = fmtDay(days[days.length - 1].date);
+    document.getElementById('range').textContent = a + ' – ' + b;
+  }
+
+  for (const day of days) {
+    const mine = items.filter(x => x.day_id === day.id);
+    const card = el('div', 'day');
+
+    const head = el('div', 'day-head');
+    head.appendChild(el('span', 'd', fmtDay(day.date)));
+    const city = el('button', 'city linkish', day.city || 'set city');
+    city.style.fontSize = '14px';
+    city.onclick = () => editCity(day);
+    head.appendChild(city);
+    head.appendChild(el('span', 'n', mine.length ? mine.length + (mine.length === 1 ? ' thing' : ' things') : ''));
+    card.appendChild(head);
+
+    if (!mine.length) card.appendChild(el('div', 'empty', 'Nothing planned yet.'));
+
+    for (const it of mine) card.appendChild(itemRow(it));
+
+    const add = el('button', 'add', '+  Add something');
+    add.onclick = () => openSheet(day, null);
+    card.appendChild(add);
+
+    host.appendChild(card);
+  }
+}
+
+// Built as DOM nodes, never as an HTML string. Everything here was typed by
+// somebody else on the trip, and string templates are how that becomes a
+// script tag.
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+
+function itemRow(it) {
+  const row = el('div', 'item' + (it.booked ? ' booked' : ''));
+  row.appendChild(el('div', 't', it.at_time || ''));
+
+  const body = el('div', 'body');
+  const title = el('div', 'title', (it.booked ? '✓ ' : '') + (it.title || 'Untitled'));
+  body.appendChild(title);
+  if (it.detail) body.appendChild(el('div', 'detail', it.detail));
+
+  const foot = el('div', 'by');
+  if (it.category && it.category !== 'plan') {
+    foot.appendChild(el('span', 'tag', it.category + ' '));
+  }
+  if (it.author) foot.appendChild(el('span', null, 'added by ' + it.author + ' '));
+  if (it.place) {
+    const a = el('a', 'map', 'Map');
+    // A plain Maps search URL, which opens the native app on an iPhone and on
+    // an Android without either of them needing anything installed first.
+    a.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(it.place);
+    a.target = '_blank'; a.rel = 'noopener';
+    a.onclick = e => e.stopPropagation();
+    foot.appendChild(a);
+  }
+  if (foot.childNodes.length) body.appendChild(foot);
+
+  row.appendChild(body);
+  row.onclick = () => openSheet(null, it);
+  return row;
+}
+
+// ── Editing ─────────────────────────────────────────────────────────────────
+function openSheet(day, item) {
+  editing = item; editingDay = day || days.find(d => d.id === (item && item.day_id));
+  document.getElementById('sheet-title').textContent = item ? 'Edit' : 'Add to ' + (editingDay ? fmtDay(editingDay.date) : 'the plan');
+  document.getElementById('f-time').value   = item ? (item.at_time || '') : '';
+  document.getElementById('f-title').value  = item ? (item.title || '') : '';
+  document.getElementById('f-place').value  = item ? (item.place || '') : '';
+  document.getElementById('f-detail').value = item ? (item.detail || '') : '';
+  document.getElementById('f-cat').value    = item ? (item.category || 'plan') : 'plan';
+  document.getElementById('f-booked').checked = item ? !!item.booked : false;
+  document.getElementById('f-del').classList.toggle('hidden', !item);
+  document.getElementById('sheet-err').textContent = '';
+  document.getElementById('sheet').classList.add('open');
+}
+function closeSheet() { document.getElementById('sheet').classList.remove('open'); editing = null; }
+
+async function saveItem() {
+  const err = document.getElementById('sheet-err');
+  const title = document.getElementById('f-title').value.trim();
+  if (!title) { err.textContent = 'Give it a name.'; return; }
+  if (!NAME) askName();
+
+  const payload = {
+    at_time: document.getElementById('f-time').value.trim(),
+    title,
+    place: document.getElementById('f-place').value.trim(),
+    detail: document.getElementById('f-detail').value.trim(),
+    category: document.getElementById('f-cat').value,
+    booked: document.getElementById('f-booked').checked,
+    author: NAME || 'someone',
+    updated_at: new Date().toISOString(),
+  };
+
+  setStatus('Saving…');
+  try {
+    if (editing) {
+      await db('PATCH', `trip_items?id=eq.${editing.id}`, payload);
+    } else {
+      payload.trip = TRIP;
+      payload.day_id = editingDay.id;
+      await db('POST', 'trip_items', payload);
+    }
+    closeSheet();
+    await load(true);
+  } catch (e) {
+    err.textContent = 'Could not save. Check your connection and try again.';
+    setStatus('Not saved');
+  }
+}
+
+async function deleteItem() {
+  if (!editing) return;
+  if (!confirm('Remove "' + (editing.title || 'this') + '" from the plan?')) return;
+  setStatus('Removing…');
+  try {
+    await db('DELETE', `trip_items?id=eq.${editing.id}`);
+    closeSheet();
+    await load(true);
+  } catch (e) { setStatus('Not removed'); }
+}
+
+async function editCity(day) {
+  const c = prompt('Which city on ' + fmtDay(day.date) + '?', day.city || '');
+  if (c === null) return;
+  setStatus('Saving…');
+  try {
+    await db('PATCH', `trip_days?id=eq.${day.id}`, { city: c.trim() });
+    await load(true);
+  } catch (e) { setStatus('Not saved'); }
+}
+
+// Moving the first day shifts the rest by the same number of days, so the
+// items stay attached to the day they were planned for.
+async function shiftDates() {
+  if (!days.length) return;
+  const first = prompt('First day of the trip, as YYYY-MM-DD', days[0].date);
+  if (first === null) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(first.trim())) { alert('Use the form 2026-10-10.'); return; }
+  const base = new Date(first.trim() + 'T12:00:00');
+  if (isNaN(base)) { alert('That is not a date.'); return; }
+
+  setStatus('Saving…');
+  try {
+    for (let i = 0; i < days.length; i++) {
+      const d = new Date(base); d.setDate(base.getDate() + i);
+      const iso = d.toISOString().slice(0, 10);
+      if (iso !== days[i].date) await db('PATCH', `trip_days?id=eq.${days[i].id}`, { date: iso });
+    }
+    await load(true);
+  } catch (e) { setStatus('Not saved'); }
+}
+
+// ── Boot ────────────────────────────────────────────────────────────────────
+function boot() {
+  document.getElementById('gate').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('me').textContent = NAME || '—';
+  if (!NAME) setTimeout(askName, 300);
+  cacheRead();
+  load();
+}
+
+// Other people are editing the same page, so it refreshes on a slow timer and
+// whenever the phone comes back to it. Twenty seconds is often enough that a
+// change appears while you are still looking, and rare enough to be free.
+setInterval(() => { if (TOKEN && document.visibilityState === 'visible') load(true); }, 20000);
+document.addEventListener('visibilitychange', () => { if (TOKEN && document.visibilityState === 'visible') load(true); });
+
+if (TOKEN) boot();
+</script>
+</body>
+</html>

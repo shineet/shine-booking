@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 // warn about clashes. Added here rather than as a new endpoint because
 // Vercel Hobby caps this project at 12 serverless functions and api/ is
 // already at 12 -- a 13th file fails the build.
-const ALLOWED_TABLES = new Set(['clients', 'messages', 'bookings', 'app_settings', 'gigs', 'family_events', 'family_note']);
+const ALLOWED_TABLES = new Set(['clients', 'messages', 'bookings', 'app_settings', 'gigs', 'family_events', 'family_note', 'trip_days', 'trip_items']);
 
 const SB_HDR = () => ({
   'apikey': process.env.SUPABASE_SECRET_KEY,
@@ -358,6 +358,24 @@ function familyAllowed(table, method) {
   return false;
 }
 
+// The trip planner is shared with people outside the family, so it gets its own
+// PIN and its own token rather than reusing the family one. A friend planning
+// Madrid should not be one URL away from the family calendar.
+function makeTripToken() {
+  return crypto.createHash('sha256')
+    .update(String(process.env.TRIP_PIN || '') + '|' + String(process.env.SUPABASE_SECRET_KEY || '') + '|trip')
+    .digest('hex');
+}
+function tripTokenValid(t) {
+  if (!t || typeof t !== 'string' || !process.env.TRIP_PIN) return false;
+  const a = Buffer.from(t);
+  const b = Buffer.from(makeTripToken());
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+function tripAllowed(table) {
+  return table === 'trip_days' || table === 'trip_items';
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -396,16 +414,32 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (body.action === 'trip_login') {
+      if (!process.env.TRIP_PIN) {
+        res.status(500).json({ error: 'TRIP_PIN is not set on the server.' });
+        return;
+      }
+      const supplied = Buffer.from(String(body.pin || ''));
+      const real = Buffer.from(String(process.env.TRIP_PIN));
+      const ok = supplied.length === real.length && crypto.timingSafeEqual(supplied, real);
+      if (!ok) { res.status(401).json({ error: 'Wrong PIN.' }); return; }
+      res.status(200).json({ token: makeTripToken() });
+      return;
+    }
+
     if (body.action === 'db') {
       const path = String(body.path || '');
       const table = path.split(/[?/]/)[0];
       const method = String(body.method || 'GET').toUpperCase();
       if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(method)) { res.status(405).json({ error: 'Method not allowed' }); return; }
       // Full dashboard token: any allowed table. Family token: note + gigs only.
+      // Trip token: the two trip tables and nothing else.
       const isFull = tokenValid(body.token);
       const isFamily = !isFull && familyTokenValid(body.token);
-      if (!isFull && !isFamily) { res.status(401).json({ error: 'Unauthorized' }); return; }
+      const isTrip = !isFull && !isFamily && tripTokenValid(body.token);
+      if (!isFull && !isFamily && !isTrip) { res.status(401).json({ error: 'Unauthorized' }); return; }
       if (isFamily && !familyAllowed(table, method)) { res.status(403).json({ error: 'Not allowed for this login' }); return; }
+      if (isTrip && !tripAllowed(table)) { res.status(403).json({ error: 'Not allowed for this login' }); return; }
       if (isFull && !ALLOWED_TABLES.has(table)) { res.status(403).json({ error: 'Table not allowed: ' + table }); return; }
 
       const opts = {
