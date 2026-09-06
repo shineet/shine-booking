@@ -39,6 +39,12 @@
   .day-head .d, .card-head .d { font-weight: 700; font-size: 16px; }
   .day-head .city { color: var(--accent); font-weight: 600; font-size: 14px; }
   .day-head .n, .card-head .n { margin-left: auto; font-size: 12px; color: var(--muted); }
+  /* Today, so it is obvious why the page opened where it did. */
+  .day.today { border-color: var(--accent); }
+  .day-head .now {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: #fff; background: var(--accent); border-radius: 999px; padding: 2px 8px;
+  }
 
   .item { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); align-items: flex-start; }
   .item:last-child { border-bottom: 0; }
@@ -279,6 +285,17 @@ let days = [], items = [], editing = null, editingDay = null;
 let people = [], expenses = [], editingExpense = null, splitWith = new Set();
 let rate = 1.22;   // USD per EUR, agreed once for the whole trip
 let cameFromPlan = false;
+let hasJumped = false;
+
+function jumpToToday() {
+  if (hasJumped || tab !== 'plan') return;
+  const day = dayToOpenOn(days, todayISO());
+  if (!day) { hasJumped = true; return; }
+  const card = document.querySelector('[data-day="' + day.id + '"]');
+  if (!card) return;
+  hasJumped = true;
+  if (card.scrollIntoView) card.scrollIntoView({ block: 'start' });
+}
 let tab = 'plan', moneyReady = true;
 
 // ── Server ──────────────────────────────────────────────────────────────────
@@ -417,6 +434,27 @@ async function load(quiet) {
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────────
+// Built from local parts, not toISOString.
+//
+// toISOString converts to UTC first, and Spain is two hours ahead of it in
+// October: at half past midnight on the 14th, UTC still says the 13th. That
+// would file a late dinner against the wrong day and jump the page to the
+// wrong card.
+function todayISO() {
+  const d = new Date();
+  const pad = (x) => String(x).padStart(2, '0');
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+
+// Which day the page should open on.
+//
+// Before the trip, the top: the whole thing is ahead of you. Once it has
+// started, the day you are actually in, with the days behind you still there
+// to scroll back to.
+function dayToOpenOn(dayList, today) {
+  return (dayList || []).find(d => d.date === today) || null;
+}
+
 function fmtTime(t) {
   const m = String(t || '').match(/^(\d{1,2}):(\d{2})$/);
   if (!m) return t || '';
@@ -433,6 +471,10 @@ function fmtDay(iso) {
 
 function render() {
   renderMoney();
+  // Queued after the cards exist. Only ever once: the page refreshes itself
+  // every twenty seconds, and yanking it back to today while somebody is
+  // reading Thursday would be worse than not jumping at all.
+  if (!hasJumped) setTimeout(jumpToToday, 0);
   const host = document.getElementById('days');
   host.textContent = '';
 
@@ -444,6 +486,9 @@ function render() {
   for (const day of days) {
     const mine = items.filter(x => x.day_id === day.id);
     const card = el('div', 'day');
+    card.dataset.day = day.id;
+    const isToday = day.date === todayISO();
+    if (isToday) card.classList.add('today');
 
     const head = el('div', 'day-head');
     head.appendChild(el('span', 'd', fmtDay(day.date)));
@@ -451,6 +496,7 @@ function render() {
     city.style.fontSize = '14px';
     city.onclick = () => editCity(day);
     head.appendChild(city);
+    if (isToday) head.appendChild(el('span', 'now', 'today'));
     head.appendChild(el('span', 'n', mine.length ? mine.length + (mine.length === 1 ? ' thing' : ' things') : ''));
     card.appendChild(head);
 
@@ -896,7 +942,7 @@ function openExpense(e, prefill) {
     o.value = d.date;
     dsel.appendChild(o);
   }
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayISO();
   dsel.value = e ? e.spent_on
     : ((prefill && prefill.spent_on) || (days.find(d => d.date === today) || days[0] || {}).date);
 
