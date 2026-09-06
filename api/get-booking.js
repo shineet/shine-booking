@@ -449,11 +449,17 @@ export default async function handler(req, res) {
 
       // Upsert on the email, so scanning twice corrects a typo in the name
       // rather than failing with an error nobody at a dinner table can act on.
-      const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/agni_testers`, {
-        method: 'POST',
-        headers: { ...SB_HDR(), Prefer: 'resolution=merge-duplicates,return=minimal' },
-        body: JSON.stringify({ name, email, device }),
-      });
+      // `on_conflict=email` is not optional. PostgREST resolves a conflict
+      // against the PRIMARY KEY unless told otherwise, and the key here is a
+      // generated id that is never supplied, so a second scan of the same
+      // address hit the unique index and came back 500 rather than updating.
+      // That is precisely the case the upsert exists for.
+      const r = await fetch(
+        `${process.env.SUPABASE_URL}/rest/v1/agni_testers?on_conflict=email`, {
+          method: 'POST',
+          headers: { ...SB_HDR(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify({ name, email, device }),
+        });
       if (!r.ok) {
         res.status(500).json({ error: 'Could not save that. Try again in a moment.' });
         return;
