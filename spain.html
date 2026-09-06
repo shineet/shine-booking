@@ -42,7 +42,7 @@
 
   .item { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); align-items: flex-start; }
   .item:last-child { border-bottom: 0; }
-  .item .t { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); min-width: 52px; padding-top: 2px; }
+  .item .t { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); min-width: 68px; padding-top: 2px; }
   .item .body { flex: 1; min-width: 0; }
   .item .title { font-weight: 600; }
   .item .detail, .item .by { font-size: 13px; color: var(--muted); }
@@ -195,8 +195,8 @@
     <h3 id="sheet-title">Add to the plan</h3>
     <div class="row">
       <div>
-        <label for="f-time">Time</label>
-        <input id="f-time" type="text" inputmode="numeric" placeholder="09:30 or Morning" autocomplete="off">
+        <label for="f-time">Time <button type="button" class="linkish" style="font-size:11px" onclick="document.getElementById('f-time').value=''">clear</button></label>
+        <input id="f-time" type="time" autocomplete="off">
       </div>
       <div>
         <label for="f-cat">Kind</label>
@@ -211,8 +211,8 @@
     </div>
     <label for="f-title">What</label>
     <input id="f-title" type="text" placeholder="Prado Museum" autocomplete="off">
-    <label for="f-place">Place, for the map link</label>
-    <input id="f-place" type="text" placeholder="Museo del Prado, Madrid" autocomplete="off">
+    <label for="f-place">Address</label>
+    <input id="f-place" type="text" placeholder="Calle de Ruiz de Alarcon 23, Madrid" autocomplete="off">
     <label for="f-detail">Notes</label>
     <textarea id="f-detail" placeholder="Tickets booked, meet in the lobby at 9…"></textarea>
     <label class="check"><input id="f-booked" type="checkbox"> Booked and paid</label>
@@ -415,6 +415,15 @@ async function load(quiet) {
 }
 
 // ── Rendering ───────────────────────────────────────────────────────────────
+function fmtTime(t) {
+  const m = String(t || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return t || '';
+  const h = Number(m[1]);
+  const suffix = h < 12 ? 'AM' : 'PM';
+  const twelve = h % 12 === 0 ? 12 : h % 12;
+  return twelve + ':' + m[2] + ' ' + suffix;
+}
+
 function fmtDay(iso) {
   const dt = new Date(iso + 'T12:00:00');
   return dt.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
@@ -467,7 +476,7 @@ function el(tag, cls, text) {
 
 function itemRow(it) {
   const row = el('div', 'item' + (it.booked ? ' booked' : ''));
-  row.appendChild(el('div', 't', it.at_time || ''));
+  row.appendChild(el('div', 't', fmtTime(it.at_time)));
 
   const body = el('div', 'body');
   const title = el('div', 'title', (it.booked ? '✓ ' : '') + (it.title || 'Untitled'));
