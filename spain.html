@@ -682,6 +682,35 @@ function daysLabel(p) {
   return f + ' to ' + t;
 }
 
+// "11 to 15" rather than "2026-10-11 to 2026-10-15".
+//
+// Nobody types a full ISO date on a phone, and the trip is six days long, so a
+// day of the month is unambiguous. Full dates still work for anyone who prefers
+// them.
+function resolveTripDate(token) {
+  const t = String(token).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const n = parseInt(t, 10);
+  if (!(n >= 1 && n <= 31)) return null;
+  const hit = days.find(d => Number(d.date.slice(8, 10)) === n);
+  return hit ? hit.date : null;
+}
+
+function parseStay(text) {
+  const t = String(text).trim();
+  if (!t) return null;
+  const parts = t.split(/\s*(?:to|until|through|–|—|-)\s*/).filter(Boolean);
+  // A bare ISO date splits on its own hyphens, so put it back together.
+  if (parts.length === 6) return [null, parts.slice(0, 3).join('-'), parts.slice(3).join('-')];
+  if (parts.length !== 2) return null;
+  const from = resolveTripDate(parts[0]), to = resolveTripDate(parts[1]);
+  return from && to ? [null, from, to] : null;
+}
+
+function shortRange(from, to) {
+  return Number(from.slice(8, 10)) + ' to ' + Number(to.slice(8, 10));
+}
+
 async function editRate() {
   const r = prompt('How many dollars to the euro? Everyone gets converted by the same number, which is what makes it fair.', String(rate));
   if (r === null) return;
@@ -788,10 +817,10 @@ async function renamePerson(p) {
       // Dates only asked for after the name, because most people are there for
       // the whole trip and should not have to answer a second question.
       const when = prompt(
-        'Which days are they on the trip? Give it as 2026-10-13 to 2026-10-15, or leave it blank for the whole trip.',
-        p.from_date ? p.from_date + ' to ' + p.to_date : '');
+        'Which days are they here for?\n\nJust the dates of the month is enough, like  11 to 15.\nLeave it blank if they are there for the whole trip.',
+        p.from_date ? shortRange(p.from_date, p.to_date) : '');
       if (when === null) return;
-      const m = String(when).match(/(\d{4}-\d{2}-\d{2})\s*(?:to|-|until)\s*(\d{4}-\d{2}-\d{2})/);
+      const m = parseStay(when);
       setStatus('Saving…');
       await db('PATCH', `trip_people?id=eq.${p.id}`, {
         name: n.trim().slice(0, 40),
