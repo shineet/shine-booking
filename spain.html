@@ -50,6 +50,16 @@
   .item.booked .title { color: var(--good); }
   .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
   .map { font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 600; }
+  /* A deliberate target, not the whole row.
+     The row used to be the button, so reading the plan and opening an editor
+     with a Delete in it were the same gesture. This page is mostly read, by
+     eight people, on phones. */
+  .item .edit {
+    flex: 0 0 auto; width: 44px; height: 44px; margin: -6px -6px -6px 0;
+    background: none; border: 0; color: var(--muted); font-size: 17px;
+    display: flex; align-items: center; justify-content: center; border-radius: 10px;
+  }
+  .item .edit:active { background: var(--line); }
   .add { display: block; width: 100%; text-align: left; padding: 11px 14px; background: none; border: 0; color: var(--accent); font-size: 15px; font-weight: 600; }
   .empty { padding: 12px 14px; color: var(--muted); font-size: 14px; }
 
@@ -141,7 +151,7 @@
       <button class="ghost" onclick="closeSheet()">Cancel</button>
       <button class="primary" onclick="saveItem()">Save</button>
     </div>
-    <div style="text-align:center"><button class="danger hidden" id="f-del" onclick="deleteItem()">Delete this</button></div>
+    <div style="text-align:center"><button class="danger hidden" id="f-del" onclick="deleteItem()">Delete from the plan</button></div>
     <div class="err" id="sheet-err"></div>
   </div>
 </div>
@@ -354,13 +364,16 @@ function itemRow(it) {
     // an Android without either of them needing anything installed first.
     a.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(it.place);
     a.target = '_blank'; a.rel = 'noopener';
-    a.onclick = e => e.stopPropagation();
     foot.appendChild(a);
   }
   if (foot.childNodes.length) body.appendChild(foot);
 
   row.appendChild(body);
-  row.onclick = () => openSheet(null, it);
+
+  const edit = el('button', 'edit', '\u270E');
+  edit.setAttribute('aria-label', 'Edit ' + (it.title || 'this'));
+  edit.onclick = () => openSheet(null, it);
+  row.appendChild(edit);
   return row;
 }
 
@@ -416,7 +429,7 @@ async function saveItem() {
 
 async function deleteItem() {
   if (!editing) return;
-  if (!confirm('Remove "' + (editing.title || 'this') + '" from the plan?')) return;
+  if (!confirm('Delete "' + (editing.title || 'this') + '" from the plan?\n\nEveryone loses it, and there is no undo.')) return;
   setStatus('Removing…');
   try {
     await db('DELETE', `trip_items?id=eq.${editing.id}`);
