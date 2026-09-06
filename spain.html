@@ -213,7 +213,10 @@ async function submitPin(pinOverride) {
 // page anyone can find by guessing a filename is a page with eight people's
 // flight numbers on it.
 async function tryLinkKey() {
-  const m = (location.hash || '').match(/^#([0-9]{3,8})$/);
+  // Letters allowed, not just digits. TRIP_PIN is whatever was typed into
+  // Vercel, and a link that silently fails to open because the value happened
+  // to contain a letter is a bug nobody would think to look for.
+  const m = (location.hash || '').match(/^#([A-Za-z0-9_-]{3,32})$/);
   if (!m) return false;
   const ok = await submitPin(m[1]);
   history.replaceState(null, '', location.pathname);
