@@ -595,7 +595,9 @@ function showTab(which) {
 
 const eur = (cents) => '€' + (cents / 100).toFixed(2);
 const usd = (cents) => '$' + (cents * rate / 100).toFixed(2);
-const both = (cents) => eur(cents) + '  ' + usd(cents);
+// A separator, not two spaces. HTML collapses whitespace, so the two figures ran
+// together as one unreadable number.
+const both = (cents) => eur(cents) + ' · ' + usd(cents);
 
 // Everything nets in EUR. A settlement cannot be computed across two currencies
 // without picking one, and euros are what most of this trip is spent in.
