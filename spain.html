@@ -34,11 +34,11 @@
   .who b { color: var(--ink); font-weight: 600; }
   .linkish { color: var(--accent); font-weight: 600; background: none; border: 0; padding: 0; font-size: 13px; }
 
-  .day { background: var(--card); border: 1px solid var(--line); border-radius: 16px; margin-bottom: 14px; overflow: hidden; }
-  .day-head { display: flex; align-items: baseline; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
-  .day-head .d { font-weight: 700; font-size: 16px; }
+  .day, .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; margin-bottom: 14px; overflow: hidden; }
+  .day-head, .card-head { display: flex; align-items: baseline; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
+  .day-head .d, .card-head .d { font-weight: 700; font-size: 16px; }
   .day-head .city { color: var(--accent); font-weight: 600; font-size: 14px; }
-  .day-head .n { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .day-head .n, .card-head .n { margin-left: auto; font-size: 12px; color: var(--muted); }
 
   .item { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); align-items: flex-start; }
   .item:last-child { border-bottom: 0; }
@@ -87,6 +87,37 @@
   button.ghost { background: none; border: 1px solid var(--line); border-radius: 12px; padding: 13px 16px; font-size: 16px; color: var(--ink); }
   button.danger { background: none; border: 0; color: #b03a2e; font-size: 15px; padding: 13px 4px; font-weight: 600; }
 
+  /* Tabs */
+  .tabs { display: flex; gap: 6px; margin: 0 0 14px; }
+  .tabs button {
+    flex: 1; padding: 9px; border: 1px solid var(--line); background: var(--card);
+    border-radius: 11px; font-size: 15px; font-weight: 600; color: var(--muted);
+  }
+  .tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* Money */
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip {
+    border: 1px solid var(--line); background: var(--card); border-radius: 999px;
+    padding: 7px 13px; font-size: 14px; color: var(--ink);
+  }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.add { color: var(--accent); font-weight: 600; }
+  .exp { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); align-items: flex-start; }
+  .exp:last-child { border-bottom: 0; }
+  .exp .body { flex: 1; min-width: 0; }
+  .exp .amt { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .exp .sub { font-size: 13px; color: var(--muted); }
+  .owe { display: flex; align-items: baseline; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .owe:last-child { border-bottom: 0; }
+  .owe .who { font-weight: 600; }
+  .owe .amt { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
+  .settled { padding: 16px 14px; color: var(--good); font-weight: 600; }
+  .totals { display: flex; gap: 0; padding: 12px 0 14px; }
+  .totals div { flex: 1; text-align: center; }
+  .totals .n { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .totals .l { font-size: 12px; color: var(--muted); }
+
   /* PIN gate */
   #gate { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column;
           align-items: center; justify-content: center; gap: 14px; padding: 24px; z-index: 30; }
@@ -117,8 +148,36 @@
     <button class="linkish" onclick="shiftDates()">trip dates</button>
   </div>
 
+  <div class="tabs">
+    <button id="tab-plan" class="on" onclick="showTab('plan')">Plan</button>
+    <button id="tab-money" onclick="showTab('money')">Money</button>
+  </div>
+
   <div id="stale" class="offline hidden"></div>
   <div id="days"></div>
+
+  <div id="money" class="hidden">
+    <div class="totals">
+      <div><div class="n" id="m-total">-</div><div class="l">spent together</div></div>
+      <div><div class="n" id="m-each">-</div><div class="l">each, so far</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="d">Who is splitting</span></div>
+      <div style="padding:12px 14px"><div class="chips" id="m-people"></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="d">Who owes whom</span><span class="n" id="m-count"></span></div>
+      <div id="m-settle"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="d">Everything so far</span></div>
+      <div id="m-list"></div>
+      <button class="add" onclick="openExpense()">+  Add an expense</button>
+    </div>
+  </div>
 </div>
 
 <div id="sheet" onclick="if(event.target===this) closeSheet()">
@@ -156,6 +215,34 @@
   </div>
 </div>
 
+<div id="esheet" onclick="if(event.target===this) closeExpense()" style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:flex-end;z-index:20">
+  <div class="panel" style="background:var(--card);width:100%;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom));max-width:680px;margin:0 auto">
+    <h3 id="e-title">Add an expense</h3>
+    <div class="row">
+      <div>
+        <label for="e-amount">Amount in euros</label>
+        <input id="e-amount" type="text" inputmode="decimal" placeholder="42.50" autocomplete="off">
+      </div>
+      <div>
+        <label for="e-date">Day</label>
+        <select id="e-date"></select>
+      </div>
+    </div>
+    <label for="e-what">What for</label>
+    <input id="e-what" type="text" placeholder="Dinner at Botin" autocomplete="off">
+    <label for="e-payer">Who paid</label>
+    <select id="e-payer"></select>
+    <label>Split between</label>
+    <div class="chips" id="e-with" style="margin-top:4px"></div>
+    <div class="actions">
+      <button class="ghost" onclick="closeExpense()">Cancel</button>
+      <button class="primary" onclick="saveExpense()">Save</button>
+    </div>
+    <div style="text-align:center"><button class="danger hidden" id="e-del" onclick="deleteExpense()">Delete this expense</button></div>
+    <div class="err" id="e-err"></div>
+  </div>
+</div>
+
 <div id="gate">
   <h2>Spain</h2>
   <p>Ask Shine for the link and it will open on its own.<br>Or type the trip PIN.</p>
@@ -171,6 +258,8 @@ const CACHE = 'spainPlanCache';
 let TOKEN = localStorage.getItem('tripToken') || '';
 let NAME  = localStorage.getItem('tripName') || '';
 let days = [], items = [], editing = null, editingDay = null;
+let people = [], expenses = [], editingExpense = null, splitWith = new Set();
+let tab = 'plan';
 
 // ── Server ──────────────────────────────────────────────────────────────────
 async function api(action, extra) {
@@ -250,7 +339,7 @@ function askName() {
 function setStatus(t) { document.getElementById('status').textContent = t; }
 
 function cacheWrite() {
-  try { localStorage.setItem(CACHE, JSON.stringify({ at: Date.now(), days, items })); } catch (e) {}
+  try { localStorage.setItem(CACHE, JSON.stringify({ at: Date.now(), days, items, people, expenses })); } catch (e) {}
 }
 
 // Renders whatever was last seen before going near the network, so the plan is
@@ -260,6 +349,7 @@ function cacheRead() {
     const c = JSON.parse(localStorage.getItem(CACHE) || 'null');
     if (!c || !Array.isArray(c.days)) return false;
     days = c.days; items = c.items || [];
+    people = c.people || []; expenses = c.expenses || [];
     render();
     showStale(c.at);
     return true;
@@ -278,11 +368,13 @@ function showStale(at) {
 async function load(quiet) {
   if (!quiet) setStatus('Loading…');
   try {
-    const [d, i] = await Promise.all([
+    const [d, i, p, e] = await Promise.all([
       db('GET', `trip_days?trip=eq.${TRIP}&order=sort_index.asc`),
       db('GET', `trip_items?trip=eq.${TRIP}&order=at_time.asc,sort_index.asc`),
+      db('GET', `trip_people?trip=eq.${TRIP}&order=sort_index.asc`),
+      db('GET', `trip_expenses?trip=eq.${TRIP}&order=created_at.desc`),
     ]);
-    days = d || []; items = i || [];
+    days = d || []; items = i || []; people = p || []; expenses = e || [];
     cacheWrite();
     document.getElementById('stale').classList.add('hidden');
     render();
@@ -301,6 +393,7 @@ function fmtDay(iso) {
 }
 
 function render() {
+  renderMoney();
   const host = document.getElementById('days');
   host.textContent = '';
 
@@ -470,6 +563,266 @@ async function shiftDates() {
 }
 
 // ── Boot ────────────────────────────────────────────────────────────────────
+// ── Money ───────────────────────────────────────────────────────────────────
+
+function showTab(which) {
+  tab = which;
+  document.getElementById('tab-plan').classList.toggle('on', which === 'plan');
+  document.getElementById('tab-money').classList.toggle('on', which === 'money');
+  document.getElementById('days').classList.toggle('hidden', which !== 'plan');
+  document.getElementById('money').classList.toggle('hidden', which !== 'money');
+}
+
+const eur = (cents) => '€' + (cents / 100).toFixed(2);
+
+// Splits an amount so the parts add back up to it, exactly.
+//
+// 100.00 three ways is 33.33, 33.33 and 33.34, not three of 33.33. The odd
+// cents go to the first few, deterministically. Without this the balances never
+// reach zero and somebody is left owing a fraction of a cent forever.
+function shareOut(cents, ids) {
+  const out = {};
+  const n = ids.length;
+  if (!n) return out;
+  const base = Math.floor(cents / n);
+  let extra = cents - base * n;
+  for (const id of ids) {
+    out[id] = base + (extra > 0 ? 1 : 0);
+    if (extra > 0) extra--;
+  }
+  return out;
+}
+
+// Who owes whom, in as few payments as possible.
+//
+// Nets everyone off first, then repeatedly settles the largest debt against the
+// largest credit. That is at most one payment fewer than there are people,
+// which matters when the alternative is eight people making twenty transfers.
+function settleUp(peopleList, expenseList) {
+  const net = {};
+  for (const p of peopleList) net[p.id] = 0;
+  let total = 0;
+
+  for (const e of expenseList) {
+    const amount = e.amount_cents || 0;
+    const withIds = (e.shared_with || []).filter(id => id in net);
+    if (!amount || !withIds.length) continue;
+    total += amount;
+    if (e.paid_by in net) net[e.paid_by] += amount;
+    const parts = shareOut(amount, withIds);
+    for (const id of withIds) net[id] -= parts[id];
+  }
+
+  const owe = peopleList.filter(p => net[p.id] < 0).map(p => ({ id: p.id, amount: -net[p.id] }));
+  const due = peopleList.filter(p => net[p.id] > 0).map(p => ({ id: p.id, amount: net[p.id] }));
+  owe.sort((a, b) => b.amount - a.amount);
+  due.sort((a, b) => b.amount - a.amount);
+
+  const transfers = [];
+  let i = 0, j = 0;
+  while (i < owe.length && j < due.length) {
+    const pay = Math.min(owe[i].amount, due[j].amount);
+    if (pay > 0) transfers.push({ from: owe[i].id, to: due[j].id, amount: pay });
+    owe[i].amount -= pay;
+    due[j].amount -= pay;
+    if (owe[i].amount === 0) i++;
+    if (due[j].amount === 0) j++;
+  }
+  return { net, transfers, total };
+}
+
+const personName = (id) => (people.find(p => p.id === id) || {}).name || 'someone';
+
+function renderMoney() {
+  const { transfers, total } = settleUp(people, expenses);
+
+  document.getElementById('m-total').textContent = people.length ? eur(total) : '-';
+  document.getElementById('m-each').textContent =
+    people.length ? eur(Math.round(total / people.length)) : '-';
+
+  const chips = document.getElementById('m-people');
+  chips.textContent = '';
+  for (const p of people) {
+    const c = el('button', 'chip', p.name);
+    c.onclick = () => renamePerson(p);
+    chips.appendChild(c);
+  }
+  const add = el('button', 'chip add', people.length ? '+ add' : '+ add everyone splitting');
+  add.onclick = addPerson;
+  chips.appendChild(add);
+
+  const settle = document.getElementById('m-settle');
+  settle.textContent = '';
+  document.getElementById('m-count').textContent =
+    transfers.length ? transfers.length + (transfers.length === 1 ? ' payment' : ' payments') : '';
+  if (!people.length) {
+    settle.appendChild(el('div', 'empty', 'Add everyone splitting first. Couples work well as one name.'));
+  } else if (!transfers.length) {
+    settle.appendChild(el('div', 'settled', expenses.length ? 'All square.' : 'Nothing spent yet.'));
+  } else {
+    for (const t of transfers) {
+      const row = el('div', 'owe');
+      row.appendChild(el('span', 'who', personName(t.from)));
+      row.appendChild(el('span', null, 'pays'));
+      row.appendChild(el('span', 'who', personName(t.to)));
+      row.appendChild(el('span', 'amt', eur(t.amount)));
+      settle.appendChild(row);
+    }
+  }
+
+  const list = document.getElementById('m-list');
+  list.textContent = '';
+  if (!expenses.length) list.appendChild(el('div', 'empty', 'Nothing yet.'));
+  for (const e of expenses) {
+    const row = el('div', 'exp');
+    const body = el('div', 'body');
+    body.appendChild(el('div', 'title', e.description || 'Expense'));
+    const n = (e.shared_with || []).length;
+    body.appendChild(el('div', 'sub',
+      personName(e.paid_by) + ' paid' + (n ? ', split ' + n + (n === 1 ? ' way' : ' ways') : '') +
+      (e.spent_on ? ' · ' + fmtDay(e.spent_on) : '')));
+    row.appendChild(body);
+    row.appendChild(el('div', 'amt', eur(e.amount_cents || 0)));
+    const edit = el('button', 'edit', '✎');
+    edit.setAttribute('aria-label', 'Edit ' + (e.description || 'this expense'));
+    edit.onclick = () => openExpense(e);
+    row.appendChild(edit);
+    list.appendChild(row);
+  }
+}
+
+async function addPerson() {
+  const n = prompt('Name. A couple counts as one, so "Shine and Kavitha" is fine.', '');
+  if (n === null || !n.trim()) return;
+  setStatus('Saving…');
+  try {
+    await db('POST', 'trip_people', { trip: TRIP, name: n.trim().slice(0, 40), sort_index: people.length });
+    await load(true);
+  } catch (e) { setStatus('Not saved'); }
+}
+
+async function renamePerson(p) {
+  const n = prompt('Rename, or clear the box to remove them.', p.name);
+  if (n === null) return;
+  try {
+    if (!n.trim()) {
+      // Their expenses go with them. A settlement that references somebody who
+      // is no longer in the list cannot balance.
+      if (!confirm('Remove ' + p.name + ', and every expense they paid for?')) return;
+      setStatus('Saving…');
+      await db('DELETE', `trip_expenses?paid_by=eq.${p.id}`);
+      await db('DELETE', `trip_people?id=eq.${p.id}`);
+    } else {
+      setStatus('Saving…');
+      await db('PATCH', `trip_people?id=eq.${p.id}`, { name: n.trim().slice(0, 40) });
+    }
+    await load(true);
+  } catch (e) { setStatus('Not saved'); }
+}
+
+function openExpense(e) {
+  if (!people.length) { addPerson(); return; }
+  editingExpense = e || null;
+  document.getElementById('e-title').textContent = e ? 'Edit expense' : 'Add an expense';
+  document.getElementById('e-amount').value = e ? (e.amount_cents / 100).toFixed(2) : '';
+  document.getElementById('e-what').value = e ? (e.description || '') : '';
+  document.getElementById('e-err').textContent = '';
+  document.getElementById('e-del').classList.toggle('hidden', !e);
+
+  const payer = document.getElementById('e-payer');
+  payer.textContent = '';
+  for (const p of people) {
+    const o = el('option', null, p.name);
+    o.value = p.id;
+    payer.appendChild(o);
+  }
+  payer.value = e ? e.paid_by : (people[0] && people[0].id);
+
+  const dsel = document.getElementById('e-date');
+  dsel.textContent = '';
+  for (const d of days) {
+    const o = el('option', null, fmtDay(d.date) + (d.city ? ' · ' + d.city : ''));
+    o.value = d.date;
+    dsel.appendChild(o);
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  dsel.value = e ? e.spent_on : ((days.find(d => d.date === today) || days[0] || {}).date);
+
+  // Everybody, by default. Most things on a trip are split by everybody, and
+  // deselecting two is faster than selecting six.
+  splitWith = new Set(e ? (e.shared_with || []) : people.map(p => p.id));
+  renderSplitChips();
+  document.getElementById('esheet').style.display = 'flex';
+}
+
+function renderSplitChips() {
+  const host = document.getElementById('e-with');
+  host.textContent = '';
+  for (const p of people) {
+    const c = el('button', 'chip' + (splitWith.has(p.id) ? ' on' : ''), p.name);
+    c.onclick = () => {
+      if (splitWith.has(p.id)) splitWith.delete(p.id); else splitWith.add(p.id);
+      renderSplitChips();
+    };
+    host.appendChild(c);
+  }
+}
+
+function closeExpense() {
+  document.getElementById('esheet').style.display = 'none';
+  editingExpense = null;
+}
+
+// Reads "42.50" as 4250, off the text rather than by multiplying a float.
+// 42.50 * 100 is 4249.999... in binary, and rounding that the wrong way often
+// enough over a week of dinners is how a settlement ends up a few cents out.
+function toCents(text) {
+  const m = String(text).trim().replace(',', '.').match(/^(\d+)(?:\.(\d{1,2}))?$/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 100 + parseInt((m[2] || '0').padEnd(2, '0'), 10);
+}
+
+async function saveExpense() {
+  const err = document.getElementById('e-err');
+  const cents = toCents(document.getElementById('e-amount').value);
+  if (cents === null || cents <= 0) { err.textContent = 'Give it an amount, like 42.50.'; return; }
+  const what = document.getElementById('e-what').value.trim();
+  if (!what) { err.textContent = 'Say what it was for.'; return; }
+  if (!splitWith.size) { err.textContent = 'Somebody has to be splitting it.'; return; }
+  if (!NAME) askName();
+
+  const payload = {
+    description: what,
+    amount_cents: cents,
+    paid_by: document.getElementById('e-payer').value,
+    shared_with: Array.from(splitWith),
+    spent_on: document.getElementById('e-date').value || null,
+    author: NAME || 'someone',
+    updated_at: new Date().toISOString(),
+  };
+  setStatus('Saving…');
+  try {
+    if (editingExpense) await db('PATCH', `trip_expenses?id=eq.${editingExpense.id}`, payload);
+    else await db('POST', 'trip_expenses', Object.assign({ trip: TRIP }, payload));
+    closeExpense();
+    await load(true);
+  } catch (e) {
+    err.textContent = 'Could not save. Check your connection.';
+    setStatus('Not saved');
+  }
+}
+
+async function deleteExpense() {
+  if (!editingExpense) return;
+  if (!confirm('Delete "' + (editingExpense.description || 'this') + '"?\n\nEveryone loses it, and there is no undo.')) return;
+  setStatus('Removing…');
+  try {
+    await db('DELETE', `trip_expenses?id=eq.${editingExpense.id}`);
+    closeExpense();
+    await load(true);
+  } catch (e) { setStatus('Not removed'); }
+}
+
 function boot() {
   document.getElementById('gate').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
