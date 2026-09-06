@@ -59,7 +59,14 @@
     background: none; border: 0; color: var(--muted); font-size: 17px;
     display: flex; align-items: center; justify-content: center; border-radius: 10px;
   }
-  .item .edit:active { background: var(--line); }
+  .item .edit:active, .item .cost:active { background: var(--line); }
+  /* Sits beside the pencil. Says "cost" rather than a currency symbol, because
+     an expense can be in either currency and the sheet asks which. */
+  .item .cost {
+    flex: 0 0 auto; height: 44px; padding: 0 8px; margin: -6px 0;
+    background: none; border: 0; color: var(--accent); font-size: 13px; font-weight: 600;
+    border-radius: 10px;
+  }
   .add { display: block; width: 100%; text-align: left; padding: 11px 14px; background: none; border: 0; color: var(--accent); font-size: 15px; font-weight: 600; }
   .empty { padding: 12px 14px; color: var(--muted); font-size: 14px; }
 
@@ -269,6 +276,7 @@ let NAME  = localStorage.getItem('tripName') || '';
 let days = [], items = [], editing = null, editingDay = null;
 let people = [], expenses = [], editingExpense = null, splitWith = new Set();
 let rate = 1.22;   // USD per EUR, agreed once for the whole trip
+let cameFromPlan = false;
 let tab = 'plan', moneyReady = true;
 
 // ── Server ──────────────────────────────────────────────────────────────────
@@ -482,6 +490,13 @@ function itemRow(it) {
   if (foot.childNodes.length) body.appendChild(foot);
 
   row.appendChild(body);
+
+  // Adding what a thing cost should start from the thing, not from a blank form
+  // on another tab that has to be filled in again from memory.
+  const cost = el('button', 'cost', 'cost');
+  cost.setAttribute('aria-label', 'Add what ' + (it.title || 'this') + ' cost');
+  cost.onclick = () => openExpenseForItem(it);
+  row.appendChild(cost);
 
   const edit = el('button', 'edit', '\u270E');
   edit.setAttribute('aria-label', 'Edit ' + (it.title || 'this'));
@@ -832,13 +847,25 @@ async function renamePerson(p) {
   } catch (e) { setStatus('Not saved'); }
 }
 
-function openExpense(e) {
+// Opens the expense sheet already knowing what and when, from a plan entry.
+//
+// The alternative was reading the dinner off one tab and typing it into a form
+// on another, which is how an amount ends up filed against the wrong day.
+function openExpenseForItem(it) {
+  if (!moneyReady) { alert('Expenses are not switched on yet.'); return; }
+  if (!people.length) { showTab('money'); addPerson(); return; }
+  const day = days.find(d => d.id === it.day_id);
+  openExpense(null, { description: it.title || '', spent_on: day && day.date, fromPlan: true });
+}
+
+function openExpense(e, prefill) {
   if (!people.length) { addPerson(); return; }
   editingExpense = e || null;
+  cameFromPlan = !!(prefill && prefill.fromPlan);
   document.getElementById('e-title').textContent = e ? 'Edit expense' : 'Add an expense';
   document.getElementById('e-amount').value = e ? (e.amount_cents / 100).toFixed(2) : '';
   document.getElementById('e-cur').value = e ? (e.currency || 'EUR') : 'EUR';
-  document.getElementById('e-what').value = e ? (e.description || '') : '';
+  document.getElementById('e-what').value = e ? (e.description || '') : ((prefill && prefill.description) || '');
   document.getElementById('e-err').textContent = '';
   document.getElementById('e-del').classList.toggle('hidden', !e);
 
@@ -859,7 +886,8 @@ function openExpense(e) {
     dsel.appendChild(o);
   }
   const today = new Date().toISOString().slice(0, 10);
-  dsel.value = e ? e.spent_on : ((days.find(d => d.date === today) || days[0] || {}).date);
+  dsel.value = e ? e.spent_on
+    : ((prefill && prefill.spent_on) || (days.find(d => d.date === today) || days[0] || {}).date);
 
   // Everybody, by default. Most things on a trip are split by everybody, and
   // deselecting two is faster than selecting six.
@@ -931,6 +959,9 @@ async function saveExpense() {
     if (editingExpense) await db('PATCH', `trip_expenses?id=eq.${editingExpense.id}`, payload);
     else await db('POST', 'trip_expenses', Object.assign({ trip: TRIP }, payload));
     closeExpense();
+    // Land on Money, so the thing just recorded is visible rather than
+    // disappearing into a tab nobody switched to.
+    if (cameFromPlan) { showTab('money'); cameFromPlan = false; }
     await load(true);
   } catch (e) {
     err.textContent = 'Could not save. Check your connection.';
