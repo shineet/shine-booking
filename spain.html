@@ -148,7 +148,7 @@
 
 <div id="gate">
   <h2>Spain</h2>
-  <p>Enter the trip PIN</p>
+  <p>Ask Shine for the link and it will open on its own.<br>Or type the trip PIN.</p>
   <input id="pin" type="tel" inputmode="numeric" autocomplete="off" placeholder="••••">
   <button onclick="submitPin()">Open</button>
   <div class="err" id="gate-err"></div>
@@ -188,17 +188,37 @@ function logout(msg) {
   if (msg) document.getElementById('gate-err').textContent = msg;
 }
 
-async function submitPin() {
-  const pin = document.getElementById('pin').value.trim();
+async function submitPin(pinOverride) {
+  const pin = pinOverride !== undefined ? pinOverride : document.getElementById('pin').value.trim();
   const err = document.getElementById('gate-err');
   err.textContent = '';
   let r;
   try { r = await api('trip_login', { pin }); }
-  catch (e) { err.textContent = 'No connection.'; return; }
-  if (!r.ok) { err.textContent = 'Wrong PIN.'; return; }
+  catch (e) { err.textContent = 'No connection.'; return false; }
+  if (!r.ok) { if (pinOverride === undefined) err.textContent = 'Wrong PIN.'; return false; }
   TOKEN = (await r.json()).token;
   localStorage.setItem('tripToken', TOKEN);
   boot();
+  return true;
+}
+
+// The link carries the PIN, so nobody has to be told a number or type one.
+//
+// In the hash rather than the query string: a hash is never sent to the server,
+// so it stays out of request logs and out of anything a proxy keeps. It is
+// wiped from the address bar the moment it is used, so a screenshot of the page
+// does not hand the trip to whoever sees it.
+//
+// The gate stays for the bare URL. This lives on Shine's business domain, and a
+// page anyone can find by guessing a filename is a page with eight people's
+// flight numbers on it.
+async function tryLinkKey() {
+  const m = (location.hash || '').match(/^#([0-9]{3,8})$/);
+  if (!m) return false;
+  const ok = await submitPin(m[1]);
+  history.replaceState(null, '', location.pathname);
+  if (!ok) document.getElementById('gate-err').textContent = 'That link is out of date. Ask Shine for a new one.';
+  return ok;
 }
 document.getElementById('pin').addEventListener('keydown', e => { if (e.key === 'Enter') submitPin(); });
 
@@ -449,7 +469,7 @@ function boot() {
 setInterval(() => { if (TOKEN && document.visibilityState === 'visible') load(true); }, 20000);
 document.addEventListener('visibilitychange', () => { if (TOKEN && document.visibilityState === 'visible') load(true); });
 
-if (TOKEN) boot();
+if (TOKEN) { boot(); } else { tryLinkKey(); }
 </script>
 </body>
 </html>
