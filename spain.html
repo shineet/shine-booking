@@ -259,7 +259,7 @@ let TOKEN = localStorage.getItem('tripToken') || '';
 let NAME  = localStorage.getItem('tripName') || '';
 let days = [], items = [], editing = null, editingDay = null;
 let people = [], expenses = [], editingExpense = null, splitWith = new Set();
-let tab = 'plan';
+let tab = 'plan', moneyReady = true;
 
 // ── Server ──────────────────────────────────────────────────────────────────
 async function api(action, extra) {
@@ -368,13 +368,20 @@ function showStale(at) {
 async function load(quiet) {
   if (!quiet) setStatus('Loading…');
   try {
+    // The plan and the money load together but must not fail together. Before
+    // the money tables exist, asking for them 404s, and inside a Promise.all
+    // that would take the whole page down with it: no plan, no flights, no
+    // hotels, on a page eight people are relying on.
+    const soft = (path) => db('GET', path).catch(() => null);
     const [d, i, p, e] = await Promise.all([
       db('GET', `trip_days?trip=eq.${TRIP}&order=sort_index.asc`),
       db('GET', `trip_items?trip=eq.${TRIP}&order=at_time.asc,sort_index.asc`),
-      db('GET', `trip_people?trip=eq.${TRIP}&order=sort_index.asc`),
-      db('GET', `trip_expenses?trip=eq.${TRIP}&order=created_at.desc`),
+      soft(`trip_people?trip=eq.${TRIP}&order=sort_index.asc`),
+      soft(`trip_expenses?trip=eq.${TRIP}&order=created_at.desc`),
     ]);
-    days = d || []; items = i || []; people = p || []; expenses = e || [];
+    days = d || []; items = i || [];
+    moneyReady = Array.isArray(p) && Array.isArray(e);
+    people = p || []; expenses = e || [];
     cacheWrite();
     document.getElementById('stale').classList.add('hidden');
     render();
@@ -655,7 +662,10 @@ function renderMoney() {
   settle.textContent = '';
   document.getElementById('m-count').textContent =
     transfers.length ? transfers.length + (transfers.length === 1 ? ' payment' : ' payments') : '';
-  if (!people.length) {
+  if (!moneyReady) {
+    settle.appendChild(el('div', 'empty',
+      'Expenses are not switched on yet. The two money tables still need creating in the database.'));
+  } else if (!people.length) {
     settle.appendChild(el('div', 'empty', 'Add everyone splitting first. Couples work well as one name.'));
   } else if (!transfers.length) {
     settle.appendChild(el('div', 'settled', expenses.length ? 'All square.' : 'Nothing spent yet.'));
