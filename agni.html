@@ -37,14 +37,7 @@
   }
   input:focus { outline: none; border-color: var(--flame); }
 
-  .devices { display: flex; gap: 8px; }
-  .devices button {
-    flex: 1; font: inherit; font-size: 15px; padding: 12px 8px; color: var(--muted);
-    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
-  }
-  .devices button[aria-pressed="true"] {
-    color: #1a0d05; background: var(--flame); border-color: var(--flame); font-weight: 600;
-  }
+  .note { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
 
   .go {
     width: 100%; font: inherit; font-size: 17px; font-weight: 600; margin-top: 10px;
@@ -98,13 +91,7 @@
       <input id="email" type="email" autocomplete="email" autocapitalize="none"
              autocorrect="off" spellcheck="false" inputmode="email" enterkeyhint="go"
              placeholder="the one you use on your iPhone">
-    </div>
-    <div class="field">
-      <label>Phone</label>
-      <div class="devices">
-        <button type="button" data-device="iphone" aria-pressed="true">iPhone</button>
-        <button type="button" data-device="android" aria-pressed="false">Android</button>
-      </div>
+      <p class="note">iPhone only for now. Apple's TestFlight cannot install on Android.</p>
     </div>
     <input class="hp" type="text" id="website" tabindex="-1" autocomplete="off" aria-hidden="true">
     <button class="go" id="go" type="submit">Put me on the list</button>
@@ -133,15 +120,6 @@
 
 <script>
 const $ = id => document.getElementById(id);
-let device = 'iphone';
-
-document.querySelectorAll('.devices button').forEach(b => {
-  b.addEventListener('click', () => {
-    device = b.dataset.device;
-    document.querySelectorAll('.devices button')
-      .forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-  });
-});
 
 // Approved: the form is pointless, so it never appears.
 if (TESTFLIGHT_LINK) {
@@ -169,7 +147,7 @@ $('form').addEventListener('submit', async e => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'agni_signup', name, email, device, website: $('website').value,
+        action: 'agni_signup', name, email, device: 'iphone', website: $('website').value,
       }),
     });
     if (!r.ok) {
@@ -178,15 +156,6 @@ $('form').addEventListener('submit', async e => {
     }
     $('form').classList.add('hidden');
     $('done').classList.remove('hidden');
-    // TestFlight is iOS only. Saying so here beats an invite that can never
-    // be redeemed, and the name is recorded either way so nobody is dropped.
-    if (device === 'android') {
-      $('doneTitle').textContent = 'Noted, but hold on';
-      $('doneBody').textContent =
-        'Agni is an iPhone app for now, and Apple’s TestFlight cannot install on Android. '
-        + 'You are on the list, and Shine will tell you when there is something you can run.';
-      $('next').classList.add('hidden');
-    }
   } catch (err) {
     $('err').textContent = err.message;
     $('go').disabled = false;
