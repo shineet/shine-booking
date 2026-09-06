@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 // warn about clashes. Added here rather than as a new endpoint because
 // Vercel Hobby caps this project at 12 serverless functions and api/ is
 // already at 12 -- a 13th file fails the build.
-const ALLOWED_TABLES = new Set(['clients', 'messages', 'bookings', 'app_settings', 'gigs', 'family_events', 'family_note', 'trip_days', 'trip_items', 'trip_people', 'trip_expenses']);
+const ALLOWED_TABLES = new Set(['clients', 'messages', 'bookings', 'app_settings', 'gigs', 'family_events', 'family_note', 'trip_days', 'trip_items', 'trip_people', 'trip_expenses', 'trip_config']);
 
 const SB_HDR = () => ({
   'apikey': process.env.SUPABASE_SECRET_KEY,
@@ -374,7 +374,8 @@ function tripTokenValid(t) {
 }
 function tripAllowed(table) {
   return table === 'trip_days' || table === 'trip_items'
-      || table === 'trip_people' || table === 'trip_expenses';
+      || table === 'trip_people' || table === 'trip_expenses'
+      || table === 'trip_config';
 }
 
 export default async function handler(req, res) {

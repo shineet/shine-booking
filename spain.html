@@ -161,6 +161,9 @@
       <div><div class="n" id="m-total">-</div><div class="l">spent together</div></div>
       <div><div class="n" id="m-each">-</div><div class="l">each, so far</div></div>
     </div>
+    <div style="text-align:center;margin:-6px 0 14px">
+      <button class="linkish" id="m-rate" onclick="editRate()"></button>
+    </div>
 
     <div class="card">
       <div class="card-head"><span class="d">Who is splitting</span></div>
@@ -220,8 +223,14 @@
     <h3 id="e-title">Add an expense</h3>
     <div class="row">
       <div>
-        <label for="e-amount">Amount in euros</label>
-        <input id="e-amount" type="text" inputmode="decimal" placeholder="42.50" autocomplete="off">
+        <label for="e-amount">Amount</label>
+        <div style="display:flex;gap:8px">
+          <input id="e-amount" type="text" inputmode="decimal" placeholder="42.50" autocomplete="off" style="flex:1">
+          <select id="e-cur" style="width:88px">
+            <option value="EUR">EUR</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
       </div>
       <div>
         <label for="e-date">Day</label>
@@ -259,6 +268,7 @@ let TOKEN = localStorage.getItem('tripToken') || '';
 let NAME  = localStorage.getItem('tripName') || '';
 let days = [], items = [], editing = null, editingDay = null;
 let people = [], expenses = [], editingExpense = null, splitWith = new Set();
+let rate = 1.22;   // USD per EUR, agreed once for the whole trip
 let tab = 'plan', moneyReady = true;
 
 // ── Server ──────────────────────────────────────────────────────────────────
@@ -339,7 +349,7 @@ function askName() {
 function setStatus(t) { document.getElementById('status').textContent = t; }
 
 function cacheWrite() {
-  try { localStorage.setItem(CACHE, JSON.stringify({ at: Date.now(), days, items, people, expenses })); } catch (e) {}
+  try { localStorage.setItem(CACHE, JSON.stringify({ at: Date.now(), days, items, people, expenses, rate })); } catch (e) {}
 }
 
 // Renders whatever was last seen before going near the network, so the plan is
@@ -350,6 +360,7 @@ function cacheRead() {
     if (!c || !Array.isArray(c.days)) return false;
     days = c.days; items = c.items || [];
     people = c.people || []; expenses = c.expenses || [];
+    if (c.rate) rate = c.rate;
     render();
     showStale(c.at);
     return true;
@@ -373,15 +384,17 @@ async function load(quiet) {
     // that would take the whole page down with it: no plan, no flights, no
     // hotels, on a page eight people are relying on.
     const soft = (path) => db('GET', path).catch(() => null);
-    const [d, i, p, e] = await Promise.all([
+    const [d, i, p, e, cfg] = await Promise.all([
       db('GET', `trip_days?trip=eq.${TRIP}&order=sort_index.asc`),
       db('GET', `trip_items?trip=eq.${TRIP}&order=at_time.asc,sort_index.asc`),
       soft(`trip_people?trip=eq.${TRIP}&order=sort_index.asc`),
       soft(`trip_expenses?trip=eq.${TRIP}&order=created_at.desc`),
+      soft(`trip_config?trip=eq.${TRIP}`),
     ]);
     days = d || []; items = i || [];
     moneyReady = Array.isArray(p) && Array.isArray(e);
     people = p || []; expenses = e || [];
+    if (cfg && cfg[0] && cfg[0].usd_per_eur) rate = Number(cfg[0].usd_per_eur) || rate;
     cacheWrite();
     document.getElementById('stale').classList.add('hidden');
     render();
@@ -581,6 +594,16 @@ function showTab(which) {
 }
 
 const eur = (cents) => '€' + (cents / 100).toFixed(2);
+const usd = (cents) => '$' + (cents * rate / 100).toFixed(2);
+const both = (cents) => eur(cents) + '  ' + usd(cents);
+
+// Everything nets in EUR. A settlement cannot be computed across two currencies
+// without picking one, and euros are what most of this trip is spent in.
+// Rounded to the cent on the way in, so the totals stay whole numbers of cents
+// and the balances still land on exactly zero.
+function toEurCents(amountCents, currency) {
+  return currency === 'USD' ? Math.round(amountCents / rate) : amountCents;
+}
 
 // Splits an amount so the parts add back up to it, exactly.
 //
@@ -611,7 +634,7 @@ function settleUp(peopleList, expenseList) {
   let total = 0;
 
   for (const e of expenseList) {
-    const amount = e.amount_cents || 0;
+    const amount = toEurCents(e.amount_cents || 0, e.currency);
     const withIds = (e.shared_with || []).filter(id => id in net);
     if (!amount || !withIds.length) continue;
     total += amount;
@@ -640,17 +663,49 @@ function settleUp(peopleList, expenseList) {
 
 const personName = (id) => (people.find(p => p.id === id) || {}).name || 'someone';
 
+// Whether somebody is on the trip on a given day. Dev and Nithya only join for
+// the Barcelona end, and defaulting a Madrid dinner to "everybody" would quietly
+// bill them for it.
+function presentOn(p, date) {
+  if (!date) return true;
+  if (p.from_date && date < p.from_date) return false;
+  if (p.to_date && date > p.to_date) return false;
+  return true;
+}
+
+function daysLabel(p) {
+  if (!p.from_date && !p.to_date) return '';
+  const f = p.from_date ? fmtDay(p.from_date) : 'the start';
+  const t = p.to_date ? fmtDay(p.to_date) : 'the end';
+  return f + ' to ' + t;
+}
+
+async function editRate() {
+  const r = prompt('How many dollars to the euro? Everyone gets converted by the same number, which is what makes it fair.', String(rate));
+  if (r === null) return;
+  const v = Number(String(r).replace(',', '.'));
+  if (!(v > 0)) { alert('That is not a rate.'); return; }
+  setStatus('Saving\u2026');
+  try {
+    await db('PATCH', `trip_config?trip=eq.${TRIP}`, { usd_per_eur: v, updated_at: new Date().toISOString() });
+    await load(true);
+  } catch (e) { setStatus('Not saved'); }
+}
+
 function renderMoney() {
   const { transfers, total } = settleUp(people, expenses);
 
-  document.getElementById('m-total').textContent = people.length ? eur(total) : '-';
+  document.getElementById('m-total').textContent = people.length ? both(total) : '-';
+  document.getElementById('m-rate').textContent =
+    'Converting at \u20AC1 = $' + Number(rate).toFixed(2) + '. Tap to change.';
   document.getElementById('m-each').textContent =
     people.length ? eur(Math.round(total / people.length)) : '-';
 
   const chips = document.getElementById('m-people');
   chips.textContent = '';
   for (const p of people) {
-    const c = el('button', 'chip', p.name);
+    const label = daysLabel(p);
+    const c = el('button', 'chip', p.name + (label ? '  \u00B7 ' + label : ''));
     c.onclick = () => renamePerson(p);
     chips.appendChild(c);
   }
@@ -675,7 +730,7 @@ function renderMoney() {
       row.appendChild(el('span', 'who', personName(t.from)));
       row.appendChild(el('span', null, 'pays'));
       row.appendChild(el('span', 'who', personName(t.to)));
-      row.appendChild(el('span', 'amt', eur(t.amount)));
+      row.appendChild(el('span', 'amt', both(t.amount)));
       settle.appendChild(row);
     }
   }
@@ -692,7 +747,12 @@ function renderMoney() {
       personName(e.paid_by) + ' paid' + (n ? ', split ' + n + (n === 1 ? ' way' : ' ways') : '') +
       (e.spent_on ? ' · ' + fmtDay(e.spent_on) : '')));
     row.appendChild(body);
-    row.appendChild(el('div', 'amt', eur(e.amount_cents || 0)));
+    const shown = e.currency === 'USD'
+      ? '$' + ((e.amount_cents || 0) / 100).toFixed(2)
+      : eur(e.amount_cents || 0);
+    const amt = el('div', 'amt', shown);
+    if (e.currency === 'USD') amt.title = 'about ' + eur(toEurCents(e.amount_cents, 'USD'));
+    row.appendChild(amt);
     const edit = el('button', 'edit', '✎');
     edit.setAttribute('aria-label', 'Edit ' + (e.description || 'this expense'));
     edit.onclick = () => openExpense(e);
@@ -723,8 +783,19 @@ async function renamePerson(p) {
       await db('DELETE', `trip_expenses?paid_by=eq.${p.id}`);
       await db('DELETE', `trip_people?id=eq.${p.id}`);
     } else {
+      // Dates only asked for after the name, because most people are there for
+      // the whole trip and should not have to answer a second question.
+      const when = prompt(
+        'Which days are they on the trip? Give it as 2026-10-13 to 2026-10-15, or leave it blank for the whole trip.',
+        p.from_date ? p.from_date + ' to ' + p.to_date : '');
+      if (when === null) return;
+      const m = String(when).match(/(\d{4}-\d{2}-\d{2})\s*(?:to|-|until)\s*(\d{4}-\d{2}-\d{2})/);
       setStatus('Saving…');
-      await db('PATCH', `trip_people?id=eq.${p.id}`, { name: n.trim().slice(0, 40) });
+      await db('PATCH', `trip_people?id=eq.${p.id}`, {
+        name: n.trim().slice(0, 40),
+        from_date: m ? m[1] : null,
+        to_date: m ? m[2] : null,
+      });
     }
     await load(true);
   } catch (e) { setStatus('Not saved'); }
@@ -735,6 +806,7 @@ function openExpense(e) {
   editingExpense = e || null;
   document.getElementById('e-title').textContent = e ? 'Edit expense' : 'Add an expense';
   document.getElementById('e-amount').value = e ? (e.amount_cents / 100).toFixed(2) : '';
+  document.getElementById('e-cur').value = e ? (e.currency || 'EUR') : 'EUR';
   document.getElementById('e-what').value = e ? (e.description || '') : '';
   document.getElementById('e-err').textContent = '';
   document.getElementById('e-del').classList.toggle('hidden', !e);
@@ -760,16 +832,28 @@ function openExpense(e) {
 
   // Everybody, by default. Most things on a trip are split by everybody, and
   // deselecting two is faster than selecting six.
-  splitWith = new Set(e ? (e.shared_with || []) : people.map(p => p.id));
+  const when = dsel.value;
+  splitWith = new Set(e ? (e.shared_with || [])
+                        : people.filter(p => presentOn(p, when)).map(p => p.id));
   renderSplitChips();
+  // Changing the day changes who was even there.
+  dsel.onchange = () => {
+    if (editingExpense) return;
+    splitWith = new Set(people.filter(p => presentOn(p, dsel.value)).map(p => p.id));
+    renderSplitChips();
+  };
   document.getElementById('esheet').style.display = 'flex';
 }
 
 function renderSplitChips() {
   const host = document.getElementById('e-with');
   host.textContent = '';
+  const when = document.getElementById('e-date').value;
   for (const p of people) {
-    const c = el('button', 'chip' + (splitWith.has(p.id) ? ' on' : ''), p.name);
+    const away = !presentOn(p, when);
+    const c = el('button', 'chip' + (splitWith.has(p.id) ? ' on' : ''),
+                 p.name + (away ? '  (not here)' : ''));
+    if (away && !splitWith.has(p.id)) c.style.opacity = '0.45';
     c.onclick = () => {
       if (splitWith.has(p.id)) splitWith.delete(p.id); else splitWith.add(p.id);
       renderSplitChips();
@@ -804,6 +888,7 @@ async function saveExpense() {
   const payload = {
     description: what,
     amount_cents: cents,
+    currency: document.getElementById('e-cur').value === 'USD' ? 'USD' : 'EUR',
     paid_by: document.getElementById('e-payer').value,
     shared_with: Array.from(splitWith),
     spent_on: document.getElementById('e-date').value || null,
