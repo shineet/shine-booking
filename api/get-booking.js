@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 // warn about clashes. Added here rather than as a new endpoint because
 // Vercel Hobby caps this project at 12 serverless functions and api/ is
 // already at 12 -- a 13th file fails the build.
-const ALLOWED_TABLES = new Set(['clients', 'messages', 'bookings', 'app_settings', 'gigs', 'family_events', 'family_note', 'trip_days', 'trip_items', 'trip_people', 'trip_expenses', 'trip_config']);
+const ALLOWED_TABLES = new Set(['clients', 'messages', 'bookings', 'app_settings', 'gigs', 'family_events', 'family_note', 'trip_days', 'trip_items', 'trip_people', 'trip_expenses', 'trip_config', 'agni_testers']);
 
 const SB_HDR = () => ({
   'apikey': process.env.SUPABASE_SECRET_KEY,
@@ -426,6 +426,39 @@ export default async function handler(req, res) {
       const ok = supplied.length === real.length && crypto.timingSafeEqual(supplied, real);
       if (!ok) { res.status(401).json({ error: 'Wrong PIN.' }); return; }
       res.status(200).json({ token: makeTripToken() });
+      return;
+    }
+
+    // Public and unauthenticated on purpose: it is reached by scanning a QR
+    // code at a dinner table, and a PIN in front of that is friction with
+    // nothing behind it. Writing is all it can do. Nothing here reads the list
+    // back, so a scraper that finds the URL can add rows and learn nothing.
+    if (body.action === 'agni_signup') {
+      // A bot fills in every field it finds. A person never sees this one.
+      if (String(body.website || '').trim()) { res.status(200).json({ ok: true }); return; }
+
+      const name = String(body.name || '').trim().slice(0, 80);
+      const email = String(body.email || '').trim().toLowerCase().slice(0, 160);
+      const device = String(body.device || '').trim().slice(0, 20);
+
+      if (name.length < 2) { res.status(400).json({ error: 'Please put your name in.' }); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+        res.status(400).json({ error: 'That email address does not look right.' });
+        return;
+      }
+
+      // Upsert on the email, so scanning twice corrects a typo in the name
+      // rather than failing with an error nobody at a dinner table can act on.
+      const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/agni_testers`, {
+        method: 'POST',
+        headers: { ...SB_HDR(), Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ name, email, device }),
+      });
+      if (!r.ok) {
+        res.status(500).json({ error: 'Could not save that. Try again in a moment.' });
+        return;
+      }
+      res.status(200).json({ ok: true });
       return;
     }
 

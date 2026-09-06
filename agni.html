@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0c0e">
+<title>Agni beta</title>
+<style>
+  :root {
+    --bg: #0c0c0e; --surface: #17171b; --line: #2a2a31;
+    --ink: #f5f3ef; --muted: #9a978f; --flame: #ff7a33;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex; justify-content: center;
+    padding: 32px 20px calc(40px + env(safe-area-inset-bottom));
+  }
+  main { width: 100%; max-width: 420px; }
+
+  .mark {
+    width: 66px; height: 66px; border-radius: 16px; display: grid; place-items: center;
+    background: radial-gradient(circle at 50% 78%, #ff9a3c, #e2521a 62%, #a02f0d);
+    font-size: 34px; line-height: 1; margin-bottom: 20px;
+  }
+  h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: -0.4px; }
+  .tag { color: var(--muted); margin: 0 0 26px; }
+  .tag b { color: var(--ink); font-weight: 600; }
+
+  label { display: block; font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+  .field { margin-bottom: 16px; }
+  input[type=text], input[type=email] {
+    width: 100%; font-size: 17px; padding: 13px 14px; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  }
+  input:focus { outline: none; border-color: var(--flame); }
+
+  .devices { display: flex; gap: 8px; }
+  .devices button {
+    flex: 1; font: inherit; font-size: 15px; padding: 12px 8px; color: var(--muted);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  }
+  .devices button[aria-pressed="true"] {
+    color: #1a0d05; background: var(--flame); border-color: var(--flame); font-weight: 600;
+  }
+
+  .go {
+    width: 100%; font: inherit; font-size: 17px; font-weight: 600; margin-top: 10px;
+    padding: 15px; color: #1a0d05; background: var(--flame);
+    border: 0; border-radius: 12px;
+  }
+  .go:disabled { opacity: 0.5; }
+
+  .err { color: #ff8f7a; font-size: 14px; min-height: 20px; margin-top: 10px; }
+  .hp { position: absolute; left: -9999px; }
+
+  .done { text-align: center; padding-top: 8px; }
+  .done .tick {
+    width: 62px; height: 62px; margin: 0 auto 18px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 30px;
+    background: rgba(255,122,51,0.16); color: var(--flame);
+  }
+  .done h2 { font-size: 23px; margin: 0 0 10px; }
+  .done p { color: var(--muted); margin: 0 0 16px; }
+
+  .next {
+    text-align: left; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 14px; padding: 16px 18px; margin-top: 18px;
+  }
+  .next h3 { font-size: 14px; margin: 0 0 10px; color: var(--ink); }
+  .next ol { margin: 0; padding-left: 20px; color: var(--muted); font-size: 15px; }
+  .next li { margin-bottom: 7px; }
+  .next a { color: var(--flame); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <!-- Once Beta App Review clears, put the public TestFlight link here and the
+       page turns into a one tap join. The QR code never changes, so the same
+       code on the same table works before approval and after it. -->
+  <script>const TESTFLIGHT_LINK = '';</script>
+
+  <div class="mark">🔥</div>
+  <h1>Agni</h1>
+  <p class="tag">Photograph what you eat and it works out the calories. Built for <b>Indian food</b> as much as anything else, which most calorie apps are not.</p>
+
+  <!-- Before approval: take a name and an email. -->
+  <form id="form">
+    <div class="field">
+      <label for="name">Your name</label>
+      <input id="name" type="text" autocomplete="name" autocapitalize="words" enterkeyhint="next">
+    </div>
+    <div class="field">
+      <label for="email">Apple ID email</label>
+      <input id="email" type="email" autocomplete="email" autocapitalize="none"
+             autocorrect="off" spellcheck="false" inputmode="email" enterkeyhint="go"
+             placeholder="the one you use on your iPhone">
+    </div>
+    <div class="field">
+      <label>Phone</label>
+      <div class="devices">
+        <button type="button" data-device="iphone" aria-pressed="true">iPhone</button>
+        <button type="button" data-device="android" aria-pressed="false">Android</button>
+      </div>
+    </div>
+    <input class="hp" type="text" id="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+    <button class="go" id="go" type="submit">Put me on the list</button>
+    <div class="err" id="err"></div>
+  </form>
+
+  <!-- After approval: skip all of it and go straight in. -->
+  <a class="go hidden" id="join" style="display:block;text-align:center;text-decoration:none;padding:15px">
+    Join the beta
+  </a>
+
+  <div class="done hidden" id="done">
+    <div class="tick">✓</div>
+    <h2 id="doneTitle">You are on the list</h2>
+    <p id="doneBody">Shine will send your invite as soon as Apple approves the build.</p>
+    <div class="next" id="next">
+      <h3>One thing to do now, so the invite works</h3>
+      <ol>
+        <li>Install <a href="https://apps.apple.com/app/testflight/id899247664">TestFlight</a> from the App Store.</li>
+        <li>Open it once and accept the terms.</li>
+        <li>When the invite email arrives, tap the link in it.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let device = 'iphone';
+
+document.querySelectorAll('.devices button').forEach(b => {
+  b.addEventListener('click', () => {
+    device = b.dataset.device;
+    document.querySelectorAll('.devices button')
+      .forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  });
+});
+
+// Approved: the form is pointless, so it never appears.
+if (TESTFLIGHT_LINK) {
+  $('form').classList.add('hidden');
+  const join = $('join');
+  join.href = TESTFLIGHT_LINK;
+  join.classList.remove('hidden');
+}
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = $('name').value.trim();
+  const email = $('email').value.trim();
+  $('err').textContent = '';
+
+  if (name.length < 2) { $('err').textContent = 'Put your name in.'; return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    $('err').textContent = 'That email does not look right.'; return;
+  }
+
+  $('go').disabled = true;
+  $('go').textContent = 'Saving…';
+  try {
+    const r = await fetch('/api/get-booking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'agni_signup', name, email, device, website: $('website').value,
+      }),
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.error || 'Could not save that.');
+    }
+    $('form').classList.add('hidden');
+    $('done').classList.remove('hidden');
+    // TestFlight is iOS only. Saying so here beats an invite that can never
+    // be redeemed, and the name is recorded either way so nobody is dropped.
+    if (device === 'android') {
+      $('doneTitle').textContent = 'Noted, but hold on';
+      $('doneBody').textContent =
+        'Agni is an iPhone app for now, and Apple’s TestFlight cannot install on Android. '
+        + 'You are on the list, and Shine will tell you when there is something you can run.';
+      $('next').classList.add('hidden');
+    }
+  } catch (err) {
+    $('err').textContent = err.message;
+    $('go').disabled = false;
+    $('go').textContent = 'Put me on the list';
+  }
+});
+</script>
+</body>
+</html>
