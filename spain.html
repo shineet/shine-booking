@@ -80,7 +80,9 @@
   }
   #sheet h3 { margin: 0 0 12px; font-size: 17px; }
   label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
-  input[type=text], textarea, select {
+  /* type=time has to be listed too. It is not a text input, so it was falling
+     back to its own cramped default width beside a full width Kind select. */
+  input[type=text], input[type=time], input[type=date], textarea, select {
     width: 100%; font: 16px/1.5 inherit; padding: 10px 12px;
     border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink);
   }
