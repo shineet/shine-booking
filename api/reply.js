@@ -85,7 +85,50 @@ export default async function handler(req, res) {
 
   try {
     const { From, Body } = req.body;
-    if (!From || !Body) {
+
+    // ── Picture messages ────────────────────────────────────────────────────
+    //
+    // Twilio reports media in NumMedia / MediaUrl0..N, and this handler read
+    // neither. Two things followed, both silent:
+    //
+    //   1. A photo with no caption has an empty Body, so the guard below
+    //      returned an empty response and did NOTHING -- not stored, not
+    //      forwarded, no reply. A client sending thank-you photos after a show
+    //      got silence, and Shine never learned they had sent anything.
+    //   2. A photo WITH a caption stored and forwarded the caption alone, so
+    //      nothing anywhere said pictures had come with it.
+    //
+    // The media itself was never lost -- Twilio keeps it -- but you have to
+    // already know to go looking, which is what made this dangerous.
+    const media = [];
+    const numMedia = parseInt(req.body.NumMedia || '0', 10) || 0;
+    for (let i = 0; i < numMedia && i < 10; i++) {   // Twilio's own cap is 10
+      const url = req.body[`MediaUrl${i}`];
+      if (url) media.push({ url, type: req.body[`MediaContentType${i}`] || '' });
+    }
+    const bodyText = String(Body || '').trim();
+    // Media with no words at all. Worth its own name: it is the case that used
+    // to vanish, and the case where there is nothing for the AI to answer.
+    const mediaOnly = !bodyText && media.length > 0;
+
+    // Names what arrived, in the message body itself rather than a new column,
+    // so it shows up in the app, in the forward and in the AI's context with no
+    // migration. Same approach as email attachments in api/email-reply.js.
+    function describeMedia(list) {
+      if (!list.length) return '';
+      const pics = list.filter(m => m.type.startsWith('image/')).length;
+      const vids = list.filter(m => m.type.startsWith('video/')).length;
+      const other = list.length - pics - vids;
+      const parts = [];
+      if (pics) parts.push(`${pics} photo${pics === 1 ? '' : 's'}`);
+      if (vids) parts.push(`${vids} video${vids === 1 ? '' : 's'}`);
+      if (other) parts.push(`${other} file${other === 1 ? '' : 's'}`);
+      return parts.join(' and ');
+    }
+    const mediaNote = media.length ? `📷 Sent ${describeMedia(media)}` : '';
+    const messageText = [bodyText, mediaNote].filter(Boolean).join('\n\n');
+
+    if (!From || (!bodyText && !media.length)) {
       res.setHeader('Content-Type', 'text/xml');
       res.status(200).send('<Response></Response>');
       return;
@@ -101,6 +144,14 @@ export default async function handler(req, res) {
       // carrier/Twilio for the sender's own number and mean nothing to a client. If
       // Shine texts one on its own (e.g. testing opt-out), do NOT relay it to the
       // last client -- otherwise a stray "START"/"STOP" lands in their thread.
+      // A picture Shine sends to his own Twilio number has no text to relay,
+      // and relaying a blank message to the last client would be worse than
+      // doing nothing. Sending a client a photo is not a flow that exists yet.
+      if (!bodyText) {
+        res.setHeader('Content-Type', 'text/xml');
+        res.status(200).send('<Response></Response>');
+        return;
+      }
       const KEYWORD = /^(stop|stopall|unstop|unsubscribe|cancel|end|quit|start|yes|no|help|info)$/i;
       if (KEYWORD.test(String(Body).trim())) {
         res.setHeader('Content-Type', 'text/xml');
@@ -248,7 +299,7 @@ export default async function handler(req, res) {
               from: 'Shine Booking Assistant <shine@texasmentalist.com>',
               to: 'shinethementalist@gmail.com',
               subject: `⚠️ New lead from ${From} could not be saved automatically`,
-              text: `A text came in from ${From} but the app could not save it as a lead automatically (a technical issue on our end, not something they did). Please add them manually in the dashboard so the conversation gets tracked.\n\nTheir message:\n"${Body}"\n\nshine-booking.vercel.app`
+              text: `A text came in from ${From} but the app could not save it as a lead automatically (a technical issue on our end, not something they did). Please add them manually in the app so the conversation gets tracked.\n\nTheir message:\n"${messageText}"`
             })
           });
         } catch(alertErr) {
@@ -279,7 +330,7 @@ export default async function handler(req, res) {
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
           body: JSON.stringify([{
             client_id: client.id, channel: 'sms', direction: 'inbound',
-            content: Body, status: 'received', to_address: null,
+            content: messageText, status: 'received', to_address: null,
             created_at: inboundTs.toISOString()
           }])
         });
@@ -297,15 +348,35 @@ export default async function handler(req, res) {
       const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`;
       const twilioAuth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
       const senderLabel = client?.name ? client.name : From;
-      await fetch(twilioUrl, {
+      // The pictures ride along, so they land on the phone Shine actually
+      // looks at. The app can only name them -- nothing stores the bytes -- so
+      // this forward is the one place the photos themselves arrive.
+      const forwardParams = new URLSearchParams({
+        From: process.env.TWILIO_FROM,
+        To: '+16128657681',
+        Body: `📱 ${senderLabel}: ${messageText}`
+      });
+      for (const m of media) forwardParams.append('MediaUrl', m.url);
+      const fwdRes = await fetch(twilioUrl, {
         method: 'POST',
         headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          From: process.env.TWILIO_FROM,
-          To: '+16128657681',
-          Body: `📱 ${senderLabel}: ${Body}`
-        }).toString()
+        body: forwardParams.toString()
       });
+      // Twilio will reject a media forward for reasons the text alone would
+      // survive (an unsupported type, a size limit). Losing the words too
+      // because a photo would not go is the wrong trade: retry without them.
+      if (!fwdRes.ok && media.length) {
+        console.error('MMS forward failed, retrying as text:', fwdRes.status, await fwdRes.text());
+        await fetch(twilioUrl, {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            From: process.env.TWILIO_FROM,
+            To: '+16128657681',
+            Body: `📱 ${senderLabel}: ${messageText}\n(the pictures would not forward -- they are in the Twilio console)`
+          }).toString()
+        });
+      }
       // Save exactly who was forwarded so replies route to the right client
       await fetch(`${process.env.SUPABASE_URL}/rest/v1/app_settings?id=eq.1`, {
         method: 'PATCH',
@@ -314,6 +385,30 @@ export default async function handler(req, res) {
       });
     } catch(e) {
       console.error('Forward to Shine failed:', e.message);
+    }
+
+    // Pictures with no words: stop here, deliberately.
+    //
+    // Everything above has run -- the message is saved and the photos are on
+    // Shine's phone. What is skipped is the AI reply, and that is the point: the
+    // model cannot see the pictures, so anything it wrote would be a reply to
+    // content it has not read. Guessing warmly at a photo is worse than letting
+    // Shine answer his own client, which he can now do because he has it.
+    if (mediaOnly) {
+      if (client) {
+        try {
+          await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', ...supaHeaders },
+            body: JSON.stringify({ last_activity: new Date().toISOString(), last_channel: 'sms' })
+          });
+        } catch(e) {
+          console.error('last_activity bump after media-only message failed:', e.message);
+        }
+      }
+      res.setHeader('Content-Type', 'text/xml');
+      res.status(200).send('<Response></Response>');
+      return;
     }
 
     const SYSTEM_PROMPT = `You are Shine Thankappan, a mentalist and magician based in Texas, texting your own clients personally. Write exactly the way you'd actually text someone on your phone — not the way a business or an AI assistant would text.
@@ -398,7 +493,11 @@ Call/meeting detection (separate from the actual performance date):
         }
       } catch(e) { console.error('SMS history fetch failed:', e.message); }
     }
-    const userContent = historyBlock ? historyBlock + 'THEIR LATEST MESSAGE (respond to this): ' + Body : Body;
+    // messageText, not Body: when pictures came with the text, the reply should
+    // know they arrived. It says a photo was SENT, never that it was seen --
+    // nothing here can look at one, and a reply that pretends otherwise is the
+    // one a client would notice.
+    const userContent = historyBlock ? historyBlock + 'THEIR LATEST MESSAGE (respond to this): ' + messageText : messageText;
 
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -489,7 +588,7 @@ Call/meeting detection (separate from the actual performance date):
         // captures their message rather than losing it to an earlier outage.
         const rowsToInsert = [];
         if (!inboundSaved) {
-          rowsToInsert.push({ client_id: client.id, channel: 'sms', direction: 'inbound', content: Body, status: 'received', to_address: null, created_at: inboundTs.toISOString() });
+          rowsToInsert.push({ client_id: client.id, channel: 'sms', direction: 'inbound', content: messageText, status: 'received', to_address: null, created_at: inboundTs.toISOString() });
         }
         if (!noReplyNeeded) {
           rowsToInsert.push({ client_id: client.id, channel: 'sms', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: From, created_at: outboundTs.toISOString() });
@@ -515,7 +614,7 @@ Call/meeting detection (separate from the actual performance date):
                 from: 'Shine Booking Assistant <shine@texasmentalist.com>',
                 to: 'shinethementalist@gmail.com',
                 subject: `📝 Reply pending review — ${client.name || From}`,
-                text: `${client.name || From} texted:\n"${Body}"\n\nAI drafted this reply:\n"${cleanReply}"\n\nReview and send it from the ShineBooking app, under Replies.`
+                text: `${client.name || From} texted:\n"${messageText}"\n\nAI drafted this reply:\n"${cleanReply}"\n\nReview and send it from the ShineBooking app, under Replies.`
               })
             });
           } catch(notifyErr) {
