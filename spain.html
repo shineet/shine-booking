@@ -209,6 +209,11 @@
       <div>
         <label for="f-cat">Kind</label>
         <select id="f-cat">
+          <!-- Activity leads, and is what a new entry starts as. Once everyone
+               is actually in Spain almost everything added is something to do
+               or something to eat, so the common case should cost no taps.
+               Plan stays because rows already on the sheet use it. -->
+          <option value="activity">Activity</option>
           <option value="plan">Plan</option>
           <option value="food">Food</option>
           <option value="travel">Travel</option>
@@ -525,7 +530,11 @@ function el(tag, cls, text) {
 /// Categories that can carry a shared bill. Travel, stay and note are
 /// informational on this trip: the flights, the train and the hotels are booked
 /// and paid for per couple already.
-const SPLITTABLE = new Set(['plan', 'food']);
+///
+/// Activity belongs here and is half the reason the category exists. A tour, a
+/// Sagrada Familia ticket or a Park Guell entry for eight people is the most
+/// likely shared bill of the whole trip.
+const SPLITTABLE = new Set(['activity', 'plan', 'food']);
 
 function itemRow(it) {
   const row = el('div', 'item' + (it.booked ? ' booked' : ''));
@@ -583,7 +592,7 @@ function openSheet(day, item) {
   document.getElementById('f-title').value  = item ? (item.title || '') : '';
   document.getElementById('f-place').value  = item ? (item.place || '') : '';
   document.getElementById('f-detail').value = item ? (item.detail || '') : '';
-  document.getElementById('f-cat').value    = item ? (item.category || 'plan') : 'plan';
+  document.getElementById('f-cat').value    = item ? (item.category || 'plan') : 'activity';
   document.getElementById('f-booked').checked = item ? !!item.booked : false;
   document.getElementById('f-del').classList.toggle('hidden', !item);
   document.getElementById('sheet-err').textContent = '';
