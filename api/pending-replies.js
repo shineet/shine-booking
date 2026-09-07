@@ -1,3 +1,5 @@
+import { threadHeaders, lastInboundMessageId } from '../lib/email-thread.js';
+
 function normalizePhone(phone) {
   if (!phone) return phone;
   var digits = phone.replace(/[^0-9]/g, '');
@@ -720,7 +722,11 @@ PRICING:
             to: message.to_address,
             ...(ccList && ccList.length ? { cc: ccList } : {}),
             subject: message.email_subject || 'Following up',
-            text: finalText
+            text: finalText,
+            // Held for review and sent later, possibly a day later, so the id
+            // has to come from the conversation rather than from anything in
+            // hand here.
+            headers: threadHeaders(await lastInboundMessageId(message.client_id))
           })
         });
       }
