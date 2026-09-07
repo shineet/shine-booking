@@ -74,7 +74,7 @@
   <!-- Once Beta App Review clears, put the public TestFlight link here and the
        page turns into a one tap join. The QR code never changes, so the same
        code on the same table works before approval and after it. -->
-  <script>const TESTFLIGHT_LINK = '';</script>
+  <script>const TESTFLIGHT_LINK = 'https://testflight.apple.com/join/jHpmfZ1v';</script>
 
   <div class="mark">🔥</div>
   <h1>Agni</h1>
@@ -99,9 +99,15 @@
   </form>
 
   <!-- After approval: skip all of it and go straight in. -->
-  <a class="go hidden" id="join" style="display:block;text-align:center;text-decoration:none;padding:15px">
-    Join the beta
-  </a>
+  <div class="hidden" id="joinBox">
+    <a class="go" id="join" style="display:block;text-align:center;text-decoration:none;padding:15px">
+      Join the beta
+    </a>
+    <p class="note" style="text-align:center">
+      Opens TestFlight, which is how Apple hands out apps before the App Store.
+      If you do not have it, the App Store offers it first.
+    </p>
+  </div>
 
   <div class="done hidden" id="done">
     <div class="tick">✓</div>
@@ -124,9 +130,8 @@ const $ = id => document.getElementById(id);
 // Approved: the form is pointless, so it never appears.
 if (TESTFLIGHT_LINK) {
   $('form').classList.add('hidden');
-  const join = $('join');
-  join.href = TESTFLIGHT_LINK;
-  join.classList.remove('hidden');
+  $('join').href = TESTFLIGHT_LINK;
+  $('joinBox').classList.remove('hidden');
 }
 
 $('form').addEventListener('submit', async e => {
