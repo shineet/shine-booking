@@ -82,6 +82,22 @@ export default async function handler(req, res) {
 
       let booking;
       if (existingBookingId) {
+        // The gig owns its own date once it exists, so re-sending intake must not
+        // push the CLIENT's copy over it. That copy is written when the lead is
+        // created and is not touched again after a gig exists, so the day the two
+        // disagree it is the client's that is stale -- and this PATCH would have
+        // let the stale one win, silently moving a booked gig to an old date.
+        //
+        // It may still FILL a blank: a booking created without a date and a lead
+        // that has since got one is exactly the Bella case, and there is nothing
+        // to overwrite.
+        let bookingDate = null;
+        const curRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${existingBookingId}&select=event_date&limit=1`, {
+          headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` }
+        });
+        const curRows = await curRes.json();
+        if (Array.isArray(curRows) && curRows[0]) bookingDate = curRows[0].event_date || null;
+        const dateToWrite = bookingDate ? undefined : (eventDate || undefined);
         const updateRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${existingBookingId}`, {
           method: 'PATCH',
           headers: {
@@ -94,7 +110,7 @@ export default async function handler(req, res) {
             client_name:  clientName || undefined,
             client_email: clientEmail || undefined,
             event_type:   eventType || undefined,
-            event_date:   eventDate || undefined,
+            event_date:   dateToWrite,
             fee:          fee || undefined,
             intake_status: 'sent'
           })
