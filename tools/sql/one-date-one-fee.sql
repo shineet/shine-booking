@@ -6,6 +6,7 @@
 --   2-install-triggers.sql the enforcement; run after reading step 1's result
 --   3-uninstall.sql        removes it again, changing no data
 --   4-verify.sql           read only; proves the four triggers exist and are on
+--   5-email-threading.sql adds messages.email_message_id, so replies thread
 --
 -- Copy one to the clipboard with, e.g.:
 --   pbcopy < tools/sql/1-check-drift.sql
