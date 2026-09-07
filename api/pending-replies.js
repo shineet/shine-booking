@@ -525,7 +525,17 @@ export default async function handler(req, res) {
       return;
     }
 
-    // POST action=generate-followup -> generate context-aware draft and save to messages
+    // POST action=generate-followup -> generate a context-aware draft and RETURN it.
+    //
+    // It used to also insert the draft as a pending_review message, which is
+    // why pressing "Draft follow-up" on a lead answered "see the Replies tab"
+    // instead of showing you the draft. Asking for a draft and being sent to
+    // another screen to find it is the wrong shape: the draft is not a record
+    // of anything until it is sent.
+    //
+    // The app is the only caller, and it now opens the returned text in the
+    // message composer, where sending writes the outbound message through the
+    // normal path. Nothing is stored on the way.
     if (req.method === 'POST' && req.body.action === 'generate-followup') {
       const { clientId, clientName, eventType, eventDate, venue, guests, status, hoursAgo, toEmail, toPhone } = req.body;
 
@@ -585,32 +595,7 @@ Hours since last contact: ${hoursAgo}` + eventTimingBlock(eventDate) + (await fe
       }
       if (!draft) throw new Error('No draft generated');
 
-      // Save to messages table
-      const sbHdr = {
-        'Content-Type': 'application/json',
-        'apikey': process.env.SUPABASE_SECRET_KEY,
-        'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
-        'Prefer': 'return=representation'
-      };
-
-      const saveRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
-        method: 'POST',
-        headers: sbHdr,
-        body: JSON.stringify({
-          client_id: clientId,
-          channel: toEmail ? 'email' : 'sms',
-          content: draft,
-          status: 'pending_review',
-          to_address: toEmail || toPhone || null,
-          direction: 'outbound',
-          created_at: new Date().toISOString()
-        })
-      });
-
-      const saved = await saveRes.json();
-      if (saved && saved.code) throw new Error('Supabase: ' + (saved.message || saved.code));
-
-      res.status(200).json({ success: true, draft });
+      res.status(200).json({ success: true, draft, channel: toEmail ? 'email' : 'sms' });
       return;
     }
 
