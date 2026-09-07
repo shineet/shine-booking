@@ -5,6 +5,7 @@
 --   1-check-drift.sql      read only; lists anything that already disagrees
 --   2-install-triggers.sql the enforcement; run after reading step 1's result
 --   3-uninstall.sql        removes it again, changing no data
+--   4-verify.sql           read only; proves the four triggers exist and are on
 --
 -- Copy one to the clipboard with, e.g.:
 --   pbcopy < tools/sql/1-check-drift.sql
