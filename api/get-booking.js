@@ -468,6 +468,91 @@ export default async function handler(req, res) {
       return;
     }
 
+    // TEMPORARY: a one-off audit of picture messages that arrived before the
+    // webhook knew how to read them.
+    //
+    // Until e90e92c, api/reply.js read only From and Body, so an MMS with no
+    // caption was discarded without a trace and a captioned one lost its
+    // pictures. Twilio kept the media either way, and this is the only way to
+    // find out what was missed, since the app's own database never recorded it.
+    //
+    // Delete this block once the audit has been read. It exists to answer a
+    // question about the past, not to be a feature. It lives inside this file
+    // rather than its own because Vercel Hobby caps the project at 12 functions
+    // and api/ is at exactly 12 -- a 13th file fails the build.
+    if (body.action === 'twilio-media-audit') {
+      if (!tokenValid(body.token)) { res.status(401).json({ error: 'Unauthorized' }); return; }
+      if (!process.env.TWILIO_SID || !process.env.TWILIO_TOKEN) {
+        res.status(500).json({ error: 'Twilio credentials are not set on the server.' });
+        return;
+      }
+      const auth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+      const days = Math.min(Math.max(parseInt(body.days || '365', 10) || 365, 1), 1095);
+      const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+
+      // Messages TO the business number, i.e. what clients sent in.
+      let url = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`
+              + `?To=${encodeURIComponent(process.env.TWILIO_FROM)}`
+              + `&DateSent%3E=${since}&PageSize=1000`;
+      const withMedia = [];
+      let scanned = 0;
+      let pages = 0;
+      try {
+        // Paginate. Capped so a runaway history cannot hang the function.
+        while (url && pages < 20) {
+          const r = await fetch(url, { headers: { 'Authorization': `Basic ${auth}` } });
+          if (!r.ok) { throw new Error(`Twilio ${r.status}: ${(await r.text()).slice(0, 300)}`); }
+          const page = await r.json();
+          const list = page.messages || [];
+          scanned += list.length;
+          for (const m of list) {
+            if (String(m.direction || '').startsWith('inbound') && parseInt(m.num_media || '0', 10) > 0) {
+              withMedia.push({
+                sid: m.sid,
+                date: m.date_sent || m.date_created,
+                from: m.from,
+                numMedia: parseInt(m.num_media, 10),
+                body: m.body || '',
+                // The ones with no caption are the ones that vanished entirely:
+                // the old guard returned before storing, forwarding or replying.
+                wasDropped: !String(m.body || '').trim(),
+              });
+            }
+          }
+          pages++;
+          url = page.next_page_uri ? `https://api.twilio.com${page.next_page_uri}` : null;
+        }
+      } catch (e) {
+        res.status(502).json({ error: String(e.message) });
+        return;
+      }
+
+      // The media links themselves, so a photo can actually be looked at.
+      for (const m of withMedia.slice(0, 60)) {
+        try {
+          const mr = await fetch(
+            `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages/${m.sid}/Media.json`,
+            { headers: { 'Authorization': `Basic ${auth}` } });
+          const md = await mr.json();
+          m.media = (md.media_list || []).map(x => ({
+            type: x.content_type,
+            url: `https://api.twilio.com${x.uri.replace('.json', '')}`,
+          }));
+        } catch (e) {
+          m.media = [];
+        }
+      }
+
+      res.status(200).json({
+        scanned,
+        sinceDate: since,
+        found: withMedia.length,
+        droppedEntirely: withMedia.filter(m => m.wasDropped).length,
+        messages: withMedia,
+      });
+      return;
+    }
+
     if (body.action === 'db') {
       const path = String(body.path || '');
       const table = path.split(/[?/]/)[0];
