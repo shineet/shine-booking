@@ -1,3 +1,41 @@
+import { hasGigOn, insertByDate, humanDate, prettyTime } from '../lib/family-note-server.js';
+
+/**
+ * Puts a confirmed gig on the shared family note, in date order.
+ *
+ * The app already does this when Shine marks a lead booked by hand. This path
+ * never did, so a client who confirmed through the pricing page created a
+ * booking, a Dashboard card and a questionnaire -- and the household saw
+ * nothing until Shine happened to open the Family tab, which auto-populates on
+ * load. On a busy week that is days of a confirmed gig being invisible at home.
+ *
+ * Never throws into the caller. A family note that did not get its line is
+ * worth a log and nothing more; the booking itself has already happened and
+ * must not be undone by a note failing to update.
+ */
+async function addGigToFamilyNote(dateISO, startTime) {
+  if (!dateISO) return;
+  try {
+    const base = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_SECRET_KEY;
+    if (!base || !key) return;
+    const headers = { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` };
+    const rows = await (await fetch(`${base}/rest/v1/family_note?id=eq.1&select=content`, { headers })).json();
+    const content = (Array.isArray(rows) && rows[0] && rows[0].content) || '';
+    // Same dedupe rule the app uses, so the two paths cannot each add their own
+    // line for the same day.
+    if (hasGigOn(content, dateISO)) return;
+    const when = prettyTime(startTime);
+    const line = `${humanDate(dateISO)} Magic show${when ? ` at ${when}` : ''}`;
+    await fetch(`${base}/rest/v1/family_note?id=eq.1`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ content: insertByDate(content, dateISO, line) })
+    });
+  } catch (e) {
+    console.error('family note not updated:', e && e.message);
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -147,6 +185,10 @@ export default async function handler(req, res) {
         });
         const bookingRows = await bookingRes.json();
         const booking = Array.isArray(bookingRows) ? bookingRows[0] : null;
+
+        // The household finds out when the client confirms, not when Shine next
+        // opens the app.
+        await addGigToFamilyNote(finalEventDate, booking && booking.start_time);
 
         if (booking) {
           const intakeLink = `https://shine-booking.vercel.app/intake.html?bid=${booking.id}`;
