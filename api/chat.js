@@ -1,5 +1,3 @@
-import { threadHeaders, lastInboundMessageId } from '../lib/email-thread.js';
-
 function normalizePhone(phone) {
   if (!phone) return phone;
   // Strip everything except digits and leading +
@@ -163,16 +161,7 @@ Notes: ${notes || 'none'}`;
         const resendRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
-          body: JSON.stringify({
-            from: 'Shine, The Mentalist <shine@texasmentalist.com>',
-            to: toEmail,
-            subject: subject || 'Message from Shine, The Mentalist',
-            text: body,
-            // Composed in the app, often days after their last email, so this
-            // reads the id off the conversation. Empty for a first contact,
-            // which spreads harmlessly.
-            headers: threadHeaders(await lastInboundMessageId(clientId))
-          })
+          body: JSON.stringify({ from: 'Shine, The Mentalist <shine@texasmentalist.com>', to: toEmail, subject: subject || 'Message from Shine, The Mentalist', text: body })
         });
         const resendData = await resendRes.json();
         if (!resendData.id) throw new Error(resendData.message || 'Email failed to send');

@@ -5,7 +5,6 @@
 // match the existing client and created a duplicate lead instead. % and _ are
 // escaped since ilike treats them as wildcards.
 import { notifyNewReply } from '../lib/apns.js';
-import { extractMessageId, threadHeaders, lastInboundMessageId } from '../lib/email-thread.js';
 
 function emailIlikeParam(email) {
   return encodeURIComponent(String(email || '').trim().replace(/[%_\\]/g, m => '\\' + m));
@@ -240,7 +239,6 @@ function stripQuotedReply(text) {
 // per-request variables (from, fromEmail, client, etc.) are out of scope by
 // then. Takes the raw req.body directly instead.
 async function emergencySaveInbound(reqBody, reasonLabel) {
-  const inboundMsgId = extractMessageId(reqBody && reqBody.rawEmail);
   try {
     const from = reqBody?.from || '';
     if (!from) return false;
@@ -275,7 +273,7 @@ async function emergencySaveInbound(reqBody, reasonLabel) {
       try {
         await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
           method: 'POST', headers: supaHdrs,
-          body: JSON.stringify([{ client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: subject || null, email_message_id: inboundMsgId }])
+          body: JSON.stringify([{ client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: subject || null }])
         });
         await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${client.id}`, {
           method: 'PATCH', headers: supaHdrs,
@@ -370,9 +368,6 @@ export default async function handler(req, res) {
 
   try {
     const { from, to, subject, body, rawEmail } = req.body;
-    // Their Message-ID, kept so a reply can be threaded onto this exact email
-    // rather than arriving as an unrelated message. See lib/email-thread.js.
-    const inboundMsgId = extractMessageId(rawEmail);
 
     if (!from) {
       res.status(200).json({ received: true });
@@ -540,7 +535,7 @@ export default async function handler(req, res) {
         if (client) {
           await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
             method: 'POST', headers: supaHdrs,
-            body: JSON.stringify([{ client_id: client.id, channel: 'email', direction: 'inbound', content: cleanForm.slice(0, 4000) || noteLine, status: 'received', to_address: null, email_subject: subject || null, email_message_id: inboundMsgId }])
+            body: JSON.stringify([{ client_id: client.id, channel: 'email', direction: 'inbound', content: cleanForm.slice(0, 4000) || noteLine, status: 'received', to_address: null, email_subject: subject || null }])
           });
         }
 
@@ -858,7 +853,7 @@ Only include this block once. Do not mention this block or its contents in the v
         try {
           await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
             method: 'POST', headers: supaHdrs,
-            body: JSON.stringify([{ client_id: saveClient.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: subject || null, email_message_id: inboundMsgId }])
+            body: JSON.stringify([{ client_id: saveClient.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: subject || null }])
           });
           await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${saveClient.id}`, {
             method: 'PATCH', headers: supaHdrs,
@@ -960,10 +955,7 @@ Only include this block once. Do not mention this block or its contents in the v
           to: fromEmail,
           ...(ccAddresses ? { cc: ccAddresses.split(',') } : {}),
           subject: replySubject,
-          text: cleanReply,
-          // Answering the email in hand, so its own id is the one to quote --
-          // no lookup, and no chance of threading onto the wrong message.
-          headers: threadHeaders(inboundMsgId)
+          text: cleanReply
         })
       });
     }
@@ -993,9 +985,9 @@ Only include this block once. Do not mention this block or its contents in the v
         // A closing acknowledgment gets logged as inbound-only -- no outbound
         // draft/pending-review row, since there's nothing to send or review.
         const rowsToInsert = noReplyNeeded
-          ? [{ client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, email_message_id: inboundMsgId, cc_address: ccAddresses, created_at: inboundTs.toISOString() }]
+          ? [{ client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, cc_address: ccAddresses, created_at: inboundTs.toISOString() }]
           : [
-              { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, email_message_id: inboundMsgId, cc_address: ccAddresses, created_at: inboundTs.toISOString() },
+              { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, cc_address: ccAddresses, created_at: inboundTs.toISOString() },
               { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject, cc_address: ccAddresses, created_at: outboundTs.toISOString() }
             ];
         const messagesRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
@@ -1142,7 +1134,7 @@ Only include this block once. Do not mention this block or its contents in the v
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
             body: JSON.stringify([
-              { client_id: newClient.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, email_message_id: inboundMsgId, cc_address: ccAddresses, created_at: inboundTs2.toISOString() },
+              { client_id: newClient.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, cc_address: ccAddresses, created_at: inboundTs2.toISOString() },
               { client_id: newClient.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject, cc_address: ccAddresses, created_at: outboundTs2.toISOString() }
             ])
           });
