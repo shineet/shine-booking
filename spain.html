@@ -522,6 +522,11 @@ function el(tag, cls, text) {
   return n;
 }
 
+/// Categories that can carry a shared bill. Travel, stay and note are
+/// informational on this trip: the flights, the train and the hotels are booked
+/// and paid for per couple already.
+const SPLITTABLE = new Set(['plan', 'food']);
+
 function itemRow(it) {
   const row = el('div', 'item' + (it.booked ? ' booked' : ''));
   row.appendChild(el('div', 't', fmtTime(it.at_time)));
@@ -550,10 +555,18 @@ function itemRow(it) {
 
   // Adding what a thing cost should start from the thing, not from a blank form
   // on another tab that has to be filled in again from memory.
-  const cost = el('button', 'cost', 'cost');
-  cost.setAttribute('aria-label', 'Add what ' + (it.title || 'this') + ' cost');
-  cost.onclick = () => openExpenseForItem(it);
-  row.appendChild(cost);
+  //
+  // Only on rows that could actually be a shared bill. Nobody splits the cost
+  // of landing in Austin, checking out of a hotel, or a train that was booked
+  // and paid for months ago, and a cost button beside those is a button that
+  // exists to be pressed by mistake. Anything unusual, a taxi shared four ways
+  // say, can still be added from the Money tab.
+  if (SPLITTABLE.has(it.category || 'plan')) {
+    const cost = el('button', 'cost', 'cost');
+    cost.setAttribute('aria-label', 'Add what ' + (it.title || 'this') + ' cost');
+    cost.onclick = () => openExpenseForItem(it);
+    row.appendChild(cost);
+  }
 
   const edit = el('button', 'edit', '\u270E');
   edit.setAttribute('aria-label', 'Edit ' + (it.title || 'this'));
