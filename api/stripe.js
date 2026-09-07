@@ -104,7 +104,7 @@ export default async function handler(req, res) {
                 from: 'Shine Booking Assistant <shine@texasmentalist.com>',
                 to: 'shinethementalist@gmail.com',
                 subject: `💵 Payment received: $${amount} (${type})`,
-                text: `A ${type} payment of $${amount} just came in via Stripe.\n\nFrom: ${payerEmail}\nBooking: ${bookingId || 'n/a'}\n\n${bookingId ? 'The booking is now marked paid on your dashboard.' : '(No booking id on this payment — mark it manually.)'}\n\nshine-booking.vercel.app`
+                text: `A ${type} payment of $${amount} just came in via Stripe.\n\nFrom: ${payerEmail}\nBooking: ${bookingId || 'n/a'}\n\n${bookingId ? 'The booking is now marked paid in the app.' : '(No booking id on this payment — mark it manually.)'}`
               })
             });
           } catch (e) { console.error('Payment notify failed:', e.message); }

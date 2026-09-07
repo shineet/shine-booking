@@ -362,7 +362,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   try {
-    // Owner's custom response guidance (editable from the dashboard "AI Settings" panel).
+    // Owner's custom response guidance (editable from the app, under Settings).
     // Returns a ready-to-append suffix, or '' if none set.
     const guidanceSuffix = async () => {
       try {

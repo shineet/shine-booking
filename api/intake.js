@@ -298,7 +298,7 @@ export default async function handler(req, res) {
           from:    'Shine Booking Assistant <shine@texasmentalist.com>',
           to:      'shinethementalist@gmail.com',
           subject: `Questionnaire completed: ${booking?.client_name || 'A client'} — ready for contract`,
-          text:    `${booking?.client_name || 'A client'} completed their event questionnaire!\n\n${answersText}\n\nThe contract is now ready to send with these details pre-filled — open the app to review and send.\n\nshine-booking.vercel.app`
+          text:    `${booking?.client_name || 'A client'} completed their event questionnaire!\n\n${answersText}\n\nThe contract is now ready to send with these details pre-filled — open the ShineBooking app to review and send.`
         })
       });
 
@@ -418,7 +418,7 @@ export default async function handler(req, res) {
           from: 'Shine Booking Assistant <shine@texasmentalist.com>',
           to: 'shinethementalist@gmail.com',
           subject: `✨ New website lead: ${leadName}`,
-          text: `A new lead came in from your website contact form and is now on your dashboard.\n\nName: ${leadName}\nEmail: ${clientEmail}\n${company ? 'Company: ' + company + '\n' : ''}${eventType ? 'Event type: ' + eventType + '\n' : ''}${eDate ? 'Event date: ' + eDate + '\n' : ''}${guests ? 'Guests: ' + guests + '\n' : ''}${phone ? 'Phone: ' + phone + '\n' : ''}${messageVal ? '\nMessage: ' + messageVal + '\n' : ''}\nReply from the dashboard:\nshine-booking.vercel.app`
+          text: `A new lead came in from your website contact form and is now in the app.\n\nName: ${leadName}\nEmail: ${clientEmail}\n${company ? 'Company: ' + company + '\n' : ''}${eventType ? 'Event type: ' + eventType + '\n' : ''}${eDate ? 'Event date: ' + eDate + '\n' : ''}${guests ? 'Guests: ' + guests + '\n' : ''}${phone ? 'Phone: ' + phone + '\n' : ''}${messageVal ? '\nMessage: ' + messageVal + '\n' : ''}\nReply from the ShineBooking app, under Leads.`
         })
       });
 

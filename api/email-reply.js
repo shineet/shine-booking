@@ -546,7 +546,7 @@ export default async function handler(req, res) {
             from: 'Shine Booking Assistant <shine@texasmentalist.com>',
             to: 'shinethementalist@gmail.com',
             subject: `✨ New website lead: ${leadName}`,
-            text: `A new lead came in from your website contact form and is now on your dashboard.\n\nName: ${leadName}\nEmail: ${clientEmail}\n${company ? 'Company: ' + company + '\n' : ''}${eventType ? 'Event type: ' + eventType + '\n' : ''}${eventDate ? 'Event date: ' + eventDate + '\n' : ''}${guests ? 'Guests: ' + guests + '\n' : ''}${phone ? 'Phone: ' + phone + '\n' : ''}${messageVal ? '\nMessage: ' + messageVal + '\n' : ''}\nReply from the dashboard:\nshine-booking.vercel.app`
+            text: `A new lead came in from your website contact form and is now in the app.\n\nName: ${leadName}\nEmail: ${clientEmail}\n${company ? 'Company: ' + company + '\n' : ''}${eventType ? 'Event type: ' + eventType + '\n' : ''}${eventDate ? 'Event date: ' + eventDate + '\n' : ''}${guests ? 'Guests: ' + guests + '\n' : ''}${phone ? 'Phone: ' + phone + '\n' : ''}${messageVal ? '\nMessage: ' + messageVal + '\n' : ''}\nReply from the ShineBooking app, under Leads.`
           })
         });
 
@@ -801,7 +801,7 @@ If the email reads like someone planning THEIR OWN event (birthday, wedding, off
 
 Only include this block once. Do not mention this block or its contents in the visible reply text — it's purely structured data for internal use.`;
 
-    // Owner's custom response guidance (editable from the dashboard "AI Settings" panel).
+    // Owner's custom response guidance (editable from the app, under Settings).
     // Layered on top of the base voice; the lead-extraction instruction stays last in the prompt.
     let ownerGuidance = '';
     try {
@@ -868,7 +868,7 @@ Only include this block once. Do not mention this block or its contents in the v
             from: 'Shine Booking Assistant <shine@texasmentalist.com>',
             to: 'shinethementalist@gmail.com',
             subject: `📥 Email saved — reply manually (${fromName || fromEmail})`,
-            text: `An email came in from ${fromName ? fromName + ' (' + fromEmail + ')' : fromEmail} and is now saved on your dashboard, but I couldn't draft a reply automatically (${reasonLabel}).\n\nSubject: ${subject || '(none)'}\n\n"${(emailBody || '').substring(0, 1500)}"\n\nReply from the dashboard or Gmail.`
+            text: `An email came in from ${fromName ? fromName + ' (' + fromEmail + ')' : fromEmail} and is now saved in the app, but I couldn't draft a reply automatically (${reasonLabel}).\n\nSubject: ${subject || '(none)'}\n\n"${(emailBody || '').substring(0, 1500)}"\n\nReply from the ShineBooking app or from Gmail.`
           })
         });
       } catch(notifyErr) { console.error('Manual-reply notification failed:', notifyErr.message); }
@@ -1009,7 +1009,7 @@ Only include this block once. Do not mention this block or its contents in the v
                 from: 'Shine Booking Assistant <shine@texasmentalist.com>',
                 to: 'shinethementalist@gmail.com',
                 subject: `📝 Reply pending review — ${client.name || fromEmail}`,
-                text: `${client.name || fromEmail} emailed:\n"${emailBody}"\n\nAI drafted this reply:\n"${cleanReply}"\n\nReview and send it from the dashboard:\nshine-booking.vercel.app`
+                text: `${client.name || fromEmail} emailed:\n"${emailBody}"\n\nAI drafted this reply:\n"${cleanReply}"\n\nReview and send it from the ShineBooking app, under Replies.`
               })
             });
           } catch(notifyErr) {

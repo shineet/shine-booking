@@ -362,7 +362,7 @@ Call/meeting detection (separate from the actual performance date):
 - If, across this thread including their latest message, a specific date AND a specific time have been mutually confirmed for a phone call, video call, or meeting to talk further (this is NOT the event/performance date itself), append this marker on its own line at the very end, after any other marker: [CALL_SCHEDULED: YYYY-MM-DD|H:MM AM/PM|short title]
 - Only add it when both a specific date and a specific time are clearly settled by both sides — not when a call is merely proposed or "sometime tomorrow" with no time given. If unsure, leave it out.`;
 
-    // Owner's custom response guidance (editable from the dashboard "AI Settings" panel).
+    // Owner's custom response guidance (editable from the app, under Settings).
     // A single free-text field in app_settings, layered on top of the base voice above.
     let ownerGuidance = '';
     try {
@@ -515,7 +515,7 @@ Call/meeting detection (separate from the actual performance date):
                 from: 'Shine Booking Assistant <shine@texasmentalist.com>',
                 to: 'shinethementalist@gmail.com',
                 subject: `📝 Reply pending review — ${client.name || From}`,
-                text: `${client.name || From} texted:\n"${Body}"\n\nAI drafted this reply:\n"${cleanReply}"\n\nReview and send it from the dashboard:\nshine-booking.vercel.app`
+                text: `${client.name || From} texted:\n"${Body}"\n\nAI drafted this reply:\n"${cleanReply}"\n\nReview and send it from the ShineBooking app, under Replies.`
               })
             });
           } catch(notifyErr) {
