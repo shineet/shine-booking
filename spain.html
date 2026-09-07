@@ -96,6 +96,7 @@
   .row { display: flex; gap: 10px; }
   .row > * { flex: 1; }
   .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 15px; }
+  .hint { margin: -6px 0 2px 28px; font-size: 12.5px; color: var(--muted); }
   .check input { width: 20px; height: 20px; }
   .actions { display: flex; gap: 10px; margin-top: 16px; }
   button.primary { flex: 1; background: var(--accent); color: #fff; border: 0; border-radius: 12px; padding: 13px; font-size: 16px; font-weight: 600; }
@@ -229,6 +230,7 @@
     <label for="f-detail">Notes</label>
     <textarea id="f-detail" placeholder="Tickets booked, meet in the lobby at 9…"></textarea>
     <label class="check"><input id="f-booked" type="checkbox"> Booked and paid</label>
+    <p class="hint" id="booked-hint">Ticking this opens the expense sheet next, so it can be split.</p>
     <div class="actions">
       <button class="ghost" onclick="closeSheet()">Cancel</button>
       <button class="primary" onclick="saveItem()">Save</button>
@@ -594,17 +596,34 @@ function openSheet(day, item) {
   document.getElementById('f-detail').value = item ? (item.detail || '') : '';
   document.getElementById('f-cat').value    = item ? (item.category || 'plan') : 'activity';
   document.getElementById('f-booked').checked = item ? !!item.booked : false;
+  updateBookedHint();
   document.getElementById('f-del').classList.toggle('hidden', !item);
   document.getElementById('sheet-err').textContent = '';
   document.getElementById('sheet').classList.add('open');
 }
 function closeSheet() { document.getElementById('sheet').classList.remove('open'); editing = null; }
 
+// The promise under the checkbox has to match what ticking it will actually do,
+// which depends on the category chosen above it.
+function updateBookedHint() {
+  const cat = document.getElementById('f-cat').value;
+  const already = !!(editing && editing.booked);
+  document.getElementById('booked-hint')
+    .classList.toggle('hidden', already || !SPLITTABLE.has(cat));
+}
+document.getElementById('f-cat').addEventListener('change', updateBookedHint);
+
 async function saveItem() {
   const err = document.getElementById('sheet-err');
   const title = document.getElementById('f-title').value.trim();
   if (!title) { err.textContent = 'Give it a name.'; return; }
   if (!NAME) askName();
+
+  // Somebody who has just said they booked AND PAID for something is holding
+  // the receipt, and this is the one moment they remember the number. Carried
+  // over the save because closeSheet() clears `editing`.
+  const wasBooked = !!(editing && editing.booked);
+  const dayOfItem = editingDay || days.find(d => d.id === (editing && editing.day_id));
 
   const payload = {
     at_time: document.getElementById('f-time').value.trim(),
@@ -628,6 +647,19 @@ async function saveItem() {
     }
     closeSheet();
     await load(true);
+
+    // Only on the tick itself, never on a later edit of something already
+    // booked, or every correction to a spelling would reopen the money sheet.
+    // And only where a bill could be shared: a hotel marked paid was paid by
+    // one couple for one room.
+    const newlyBooked = payload.booked && !wasBooked;
+    if (newlyBooked && SPLITTABLE.has(payload.category) && moneyReady && people.length) {
+      openExpense(null, {
+        description: payload.title,
+        spent_on: dayOfItem && dayOfItem.date,
+        fromPlan: true,
+      });
+    }
   } catch (e) {
     err.textContent = 'Could not save. Check your connection and try again.';
     setStatus('Not saved');
