@@ -487,48 +487,49 @@ export default async function handler(req, res) {
         return;
       }
       const auth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+
+      // ONE page per request, and the caller loops.
+      //
+      // The first version walked the whole history and resolved every media
+      // link inside a single call, which ran past the function timeout and
+      // returned an empty body -- the script got no JSON and threw. A serverless
+      // function has seconds, so the work is chunked and the shell script keeps
+      // the state instead.
       const days = Math.min(Math.max(parseInt(body.days || '365', 10) || 365, 1), 1095);
       const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+      const url = body.pageUri
+        ? `https://api.twilio.com${body.pageUri}`
+        : `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`
+          + `?To=${encodeURIComponent(process.env.TWILIO_FROM)}`
+          + `&DateSent%3E=${since}&PageSize=200`;
 
-      // Messages TO the business number, i.e. what clients sent in.
-      let url = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`
-              + `?To=${encodeURIComponent(process.env.TWILIO_FROM)}`
-              + `&DateSent%3E=${since}&PageSize=1000`;
-      const withMedia = [];
-      let scanned = 0;
-      let pages = 0;
+      let page;
       try {
-        // Paginate. Capped so a runaway history cannot hang the function.
-        while (url && pages < 20) {
-          const r = await fetch(url, { headers: { 'Authorization': `Basic ${auth}` } });
-          if (!r.ok) { throw new Error(`Twilio ${r.status}: ${(await r.text()).slice(0, 300)}`); }
-          const page = await r.json();
-          const list = page.messages || [];
-          scanned += list.length;
-          for (const m of list) {
-            if (String(m.direction || '').startsWith('inbound') && parseInt(m.num_media || '0', 10) > 0) {
-              withMedia.push({
-                sid: m.sid,
-                date: m.date_sent || m.date_created,
-                from: m.from,
-                numMedia: parseInt(m.num_media, 10),
-                body: m.body || '',
-                // The ones with no caption are the ones that vanished entirely:
-                // the old guard returned before storing, forwarding or replying.
-                wasDropped: !String(m.body || '').trim(),
-              });
-            }
-          }
-          pages++;
-          url = page.next_page_uri ? `https://api.twilio.com${page.next_page_uri}` : null;
-        }
+        const r = await fetch(url, { headers: { 'Authorization': `Basic ${auth}` } });
+        if (!r.ok) throw new Error(`Twilio ${r.status}: ${(await r.text()).slice(0, 300)}`);
+        page = await r.json();
       } catch (e) {
         res.status(502).json({ error: String(e.message) });
         return;
       }
 
-      // The media links themselves, so a photo can actually be looked at.
-      for (const m of withMedia.slice(0, 60)) {
+      const list = page.messages || [];
+      const matches = list
+        .filter(m => String(m.direction || '').startsWith('inbound') && parseInt(m.num_media || '0', 10) > 0)
+        .map(m => ({
+          sid: m.sid,
+          date: m.date_sent || m.date_created,
+          from: m.from,
+          numMedia: parseInt(m.num_media, 10),
+          body: m.body || '',
+          // No caption means the old guard returned before storing, forwarding
+          // or replying: this one vanished completely.
+          wasDropped: !String(m.body || '').trim(),
+        }));
+
+      // Resolving links is another request each, so it is capped per page. With
+      // a handful of picture messages in a year this never bites.
+      for (const m of matches.slice(0, 5)) {
         try {
           const mr = await fetch(
             `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages/${m.sid}/Media.json`,
@@ -538,17 +539,14 @@ export default async function handler(req, res) {
             type: x.content_type,
             url: `https://api.twilio.com${x.uri.replace('.json', '')}`,
           }));
-        } catch (e) {
-          m.media = [];
-        }
+        } catch (e) { m.media = []; }
       }
 
       res.status(200).json({
-        scanned,
         sinceDate: since,
-        found: withMedia.length,
-        droppedEntirely: withMedia.filter(m => m.wasDropped).length,
-        messages: withMedia,
+        scanned: list.length,
+        matches,
+        nextPageUri: page.next_page_uri || null,
       });
       return;
     }
