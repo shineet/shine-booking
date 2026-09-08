@@ -1,4 +1,5 @@
 import { notifyNewReply } from '../lib/apns.js';
+import { storeTwilioMedia } from '../lib/message-media.js';
 
 // Last 10 digits of any phone format — used to match an inbound E.164 number
 // against client records that may have been stored in a non-normalized format.
@@ -323,11 +324,12 @@ export default async function handler(req, res) {
     // theirs and arrives exactly once. It gets written first.
     const inboundTs = new Date();
     let inboundSaved = false;
+    let inboundRowId = null;
     if (client) {
       try {
         const inboundRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+          headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`, 'Prefer': 'return=representation' },
           body: JSON.stringify([{
             client_id: client.id, channel: 'sms', direction: 'inbound',
             content: messageText, status: 'received', to_address: null,
@@ -335,11 +337,38 @@ export default async function handler(req, res) {
           }])
         });
         inboundSaved = inboundRes.ok;
-        if (!inboundRes.ok) {
+        if (inboundRes.ok) {
+          const saved = await inboundRes.json();
+          inboundRowId = Array.isArray(saved) && saved[0] ? saved[0].id : null;
+        } else {
           console.error('Inbound message insert failed:', inboundRes.status, await inboundRes.text());
         }
       } catch(e) {
         console.error('Inbound message insert failed:', e.message);
+      }
+    }
+
+    // Copy the pictures into the app's own bucket.
+    //
+    // AFTER their words are saved, deliberately. Fetching and uploading files
+    // takes seconds and can fail; the message must already be safe before any
+    // of that is attempted. A failure here leaves the file named but not
+    // stored, which the conversation says out loud.
+    if (media.length && client && inboundRowId) {
+      try {
+        const stored = await storeTwilioMedia(media, {
+          clientId: client.id,
+          messageSid: req.body.MessageSid || req.body.SmsMessageSid || String(Date.now()),
+        });
+        if (stored.length) {
+          await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?id=eq.${inboundRowId}`, {
+            method: 'PATCH',
+            headers: { ...supaHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ media: stored })
+          });
+        }
+      } catch (e) {
+        console.error('Storing media failed:', e.message);
       }
     }
 

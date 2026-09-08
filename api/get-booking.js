@@ -1,3 +1,4 @@
+import { signedMediaUrl } from '../lib/message-media.js';
 import crypto from 'node:crypto';
 
 // family_events is read-only in practice: it is written by the Mac-side
@@ -548,6 +549,28 @@ export default async function handler(req, res) {
         matches,
         nextPageUri: page.next_page_uri || null,
       });
+      return;
+    }
+
+    // A link the app can open for one client photo.
+    //
+    // The bucket is private -- these are pictures of other people's weddings
+    // and children -- so nothing is readable by URL alone. The app asks for a
+    // link when it draws the picture and the link stops working within the
+    // hour.
+    if (body.action === 'message-media-url') {
+      if (!tokenValid(body.token)) { res.status(401).json({ error: 'Unauthorized' }); return; }
+      const path = String(body.path || '');
+      // Paths are written by the server as clientId/messageSid/index.ext.
+      // Anything else, in particular anything containing .., is refused rather
+      // than handed to the storage API to interpret.
+      if (!/^[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\/\d+\.[a-z0-9]+$/.test(path)) {
+        res.status(400).json({ error: 'Bad path' });
+        return;
+      }
+      const url = await signedMediaUrl(path);
+      if (!url) { res.status(404).json({ error: 'Could not sign that file' }); return; }
+      res.status(200).json({ url });
       return;
     }
 
