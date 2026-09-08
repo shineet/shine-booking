@@ -67,8 +67,13 @@ function looksLikeBase64Block(s) {
 function decodeBase64Body(s) {
   try {
     const out = Buffer.from(String(s).replace(/\s+/g, ''), 'base64').toString('utf-8');
-    // Only accept if it decoded to mostly-printable text (guards against false positives)
-    const printable = out.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '');
+    // Only accept if it decoded to mostly-printable text (guards against false
+    // positives). Printable includes everything above U+00A0, not just ASCII:
+    // the old test stripped every accent, curly quote, emoji and non-Latin
+    // character before counting, so a message written with any of them could
+    // fail its own decode and be stored as base64. Clients write "it’s" with a
+    // curly apostrophe constantly.
+    const printable = out.replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\uFFFF]/g, '');
     return printable.length >= out.length * 0.8 ? out : s;
   } catch (e) { return s; }
 }
@@ -86,7 +91,22 @@ function extractMimePart(rawEmail, mime) {
   const payload = partMatch[1].trim();
   if (cte === 'base64') return decodeBase64Body(payload);
   if (cte === 'quoted-printable') return decodeQuotedPrintable(payload);
-  return payload;
+
+  // No encoding found in the headers ABOVE the body -- which does not mean
+  // there isn't one.
+  //
+  // The match starts at "Content-Type:", so a part that lists
+  // Content-Transfer-Encoding BEFORE its Content-Type puts the encoding above
+  // the slice searched, and it is simply not seen. Krista's reply was exactly
+  // this: a base64 body stored, displayed and fed to the AI as the literal
+  // string "T2ggSSdtIHNvcnJ5...", and no draft reply, because there was nothing
+  // legible to reply to.
+  //
+  // Header order is the mailer's business and both orders are valid, so rather
+  // than parse further backwards, look at what the payload actually IS.
+  // normalizeBody decodes base64 or quoted-printable only when the content
+  // really looks like it, and returns it untouched otherwise.
+  return normalizeBody(payload);
 }
 
 // Extract + decode the text/plain part from a raw MIME email, honouring its
