@@ -541,7 +541,19 @@ Call/meeting detection (separate from the actual performance date):
       throw new Error('Claude returned an unexpected response shape (no text content)');
     }
     const replyText = claudeData.content[0].text;
-    const noReplyNeeded = /^no_reply_needed$/i.test(replyText.trim());
+    // NO_REPLY_NEEDED anywhere in the answer, not only as the whole of it.
+    //
+    // The prompt asks for the bare token, and the model usually obliges. Given
+    // a phishing email it did something more sensible: it explained WHY there
+    // was nothing to answer, then wrote the token on its own line. The old test
+    // required the trimmed reply to be exactly the token, so that refusal read
+    // as an ordinary draft -- it was queued for review, and with review mode
+    // off it would have been SENT to the phisher, confirming the address is
+    // live and answered by a human.
+    //
+    // A standalone token is unambiguous. A real reply to a client does not
+    // contain the words NO_REPLY_NEEDED on a line of their own.
+    const noReplyNeeded = /(^|\n)\s*no_reply_needed\s*(\n|$)/i.test(replyText.trim());
     const bookingIntent = replyText.includes('[BOOKING_INTENT]');
     const pricingRequested = replyText.includes('[PRICING_REQUESTED]');
     const callMatch = replyText.match(/\[CALL_SCHEDULED:\s*(\d{4}-\d{2}-\d{2})\s*\|\s*([^\]|]+?)\s*\|\s*([^\]]+?)\s*\]/);
