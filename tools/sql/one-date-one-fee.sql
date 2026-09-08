@@ -8,6 +8,7 @@
 --   4-verify.sql           read only; proves the four triggers exist and are on
 --   5-email-threading.sql adds messages.email_message_id, so replies thread
 --   6-usage-audit.sql     read only; what is consuming the free-tier database
+--   7-message-media.sql   the bucket and column for client photos and video
 --
 -- Copy one to the clipboard with, e.g.:
 --   pbcopy < tools/sql/1-check-drift.sql
