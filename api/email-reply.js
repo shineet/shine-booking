@@ -4,6 +4,7 @@
 // and Postgres eq. is case-sensitive, so a same-address reply silently failed to
 // match the existing client and created a duplicate lead instead. % and _ are
 // escaped since ilike treats them as wildcards.
+import { claudeText } from '../lib/claude-text.js';
 import { notifyNewReply } from '../lib/apns.js';
 import { extractMessageId, threadHeaders, lastInboundMessageId } from '../lib/email-thread.js';
 
@@ -914,7 +915,7 @@ Only include this block once. Do not mention this block or its contents in the v
         let data;
         try { data = JSON.parse(rawText); } catch(e) { return { text: null, reason: `invalid JSON (HTTP ${resp.status})` }; }
         if (!resp.ok || data.error) { return { text: null, reason: `API error HTTP ${resp.status}: ${data.error?.message || ''}`.trim() }; }
-        const t = (data.content && data.content[0] && data.content[0].text) ? data.content[0].text : null;
+        const t = claudeText(data) || null;
         if (!t) { return { text: null, reason: data.stop_reason === 'refusal' ? 'declined (refusal)' : 'no text content' }; }
         return { text: t };
       } catch(e) {

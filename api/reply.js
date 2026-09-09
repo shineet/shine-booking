@@ -1,3 +1,4 @@
+import { claudeText } from '../lib/claude-text.js';
 import { notifyNewReply } from '../lib/apns.js';
 import { storeTwilioMedia } from '../lib/message-media.js';
 
@@ -536,11 +537,11 @@ Call/meeting detection (separate from the actual performance date):
 
     const claudeData = await claudeRes.json();
     if (claudeData.error) throw new Error(claudeData.error.message);
-    if (!claudeData.content || !claudeData.content[0] || !claudeData.content[0].text) {
+    const replyText = claudeText(claudeData);
+    if (!replyText) {
       console.error('Unexpected Claude response shape:', JSON.stringify(claudeData).substring(0, 2000));
       throw new Error('Claude returned an unexpected response shape (no text content)');
     }
-    const replyText = claudeData.content[0].text;
     // NO_REPLY_NEEDED anywhere in the answer, not only as the whole of it.
     //
     // The prompt asks for the bare token, and the model usually obliges. Given

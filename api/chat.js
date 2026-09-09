@@ -1,3 +1,4 @@
+import { claudeText } from '../lib/claude-text.js';
 import { threadHeaders, lastInboundMessageId } from '../lib/email-thread.js';
 
 function normalizePhone(phone) {
@@ -93,7 +94,7 @@ async function anthropicMessage(payload) {
   });
   const data = await r.json();
   if (data.error) throw new Error(data.error.message);
-  return data.content[0].text;
+  return claudeText(data);
 }
 
 export default async function handler(req, res) {
@@ -323,7 +324,7 @@ Notes: ${notes || 'none'}`;
       });
       const claudeData = await claudeResponse.json();
       if (claudeData.error) throw new Error(claudeData.error.message);
-      smsMessage = claudeData.content[0].text;
+      smsMessage = claudeText(claudeData);
     }
 
     // Step 2: Claude writes email (or use override)
@@ -351,7 +352,7 @@ Notes: ${notes || 'none'}`;
         })
       });
       const emailData = await emailResponse.json();
-      const emailFull = emailData.content[0].text;
+      const emailFull = claudeText(emailData);
       const emailLines = emailFull.split('\n');
       emailSubject = emailLines[0].replace('Subject:', '').trim();
       emailBody = emailLines.slice(2).join('\n').trim();

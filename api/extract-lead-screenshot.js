@@ -1,3 +1,4 @@
+import { claudeText } from '../lib/claude-text.js';
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
@@ -61,13 +62,13 @@ Rules:
       res.status(502).json({ error: 'Extraction failed: ' + claudeData.error.message });
       return;
     }
-    if (!claudeData.content || !claudeData.content[0] || !claudeData.content[0].text) {
+    const rawText = claudeText(claudeData);
+    if (!rawText) {
       console.error('Unexpected Claude response shape:', JSON.stringify(claudeData).substring(0, 2000));
       res.status(502).json({ error: 'Extraction returned an unexpected response' });
       return;
     }
 
-    const rawText = claudeData.content[0].text.trim();
     const cleanText = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
 
     let extracted;

@@ -1,3 +1,4 @@
+import { claudeText } from '../lib/claude-text.js';
 import { threadHeaders, lastInboundMessageId } from '../lib/email-thread.js';
 
 function normalizePhone(phone) {
@@ -856,7 +857,7 @@ PRICING:
             console.error('Regenerate model error:', resp.status, lastReason);
             return null;
           }
-          const out = (data.content && data.content[0] && data.content[0].text) ? data.content[0].text : null;
+          const out = claudeText(data) || null;
           if (!out) lastReason = `${model}: empty completion`;
           return out;
         } catch(e) {
