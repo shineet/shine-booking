@@ -1029,19 +1029,68 @@ Only include this block once. Do not mention this block or its contents in the v
           ? [{ client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, email_message_id: inboundMsgId, cc_address: ccAddresses, created_at: inboundTs.toISOString() }]
           : [
               { client_id: client.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, email_message_id: inboundMsgId, cc_address: ccAddresses, created_at: inboundTs.toISOString() },
-              { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject, cc_address: ccAddresses, created_at: outboundTs.toISOString() }
+              // email_message_id explicitly null, not absent.
+              //
+              // PostgREST rejects a bulk insert whose objects do not all carry
+              // the SAME keys: "All object keys must match", 400, and the whole
+              // array is refused. Adding the id to the inbound row alone broke
+              // every insert that writes both rows -- so Christian Cline's email
+              // was never stored, no draft was queued, and the notification went
+              // out anyway saying a reply was waiting. A client's message lost
+              // in silence, which is the exact failure this column was added to
+              // help avoid.
+              { client_id: client.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject, email_message_id: null, cc_address: ccAddresses, created_at: outboundTs.toISOString() }
             ];
         const messagesRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
           body: JSON.stringify(rowsToInsert)
         });
+        let messagesSaved = messagesRes.ok;
         if (!messagesRes.ok) {
           const errBody = await messagesRes.text();
           console.error('Messages insert failed:', messagesRes.status, errBody);
+
+          // Their words are the one thing here that cannot be regenerated, so
+          // do not leave them only in a log line. Retry with the inbound
+          // message ALONE: whatever was wrong with the batch -- a bad column, a
+          // key mismatch, a draft that would not serialise -- the client's own
+          // email is the part that must survive it.
+          try {
+            const inboundOnly = rowsToInsert.filter((r) => r.direction === 'inbound');
+            if (inboundOnly.length) {
+              const retry = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+                body: JSON.stringify(inboundOnly)
+              });
+              if (!retry.ok) console.error('Inbound-only retry failed too:', retry.status, await retry.text());
+              else console.error('Inbound message saved on retry; the draft was lost.');
+            }
+          } catch (e) {
+            console.error('Inbound-only retry threw:', e.message);
+          }
+
+          // And tell Shine the truth about it, rather than the notification
+          // below telling him a reply is waiting when nothing was stored.
+          try {
+            await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
+              body: JSON.stringify({
+                from: 'Shine Booking Assistant <shine@texasmentalist.com>',
+                to: 'shinethementalist@gmail.com',
+                subject: `⚠️ Could not save the reply — ${client.name || fromEmail}`,
+                text: `An email came in from ${fromEmail} and the app failed to save it properly.\n\nWhat they wrote:\n"${emailBody}"\n\nThe AI had drafted:\n"${cleanReply}"\n\nNothing is waiting in the app. Reply from Gmail, or from the app after checking the conversation.\n\nError: ${messagesRes.status} ${errBody.slice(0, 300)}`
+              })
+            });
+          } catch (e) {
+            console.error('Failure alert failed too:', e.message);
+          }
         }
 
-        if (reviewMode && !noReplyNeeded) {
+        // Only claim a reply is waiting if one is actually there to review.
+        if (reviewMode && !noReplyNeeded && messagesSaved) {
           try {
             await fetch('https://api.resend.com/emails', {
               method: 'POST',
