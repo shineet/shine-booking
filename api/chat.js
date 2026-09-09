@@ -1,6 +1,26 @@
 import { claudeText } from '../lib/claude-text.js';
 import { threadHeaders, lastInboundMessageId } from '../lib/email-thread.js';
 
+/// Who the client copied on their last email to us, or null.
+async function lastInboundCc(clientId) {
+  if (!clientId) return null;
+  try {
+    const r = await fetch(
+      `${process.env.SUPABASE_URL}/rest/v1/messages` +
+      `?client_id=eq.${clientId}&channel=eq.email&direction=eq.inbound` +
+      `&cc_address=not.is.null&select=cc_address&order=created_at.desc&limit=1`,
+      { headers: { apikey: process.env.SUPABASE_SECRET_KEY,
+                   Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}` } });
+    const rows = await r.json();
+    const cc = Array.isArray(rows) && rows[0] ? rows[0].cc_address : null;
+    return cc && String(cc).trim() ? String(cc).trim() : null;
+  } catch (e) {
+    // Copying people in is a courtesy; failing to send is not.
+    console.error('lastInboundCc failed:', e.message);
+    return null;
+  }
+}
+
 function normalizePhone(phone) {
   if (!phone) return phone;
   // Strip everything except digits and leading +
@@ -148,6 +168,10 @@ Notes: ${notes || 'none'}`;
     try {
       const { clientId, channel, toPhone, toEmail, subject } = req.body;
       let body = req.body.body;
+      // Declared out here, not inside the email branch: the message row below
+      // is written for BOTH channels and reads it, and a const scoped to the
+      // branch throws a ReferenceError on every SMS send.
+      let ccList = null;
       if (channel === 'sms' && toPhone) {
         // Twilio hard-rejects any SMS body over 1600 chars -- truncate defensively
         // rather than let the send below fail on something Shine typed/edited.
@@ -161,12 +185,25 @@ Notes: ${notes || 'none'}`;
         const d = await r.json();
         if (d.status === 'failed' || d.error_code) throw new Error(d.message || 'SMS failed');
       } else if (channel === 'email' && toEmail) {
+        ccList = await lastInboundCc(clientId);
         const resendRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.RESEND_KEY}` },
           body: JSON.stringify({
             from: 'Shine, The Mentalist <shine@texasmentalist.com>',
             to: toEmail,
+            // Whoever the client copied stays copied.
+            //
+            // A reply approved from the Replies queue already carried the CC
+            // list forward; a message composed in the app did not, and dropped
+            // it silently. On a corporate booking that is the wrong way round:
+            // Christian Cline copied three people from his committee precisely
+            // so they would see the exchange, and answering him alone quietly
+            // cuts them out of their own event.
+            //
+            // Taken from the client's last inbound email rather than passed in,
+            // so it is right whether the reply is written today or next week.
+            ...(ccList ? { cc: ccList.split(',').map((x) => x.trim()).filter(Boolean) } : {}),
             subject: subject || 'Message from Shine, The Mentalist',
             text: body,
             // Composed in the app, often days after their last email, so this
@@ -209,6 +246,10 @@ Notes: ${notes || 'none'}`;
             status: 'sent',
             to_address: channel === 'email' ? toEmail : normalizePhone(toPhone),
             email_subject: channel === 'email' ? (subject || null) : null,
+            // Kept on the row so the conversation shows who else saw it, and so
+            // the NEXT reply inherits the same list rather than narrowing the
+            // thread one message at a time.
+            cc_address: channel === 'email' ? (ccList || null) : null,
             created_at: now
           })
         });
