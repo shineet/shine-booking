@@ -1,4 +1,4 @@
-import { hasGigOn, insertByDate, humanDate, prettyTime } from '../lib/family-note-server.js';
+import { hasGigOn, insertByDate, humanDate, prettyTime, gigLine, upsertGigLine } from '../lib/family-note-server.js';
 
 /**
  * Puts a confirmed gig on the shared family note, in date order.
@@ -13,7 +13,7 @@ import { hasGigOn, insertByDate, humanDate, prettyTime } from '../lib/family-not
  * worth a log and nothing more; the booking itself has already happened and
  * must not be undone by a note failing to update.
  */
-async function addGigToFamilyNote(dateISO, startTime) {
+async function addGigToFamilyNote(dateISO, startTime, clientName) {
   if (!dateISO) return;
   try {
     const base = process.env.SUPABASE_URL;
@@ -22,14 +22,22 @@ async function addGigToFamilyNote(dateISO, startTime) {
     const headers = { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` };
     const rows = await (await fetch(`${base}/rest/v1/family_note?id=eq.1&select=content`, { headers })).json();
     const content = (Array.isArray(rows) && rows[0] && rows[0].content) || '';
-    // Same dedupe rule the app uses, so the two paths cannot each add their own
-    // line for the same day.
-    if (hasGigOn(content, dateISO)) return;
-    const when = prettyTime(startTime);
-    const line = `${humanDate(dateISO)} Magic show${when ? ` at ${when}` : ''}`;
+    const line = gigLine(dateISO, startTime, clientName);
+    // upsert, not insert: if this app already wrote a line for the day it is
+    // rewritten in place, so a start time arriving later updates the row the
+    // household is already reading rather than adding a second one.
+    //
+    // hasGigOn still guards the case where a DIFFERENT line already mentions a
+    // gig that day -- one Nadia typed herself, or one worded by hand. Ours is
+    // recognised by upsertGigLine and replaced; anything else is left alone and
+    // nothing is added on top of it.
+    let updated = upsertGigLine(content, dateISO, line, clientName);
+    if (updated === content && hasGigOn(content, dateISO)) return;
+    if (updated === content) updated = insertByDate(content, dateISO, line);
+    if (updated === content) return;
     await fetch(`${base}/rest/v1/family_note?id=eq.1`, {
       method: 'PATCH', headers,
-      body: JSON.stringify({ content: insertByDate(content, dateISO, line) })
+      body: JSON.stringify({ content: updated })
     });
   } catch (e) {
     console.error('family note not updated:', e && e.message);
@@ -214,7 +222,7 @@ export default async function handler(req, res) {
 
         // The household finds out when the client confirms, not when Shine next
         // opens the app.
-        await addGigToFamilyNote(finalEventDate, booking && booking.start_time);
+        await addGigToFamilyNote(finalEventDate, booking && booking.start_time, finalClientName);
 
         if (booking) {
           const intakeLink = `https://shine-booking.vercel.app/intake.html?bid=${booking.id}`;

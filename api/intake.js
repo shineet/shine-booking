@@ -3,6 +3,7 @@
 // POST { action: 'send', clientId, clientName, clientEmail, eventType, fee }
 // POST { action: 'submit', bookingId, answers }
 
+import { gigLine, upsertGigLine } from '../lib/family-note-server.js';
 import { notify } from '../lib/apns.js';
 
 export default async function handler(req, res) {
@@ -284,6 +285,33 @@ export default async function handler(req, res) {
       });
       const bookingRows = await bookingRes.json();
       const booking = Array.isArray(bookingRows) ? bookingRows[0] : null;
+
+      // The start time has just arrived, so the household's line gets it too.
+      //
+      // A gig is booked long before anyone knows when it starts: the family
+      // note said "Magic show for Tammy Dendy" with no time, and the time
+      // turned up here, with the questionnaire. This rewrites that same row
+      // rather than adding a second one, and leaves any line reworded by hand
+      // alone.
+      if (booking?.event_date && booking?.start_time) {
+        try {
+          const base = process.env.SUPABASE_URL;
+          const key = process.env.SUPABASE_SECRET_KEY;
+          const hdrs = { 'Content-Type': 'application/json', apikey: key, Authorization: `Bearer ${key}` };
+          const noteRows = await (await fetch(`${base}/rest/v1/family_note?id=eq.1&select=content`, { headers: hdrs })).json();
+          const noteText = (Array.isArray(noteRows) && noteRows[0] && noteRows[0].content) || '';
+          const who = booking.client_name || '';
+          const updatedNote = upsertGigLine(noteText, booking.event_date,
+                                            gigLine(booking.event_date, booking.start_time, who), who);
+          if (updatedNote !== noteText) {
+            await fetch(`${base}/rest/v1/family_note?id=eq.1`, {
+              method: 'PATCH', headers: hdrs, body: JSON.stringify({ content: updatedNote })
+            });
+          }
+        } catch (e) {
+          console.error('family note time update failed:', e && e.message);
+        }
+      }
 
       // Update client status
       if (booking?.client_id) {
