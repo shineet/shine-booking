@@ -45,6 +45,32 @@ export default async function handler(req, res) {
   try {
     const { clientId, name, contact, category, tier, label, price, readyToBook, format, strollingDurationMinutes } = req.body;
 
+    // A selection has to name a package and a price.
+    //
+    // Without this the endpoint accepted a request carrying only a category and
+    // wrote a lead whose note read "Selected package: Private -- undefined
+    // ($undefined)", with no name, no email and no phone: a row on the Leads
+    // board that nobody can ever act on, chase or delete with confidence.
+    // Rejecting here rather than patching the page covers every route into this
+    // endpoint, including ones written later.
+    const priceNum = Number(price);
+    if (!label || !Number.isFinite(priceNum) || priceNum <= 0) {
+      console.error('select-package: refused a selection with no package', { category, tier, label, price });
+      res.status(400).json({ error: 'A package and price are required.' });
+      return;
+    }
+
+    // And when there is no existing client, SOMETHING has to identify them.
+    //
+    // The page asks for a name and an email or phone before confirming, so a
+    // request with neither did not come from a person filling the form in. A
+    // lead with no way to reach it is not a lead.
+    if (!clientId && !name && !contact) {
+      console.error('select-package: refused an anonymous selection with no contact');
+      res.status(400).json({ error: 'A name or contact is required.' });
+      return;
+    }
+
     const formatNote = format === 'strolling'
       ? ` (Strolling, ${strollingDurationMinutes ? (strollingDurationMinutes / 60) + 'hr' : ''})`
       : '';
