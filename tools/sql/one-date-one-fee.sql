@@ -11,6 +11,7 @@
 --   7-message-media.sql   the bucket and column for client photos and video
 --   8-repair-base64-messages.sql  decode messages stored as base64 pre-83de302
 --   9-backfill-family-note-names.sql  put client names on older gig lines
+--   10-lead-start-time.sql  clients.start_time, so a lead can hold an hour
 --
 -- Copy one to the clipboard with, e.g.:
 --   pbcopy < tools/sql/1-check-drift.sql
