@@ -5,7 +5,7 @@
 // match the existing client and created a duplicate lead instead. % and _ are
 // escaped since ilike treats them as wildcards.
 import { claudeText } from '../lib/claude-text.js';
-import { notifyNewReply } from '../lib/apns.js';
+import { notifyNewReply, notifyNewLead } from '../lib/apns.js';
 import { extractMessageId, threadHeaders, lastInboundMessageId } from '../lib/email-thread.js';
 
 function emailIlikeParam(email) {
@@ -503,8 +503,16 @@ export default async function handler(req, res) {
 
         // Dedup vs the direct webform path (api/intake.js action=webform). If that
         // call already created this lead in the last 10 min, it has done the insert,
-        // the message log, and the alert -- so here we stay silent (just touch
-        // activity) to avoid a duplicate lead entry and a duplicate alert email.
+        // the message log, the alert email AND the push -- so here we stay silent
+        // (just touch activity) to avoid a duplicate lead entry and a duplicate
+        // alert.
+        //
+        // This comment used to claim the webform path did "the alert", and it
+        // only ever sent the email. That wrong assumption is the likeliest
+        // reason nobody noticed website leads never reached the phone: this side
+        // believed the other side had it covered, and the other side had no push
+        // in it at all. Both send one now, and the dedup below is what keeps
+        // that from becoming two.
         if (client && String(client.lead_source || '').startsWith('Website form') && client.created_at) {
           const ageMs = Date.now() - new Date(client.created_at).getTime();
           if (ageMs >= 0 && ageMs < 10 * 60 * 1000) {
@@ -575,6 +583,15 @@ export default async function handler(req, res) {
             text: `A new lead came in from your website contact form and is now in the app.\n\nName: ${leadName}\nEmail: ${clientEmail}\n${company ? 'Company: ' + company + '\n' : ''}${eventType ? 'Event type: ' + eventType + '\n' : ''}${eventDate ? 'Event date: ' + eventDate + '\n' : ''}${guests ? 'Guests: ' + guests + '\n' : ''}${phone ? 'Phone: ' + phone + '\n' : ''}${messageVal ? '\nMessage: ' + messageVal + '\n' : ''}\nReply from the ShineBooking app, under Leads.`
           })
         });
+
+        // The fallback path needs the push too. It is the one that runs when the
+        // direct endpoint did NOT fire -- the site could not reach it, or the
+        // form emailed in without posting -- which is exactly when a lead is
+        // most at risk of being missed. Leaving it email-only would have fixed
+        // the common case and left the failure case silent.
+        try {
+          await notifyNewLead({ clientName: leadName, source: 'website' });
+        } catch (pushErr) { console.error('Wix-form lead push failed:', pushErr.message); }
 
         res.status(200).json({ received: true, wixForm: true, leadCreated: !!client });
         return;
@@ -1248,9 +1265,12 @@ Only include this block once. Do not mention this block or its contents in the v
             console.error('New-lead notification failed:', notifyErr.message);
           }
           try {
-            await notifyNewReply({ clientName: leadName || fromEmail, channel: 'email' });
+            // Was notifyNewReply, which made the phone say "Reply waiting for
+            // review -- a draft is ready to send" about somebody who had never
+            // written before. The event is a new lead; say that.
+            await notifyNewLead({ clientName: leadName || fromEmail, source: 'email' });
           } catch(pushErr) {
-            console.error('Push notify failed:', pushErr.message);
+            console.error('New-lead push failed:', pushErr.message);
           }
         }
       } catch(e) {

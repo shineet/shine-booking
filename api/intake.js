@@ -4,7 +4,7 @@
 // POST { action: 'submit', bookingId, answers }
 
 import { gigLine, upsertGigLine } from '../lib/family-note-server.js';
-import { notify } from '../lib/apns.js';
+import { notify, notifyNewLead } from '../lib/apns.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -465,6 +465,18 @@ export default async function handler(req, res) {
           text: `A new lead came in from your website contact form and is now in the app.\n\nName: ${leadName}\nEmail: ${clientEmail}\n${company ? 'Company: ' + company + '\n' : ''}${eventType ? 'Event type: ' + eventType + '\n' : ''}${eDate ? 'Event date: ' + eDate + '\n' : ''}${guests ? 'Guests: ' + guests + '\n' : ''}${phone ? 'Phone: ' + phone + '\n' : ''}${messageVal ? '\nMessage: ' + messageVal + '\n' : ''}\nReply from the ShineBooking app, under Leads.`
         })
       });
+
+      // Push as well as the email. This is the PRIMARY way a lead arrives --
+      // the website form posts straight here -- and it was the one path with no
+      // push at all: the direct endpoint landed 2026-07-11, six weeks before
+      // push existed, and nobody came back to wire it. So the route most leads
+      // take was the route that never reached the phone.
+      //
+      // Best-effort, like every other call site. A push that fails must never
+      // fail the lead capture; the email has already gone either way.
+      try {
+        await notifyNewLead({ clientName: leadName, source: 'website' });
+      } catch (pushErr) { console.error('New website lead push failed:', pushErr.message); }
 
       return res.status(200).json({ success: true, leadCreated: !!client, clientId: client?.id || null });
     } catch (e) {
