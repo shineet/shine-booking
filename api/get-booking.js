@@ -1,4 +1,6 @@
 import { signedMediaUrl } from '../lib/message-media.js';
+import { claudeText } from '../lib/claude-text.js';
+import { makeToken, tokenValid } from '../lib/dashboard-token.js';
 import crypto from 'node:crypto';
 
 // family_events is read-only in practice: it is written by the Mac-side
@@ -323,19 +325,9 @@ async function sendUpcomingHeadsUp() {
   }
 }
 
-// Session token = one-way hash of the dashboard password + the server secret key.
-// Reveals nothing if intercepted; only matches if the holder logged in with the real password.
-function makeToken() {
-  return crypto.createHash('sha256')
-    .update(String(process.env.DASHBOARD_PASSWORD || '') + '|' + String(process.env.SUPABASE_SECRET_KEY || ''))
-    .digest('hex');
-}
-function tokenValid(t) {
-  if (!t || typeof t !== 'string' || !process.env.DASHBOARD_PASSWORD) return false;
-  const a = Buffer.from(t);
-  const b = Buffer.from(makeToken());
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
+// Session token: see lib/dashboard-token.js. Moved there so the screenshot
+// extractor can check the SAME token rather than grow a second copy of this
+// comparison -- it had none at all.
 
 // A separate, weaker credential for the family page (family.html), so Shine's
 // wife can edit the shared note without the dashboard password -- which would
@@ -427,6 +419,110 @@ export default async function handler(req, res) {
       const ok = supplied.length === real.length && crypto.timingSafeEqual(supplied, real);
       if (!ok) { res.status(401).json({ error: 'Wrong PIN.' }); return; }
       res.status(200).json({ token: makeTripToken() });
+      return;
+    }
+
+    // Read a photographed receipt and hand back what it says, so an expense is
+    // checked rather than typed.
+    //
+    // HERE, rather than in its own api/ file, because api/ is at exactly 12
+    // functions and Vercel Hobby refuses the thirteenth -- the build fails, it
+    // does not degrade. This is also the right home regardless: the trip token
+    // already lives in this file, and the trip page already talks to nothing
+    // else.
+    //
+    // It PREFILLS and never saves. A number read off a photograph going
+    // straight into a settlement is how money goes quietly wrong between
+    // friends, and the one thing a receipt cannot tell you is the two things
+    // the split actually turns on: who paid, and who was in on it.
+    if (body.action === 'trip_receipt') {
+      if (!tripTokenValid(body.token)) {
+        res.status(401).json({ error: 'unauthorized' }); return;
+      }
+      if (!process.env.ANTHROPIC_KEY) {
+        res.status(500).json({ error: 'Receipt reading is not configured on the server.' }); return;
+      }
+      const img = body.image || {};
+      if (!img.data || typeof img.data !== 'string') {
+        res.status(400).json({ error: 'No photo received.' }); return;
+      }
+      // The browser downscales before sending; this is the backstop. Base64 is
+      // about 4/3 of the bytes, so this is roughly a 5 MB photo.
+      if (img.data.length > 7000000) {
+        res.status(413).json({ error: 'That photo is too large. Try again, or type the amount in.' }); return;
+      }
+      const mediaType = ['image/jpeg', 'image/png', 'image/webp', 'image/heic']
+        .includes(img.mediaType) ? img.mediaType : 'image/jpeg';
+      // The trip's own dates, so a receipt dated the 13th files against the
+      // 13th instead of being matched to nothing.
+      const dates = Array.isArray(body.dates)
+        ? body.dates.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(0, 40) : [];
+
+      const prompt = `This is a photograph of a receipt from a trip to Spain. Read it and return what it says.
+
+Respond with ONLY a JSON object, no other text, no markdown, no code fences:
+{"amount": "42.50", "currency": "EUR", "description": "Dinner at Botin", "date": "2026-10-13", "note": null}
+
+Rules:
+- amount: the FINAL TOTAL actually paid, as a plain number with two decimals and no symbol. Not the subtotal, not the pre-tip line, not any single item. If a tip or service was added, the total INCLUDING it is what was paid. If you cannot find a total with confidence, set amount to null rather than guessing a number.
+- currency: "EUR" or "USD", read from the symbol or wording on the receipt. This matters more than it looks: everything is settled in euros, so guessing it wrong misprices the whole bill. If the receipt shows no symbol at all and you are only inferring from the country, still answer, but say so in note.
+- description: a short, plain name for what this was, the kind of thing a person would write. Prefer the restaurant or shop name if it is on the receipt ("Dinner at Botin", "Taxi to Sants", "Sagrada Familia tickets"). Not a list of items, not a transaction id.
+- date: the date on the receipt as YYYY-MM-DD, or null if none is legible.${dates.length ? ' The trip runs across these dates, so prefer whichever one matches: ' + dates.join(', ') + '. If the receipt date is not one of them, still return what the receipt says.' : ''}
+- note: null when the receipt was clear. Otherwise ONE short sentence saying what was unclear and what you assumed, so it can be checked. Say it plainly, to a person.
+- Never invent a value to fill a field. null is a real answer and is always better than a plausible number.`;
+
+      try {
+        const r = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': process.env.ANTHROPIC_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-opus-5',
+            max_tokens: 1000,
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'image', source: { type: 'base64', media_type: mediaType, data: img.data } },
+                { type: 'text', text: prompt },
+              ],
+            }],
+          }),
+        });
+        if (!r.ok) {
+          console.error('receipt read failed:', r.status, (await r.text()).slice(0, 300));
+          res.status(502).json({ error: 'Could not read that receipt. Type the amount in instead.' });
+          return;
+        }
+        const data = await r.json();
+        // claudeText, not content[0].text: a reply can lead with a thinking
+        // block, and block zero then has no text at all.
+        const text = claudeText(data);
+        let parsed = null;
+        try {
+          parsed = JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim());
+        } catch (parseErr) {
+          console.error('receipt JSON unparseable:', text.slice(0, 300));
+          res.status(502).json({ error: 'Could not read that receipt. Type the amount in instead.' });
+          return;
+        }
+        // Handed back narrowed and validated. Whatever the model said, the
+        // client only ever sees a shape it can put straight into the form.
+        const amount = typeof parsed.amount === 'string' || typeof parsed.amount === 'number'
+          ? String(parsed.amount).trim() : '';
+        res.status(200).json({
+          amount: /^\d+(\.\d{1,2})?$/.test(amount) ? amount : '',
+          currency: parsed.currency === 'USD' ? 'USD' : 'EUR',
+          description: typeof parsed.description === 'string' ? parsed.description.slice(0, 120) : '',
+          date: /^\d{4}-\d{2}-\d{2}$/.test(String(parsed.date || '')) ? parsed.date : null,
+          note: typeof parsed.note === 'string' && parsed.note.trim() ? parsed.note.trim().slice(0, 200) : null,
+        });
+      } catch (e) {
+        console.error('receipt read error:', e.message);
+        res.status(502).json({ error: 'Could not read that receipt. Type the amount in instead.' });
+      }
       return;
     }
 

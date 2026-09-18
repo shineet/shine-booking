@@ -1,4 +1,14 @@
+// Reads screenshots of a client inquiry into lead fields, using a vision model.
+//
+// AUTHENTICATED SINCE 2026-09-17. It had no check of any kind: POST here with
+// any images and the server would call a paid model and answer. The URL is
+// guessable, the endpoint is CORS-open, and nothing would have reported the
+// abuse -- the first sign would have been the Anthropic bill. It is called only
+// by the ShineBooking app, which already holds a dashboard token, so the fix
+// costs the caller one field.
 import { claudeText } from '../lib/claude-text.js';
+import { tokenValid } from '../lib/dashboard-token.js';
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
@@ -8,7 +18,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { images } = req.body; // array of { data: base64string, mediaType: 'image/png' etc }
+    const { images, token } = req.body; // array of { data: base64string, mediaType: 'image/png' etc }
+
+    // Before anything is read, and before the model is called: the point of
+    // this gate is that an unauthorised request costs nothing.
+    if (!tokenValid(token)) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
 
     if (!images || !Array.isArray(images) || images.length === 0) {
       res.status(400).json({ error: 'No images provided' });

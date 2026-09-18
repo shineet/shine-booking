@@ -128,6 +128,15 @@
   .owe:last-child { border-bottom: 0; }
   .owe .who { font-weight: 600; }
   .owe .amt { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
+  /* The receipt button. A label rather than a button because it fronts a file
+     input, which is what opens the camera on a phone. */
+  .shot {
+    display: block; text-align: center; margin: 4px 0 2px;
+    padding: 12px; border: 1px dashed var(--line); border-radius: 12px;
+    color: var(--accent); font-size: 15px; font-weight: 600; background: var(--bg);
+  }
+  .shot:active { background: var(--line); }
+  .shot.busy { color: var(--muted); border-style: solid; }
   .settled { padding: 16px 14px; color: var(--good); font-weight: 600; }
   .totals { display: flex; gap: 0; padding: 12px 0 14px; }
   .totals div { flex: 1; text-align: center; }
@@ -243,6 +252,16 @@
 <div id="esheet" onclick="if(event.target===this) closeExpense()" style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:flex-end;z-index:20">
   <div class="panel" style="background:var(--card);width:100%;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom));max-width:680px;margin:0 auto">
     <h3 id="e-title">Add an expense</h3>
+    <!-- First, because it is the shortcut past the rest of this form. Reading
+         the receipt fills the amount, the currency, what it was and the day;
+         who paid and who is splitting stay yours, because a receipt does not
+         know either and those are what the split turns on. -->
+    <label for="e-photo" class="shot" id="e-shot-label">
+      <span id="e-shot-text">📷  Photograph the receipt</span>
+    </label>
+    <input id="e-photo" type="file" accept="image/*" capture="environment"
+           style="display:none" onchange="readReceipt(this)">
+    <div class="err" id="e-shot-note" style="color:var(--muted)"></div>
     <div class="row">
       <div>
         <label for="e-amount">Amount</label>
@@ -1012,6 +1031,9 @@ function openExpense(e, prefill) {
     splitWith = new Set(people.filter(p => presentOn(p, dsel.value)).map(p => p.id));
     renderSplitChips();
   };
+  // A fresh sheet, so last receipt's "check the amount" is not sitting over a
+  // figure somebody typed by hand this time.
+  resetShot();
   document.getElementById('esheet').style.display = 'flex';
 }
 
@@ -1035,6 +1057,110 @@ function renderSplitChips() {
 function closeExpense() {
   document.getElementById('esheet').style.display = 'none';
   editingExpense = null;
+  resetShot();
+}
+
+// ── Reading a receipt ───────────────────────────────────────────────────────
+function resetShot() {
+  const l = document.getElementById('e-shot-label');
+  l.classList.remove('busy');
+  document.getElementById('e-shot-text').textContent = '📷  Photograph the receipt';
+  document.getElementById('e-shot-note').textContent = '';
+  document.getElementById('e-photo').value = '';
+}
+
+/// Shrink the photo before it ever leaves the phone.
+///
+/// A modern phone camera produces a 3 to 5 MB image, and base64 adds a third
+/// on top. Sending that from hotel wifi in Spain is slow enough that somebody
+/// gives up and types the number instead, which is the thing this is meant to
+/// save. 1600px on the long edge is more than enough to read a receipt.
+///
+/// It also fixes orientation for free: drawing to a canvas bakes in whatever
+/// rotation the browser applied, so a photo taken sideways does not reach the
+/// model upside down.
+function shrinkImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const max = 1600;
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const dataURL = c.toDataURL('image/jpeg', 0.8);
+      resolve(dataURL.slice(dataURL.indexOf(',') + 1));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('unreadable')); };
+    img.src = url;
+  });
+}
+
+async function readReceipt(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const label = document.getElementById('e-shot-label');
+  const text = document.getElementById('e-shot-text');
+  const note = document.getElementById('e-shot-note');
+  label.classList.add('busy');
+  text.textContent = 'Reading the receipt…';
+  note.textContent = '';
+
+  try {
+    const data = await shrinkImage(file);
+    const r = await api('trip_receipt', {
+      token: TOKEN,
+      image: { data, mediaType: 'image/jpeg' },
+      dates: days.map(d => d.date),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      label.classList.remove('busy');
+      text.textContent = '📷  Try another photo';
+      note.textContent = j.error || 'Could not read that one.';
+      note.style.color = '#b03a2e';
+      input.value = '';
+      return;
+    }
+
+    // PREFILLED, never saved. Everything below is still editable, and the
+    // Save button is still the thing that commits it.
+    if (j.amount) document.getElementById('e-amount').value = j.amount;
+    if (j.currency) document.getElementById('e-cur').value = j.currency;
+    if (j.description && !document.getElementById('e-what').value.trim()) {
+      document.getElementById('e-what').value = j.description;
+    }
+    const dsel = document.getElementById('e-date');
+    if (j.date && Array.from(dsel.options).some(o => o.value === j.date)) {
+      dsel.value = j.date;
+      // The day decides who was even there, so re-pick the split the way
+      // changing the day by hand would.
+      if (!editingExpense) {
+        splitWith = new Set(people.filter(p => presentOn(p, j.date)).map(p => p.id));
+        renderSplitChips();
+      }
+    }
+
+    label.classList.remove('busy');
+    text.textContent = '📷  Photograph a different receipt';
+    note.style.color = 'var(--muted)';
+    // Two things are said plainly: check it, and anything the model was
+    // unsure about. A number read off a photograph should never look as
+    // settled as one somebody typed.
+    const bits = ['Check the amount before saving.'];
+    if (!j.amount) bits.push('It could not find a total.');
+    if (j.note) bits.push(j.note);
+    note.textContent = bits.join(' ');
+  } catch (e) {
+    label.classList.remove('busy');
+    text.textContent = '📷  Try another photo';
+    note.style.color = '#b03a2e';
+    note.textContent = 'That photo could not be read. Type the amount in instead.';
+    input.value = '';
+  }
 }
 
 // Reads "42.50" as 4250, off the text rather than by multiplying a float.
