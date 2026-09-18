@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<!-- DO NOT ADD A WEB APP MANIFEST HERE without re-reading showAddToHome().
+     With no manifest, both iOS and Android save the CURRENT url when somebody
+     adds this to their home screen -- which is what lets the PIN be put back
+     in the hash for that moment and carried into the shortcut. A manifest
+     would make Android use its start_url instead, which cannot contain the
+     PIN, and every Android shortcut would silently go back to asking for it. -->
 <meta name="apple-mobile-web-app-title" content="Spain">
 <meta name="theme-color" content="#faf8f2">
 <title>Spain</title>
@@ -187,11 +193,7 @@
        tapped, and the link arrives with the PIN already stripped. -->
   <div id="a2hs" class="hidden">
     <b>Save this trip to your home screen</b>
-    <ol>
-      <li>Tap <b>Share</b> at the bottom of Safari</li>
-      <li>Tap <b>Add to Home Screen</b></li>
-      <li>Come back here and tap Done</li>
-    </ol>
+    <ol id="a2hs-steps"></ol>
     <p>The address bar is showing the trip PIN right now, just so iOS saves it with the shortcut. Tapping Done hides it again. After this the icon opens straight into the trip with nothing to type, ever.</p>
     <button class="linkish" onclick="doneAddToHome()">Done</button>
   </div>
@@ -1266,11 +1268,30 @@ async function deleteExpense() {
 // So: put the hash back for the few seconds iOS needs to read it, and take it
 // away again. The protection is unchanged the rest of the time, and in the
 // saved app there is no address bar at all, so it is never on screen there.
+/// The steps, in the words of the phone actually holding this.
+///
+/// Two of the eight are on Android, and "Tap Share at the bottom of Safari"
+/// is not a thing that exists there. Instructions somebody cannot follow are
+/// worse than none: they read as the page being broken.
+function addToHomeSteps() {
+  const android = /Android/i.test(navigator.userAgent);
+  const steps = android
+    ? ['Tap the <b>\u22EE</b> menu, top right of Chrome',
+       'Tap <b>Add to Home screen</b>',
+       'Come back here and tap Done']
+    : ['Tap <b>Share</b> at the bottom of Safari',
+       'Tap <b>Add to Home Screen</b>',
+       'Come back here and tap Done'];
+  document.getElementById('a2hs-steps').innerHTML =
+    steps.map((t) => '<li>' + t + '</li>').join('');
+}
+
 function showAddToHome() {
   if (!PIN) {
     alert('This device does not have the trip PIN stored, so the shortcut cannot be saved with it. Open the link Shine sent you again, then try this.');
     return;
   }
+  addToHomeSteps();
   history.replaceState(null, '', location.pathname + '#' + PIN);
   document.getElementById('a2hs').classList.remove('hidden');
   document.getElementById('a2hs').scrollIntoView({ block: 'center' });
