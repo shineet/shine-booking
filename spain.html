@@ -7,7 +7,6 @@
 <meta name="apple-mobile-web-app-title" content="Spain">
 <meta name="theme-color" content="#faf8f2">
 <title>Spain</title>
-<script src="lib/trip-line.js"></script>
 <style>
   :root {
     --bg:#faf8f2; --card:#fffdf8; --ink:#2b2b2b; --muted:#8a8578;
@@ -35,82 +34,47 @@
   .who b { color: var(--ink); font-weight: 600; }
   .linkish { color: var(--accent); font-weight: 600; background: none; border: 0; padding: 0; font-size: 13px; }
 
-  /* ── The plan, as a note ──────────────────────────────────────────────────
-     Day headings and typed lines, not cards and rows. The cards were read as
-     an app: eight chrome elements around every entry, on a page that is mostly
-     READ. A heading and a rule is what a note looks like, and the family
-     calendar is the one on this account people actually type into. */
-  .day { margin: 0 0 26px; }
-  .day-head {
-    display: flex; align-items: baseline; gap: 8px;
-    padding: 0 0 5px; border-bottom: 1px solid var(--line); margin-bottom: 6px;
-  }
-  .day-head .d { font-weight: 700; font-size: 15px; }
+  .day, .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; margin-bottom: 14px; overflow: hidden; }
+  .day-head, .card-head { display: flex; align-items: baseline; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
+  .day-head .d, .card-head .d { font-weight: 700; font-size: 16px; }
   .day-head .city { color: var(--accent); font-weight: 600; font-size: 14px; }
-  /* Today, so it is obvious why the page opened where it did. A word, not a
-     pill: a coloured badge on a page of plain text is the loudest thing on it. */
-  .day-head .now { margin-left: auto; font-size: 12px; color: var(--accent); font-weight: 600; }
-
-  /* One entry. The whole block is monospace, which is most of what makes the
-     family note read as a note rather than as a list of records. */
-  .line { padding: 3px 0; }
-  .line .txt {
-    font: 15px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
-    white-space: pre-wrap; word-break: break-word; padding: 3px 2px;
-    border-radius: 6px; cursor: text;
-  }
-  .line .txt:active { background: #f2eee2; }
-  .line.booked .txt { color: var(--good); }
-  /* The second line of an entry: who added it, and the two things you can do
-     with it. Quiet enough to skip when reading, there when looking for it. */
-  .line .meta { font-size: 12px; color: var(--muted); padding: 0 2px 2px; }
-  .line .meta button, .line .meta a {
-    background: none; border: 0; padding: 0; font-size: 12px;
-    color: var(--accent); font-weight: 600; text-decoration: none;
-  }
-  .line .meta .sep { color: var(--line); padding: 0 5px; }
-
-  /* The editor. Replaces the text in place rather than opening over it, so the
-     line you tapped stays exactly where it was on the page. */
-  .entry {
-    width: 100%; font: 15px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
-    border: 0; border-left: 2px solid var(--accent); outline: none; resize: none;
-    background: #fffdf6; color: var(--ink); padding: 3px 2px 3px 8px;
-    border-radius: 0 6px 6px 0; overflow: hidden; display: block;
-  }
-  /* Tapping this starts a new entry. Not a button: it is the blank line at the
-     end of a list, which is where you type in a note. */
-  .newline {
-    font: 15px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
-    color: var(--muted); padding: 4px 2px; cursor: text;
-  }
-  .empty { color: var(--muted); font-size: 14px; padding: 2px 2px 4px; }
-
-  /* What the syntax is, permanently on screen. Eight people use this page and
-     none of them wrote the rules; the family note keeps the same bar for the
-     same reason. */
-  #hint {
-    font-size: 12.5px; line-height: 1.6; color: var(--muted);
-    padding: 0 0 12px; margin-bottom: 14px; border-bottom: 1px solid var(--line);
-  }
-  #hint code {
-    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-    background: #f0ece0; border-radius: 4px; padding: 1px 5px; color: var(--ink);
+  .day-head .n, .card-head .n { margin-left: auto; font-size: 12px; color: var(--muted); }
+  /* Today, so it is obvious why the page opened where it did. */
+  .day.today { border-color: var(--accent); }
+  .day-head .now {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: #fff; background: var(--accent); border-radius: 999px; padding: 2px 8px;
   }
 
-  /* ── Money ──────────────────────────────────────────────────────────────── */
-  .card { margin: 0 0 22px; }
-  .card-head {
-    display: flex; align-items: baseline; gap: 8px;
-    padding: 0 0 5px; border-bottom: 1px solid var(--line); margin-bottom: 8px;
+  .item { display: flex; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); align-items: flex-start; }
+  .item:last-child { border-bottom: 0; }
+  .item .t { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); min-width: 68px; padding-top: 2px; }
+  .item .body { flex: 1; min-width: 0; }
+  .item .title { font-weight: 600; }
+  .item .detail, .item .by { font-size: 13px; color: var(--muted); }
+  .item .detail { white-space: pre-wrap; word-break: break-word; }
+  .item.booked .title { color: var(--good); }
+  .tag { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .map { font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 600; }
+  /* A deliberate target, not the whole row.
+     The row used to be the button, so reading the plan and opening an editor
+     with a Delete in it were the same gesture. This page is mostly read, by
+     eight people, on phones. */
+  .item .edit {
+    flex: 0 0 auto; width: 44px; height: 44px; margin: -6px -6px -6px 0;
+    background: none; border: 0; color: var(--muted); font-size: 17px;
+    display: flex; align-items: center; justify-content: center; border-radius: 10px;
   }
-  .card-head .d { font-weight: 700; font-size: 15px; }
-  .card-head .n { margin-left: auto; font-size: 12px; color: var(--muted); }
-  h2.section {
-    font-size: 15px; font-weight: 700; margin: 34px 0 14px;
-    padding-top: 22px; border-top: 1px solid var(--line);
+  .item .edit:active, .item .cost:active { background: var(--line); }
+  /* Sits beside the pencil. Says "cost" rather than a currency symbol, because
+     an expense can be in either currency and the sheet asks which. */
+  .item .cost {
+    flex: 0 0 auto; height: 44px; padding: 0 8px; margin: -6px 0;
+    background: none; border: 0; color: var(--accent); font-size: 13px; font-weight: 600;
+    border-radius: 10px;
   }
-  .add { display: block; width: 100%; text-align: left; padding: 8px 2px; background: none; border: 0; color: var(--accent); font-size: 14px; font-weight: 600; }
+  .add { display: block; width: 100%; text-align: left; padding: 11px 14px; background: none; border: 0; color: var(--accent); font-size: 15px; font-weight: 600; }
+  .empty { padding: 12px 14px; color: var(--muted); font-size: 14px; }
 
   /* Editor sheet */
   #sheet { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: flex-end; z-index: 20; }
@@ -139,9 +103,13 @@
   button.ghost { background: none; border: 1px solid var(--line); border-radius: 12px; padding: 13px 16px; font-size: 16px; color: var(--ink); }
   button.danger { background: none; border: 0; color: #b03a2e; font-size: 15px; padding: 13px 4px; font-weight: 600; }
 
-  /* The tabs are gone. Plan and Money are one scroll now, because a note does
-     not have modes -- and because the two were never independent: recording
-     what something cost starts from the thing in the plan. */
+  /* Tabs */
+  .tabs { display: flex; gap: 6px; margin: 0 0 14px; }
+  .tabs button {
+    flex: 1; padding: 9px; border: 1px solid var(--line); background: var(--card);
+    border-radius: 11px; font-size: 15px; font-weight: 600; color: var(--muted);
+  }
+  .tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
   /* Money */
   .chips { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -193,23 +161,18 @@
     <span>You are <b id="me">—</b></span>
     <button class="linkish" onclick="askName()">change</button>
     <span style="margin-left:auto"></span>
-    <button class="linkish" onclick="goToMoney()">money</button>
     <button class="linkish" onclick="shiftDates()">trip dates</button>
   </div>
 
-  <div id="hint">
-    Tap any line to change it, or the blank line under a day to add one.
-    <code>9:30</code> or <code>morning</code> at the start is the time,
-    <code>@place</code> opens in Maps, <code>#food</code> is the kind, and
-    <code>✓</code> means booked and paid.
-    Anything else is just the name.
+  <div class="tabs">
+    <button id="tab-plan" class="on" onclick="showTab('plan')">Plan</button>
+    <button id="tab-money" onclick="showTab('money')">Money</button>
   </div>
 
   <div id="stale" class="offline hidden"></div>
   <div id="days"></div>
 
-  <div id="money">
-    <h2 class="section">Money</h2>
+  <div id="money" class="hidden">
     <div class="totals">
       <div><div class="n" id="m-total">-</div><div class="l">spent together</div></div>
       <div><div class="n" id="m-each">-</div><div class="l">each, so far</div></div>
@@ -332,7 +295,7 @@ let cameFromPlan = false;
 let hasJumped = false;
 
 function jumpToToday() {
-  if (hasJumped) return;
+  if (hasJumped || tab !== 'plan') return;
   const day = dayToOpenOn(days, todayISO());
   if (!day) { hasJumped = true; return; }
   const card = document.querySelector('[data-day="' + day.id + '"]');
@@ -340,7 +303,7 @@ function jumpToToday() {
   hasJumped = true;
   if (card.scrollIntoView) card.scrollIntoView({ block: 'start' });
 }
-let moneyReady = true;
+let tab = 'plan', moneyReady = true;
 
 // ── Server ──────────────────────────────────────────────────────────────────
 async function api(action, extra) {
@@ -515,27 +478,6 @@ function fmtDay(iso) {
 
 function render() {
   renderMoney();
-  // Somebody is typing. The page reloads itself every twenty seconds and
-  // rebuilds this list from scratch, which would take the textarea, the caret
-  // and the half-written line with it -- the same shape as the repertoire
-  // search box that lost focus on every keystroke, and far worse here because
-  // what is lost is what they wrote.
-  //
-  // Money is still refreshed above: it has no editor in it, and somebody else
-  // adding an expense while you type should still show up.
-  if (openEditor) return;
-
-  // Every line on this page is drawn by the parser, so if that file did not
-  // load there is nothing to draw and the plan would simply be blank -- with
-  // the flights and hotels of eight people apparently gone. Say what happened
-  // instead. Reloading is the fix, and a stale cached page is the likely cause.
-  if (typeof TripLine === 'undefined') {
-    const host = document.getElementById('days');
-    host.textContent = '';
-    host.appendChild(el('div', 'offline',
-      'The plan could not be drawn because part of the page did not load. Nothing is lost. Pull down to reload.'));
-    return;
-  }
   // Queued after the cards exist. Only ever once: the page refreshes itself
   // every twenty seconds, and yanking it back to today while somebody is
   // reading Thursday would be worse than not jumping at all.
@@ -553,6 +495,7 @@ function render() {
     const card = el('div', 'day');
     card.dataset.day = day.id;
     const isToday = day.date === todayISO();
+    if (isToday) card.classList.add('today');
 
     const head = el('div', 'day-head');
     head.appendChild(el('span', 'd', fmtDay(day.date)));
@@ -561,124 +504,18 @@ function render() {
     city.onclick = () => editCity(day);
     head.appendChild(city);
     if (isToday) head.appendChild(el('span', 'now', 'today'));
+    head.appendChild(el('span', 'n', mine.length ? mine.length + (mine.length === 1 ? ' thing' : ' things') : ''));
     card.appendChild(head);
 
-    if (!mine.length) card.appendChild(el('div', 'empty', 'Nothing yet.'));
+    if (!mine.length) card.appendChild(el('div', 'empty', 'Nothing planned yet.'));
 
-    for (const it of mine) card.appendChild(lineRow(it));
+    for (const it of mine) card.appendChild(itemRow(it));
 
-    // The blank line at the end of a list, which is where you type in a note.
-    const blank = el('div', 'newline', '+ type here');
-    blank.onclick = () => startEditing(blank, null, day);
-    card.appendChild(blank);
+    const add = el('button', 'add', '+  Add something');
+    add.onclick = () => openSheet(day, null);
+    card.appendChild(add);
 
     host.appendChild(card);
-  }
-}
-
-// ── A line you can type into ────────────────────────────────────────────────
-// Only ever one editor open at a time, held here so a refresh landing mid-edit
-// knows to leave that line alone.
-let openEditor = null;
-
-/// Swap a rendered line for a textarea holding exactly the text it displayed.
-///
-/// In place rather than in a sheet: the line stays where it was on the page, so
-/// editing does not cost you your place in a six-day plan.
-function startEditing(node, item, day) {
-  if (openEditor) closeEditor();
-  const ta = document.createElement('textarea');
-  ta.className = 'entry';
-  ta.value = item ? TripLine.format(item) : '';
-  if (!item) ta.placeholder = '9:30 Something @where #food';
-  ta.rows = 1;
-  ta.autocapitalize = 'sentences';
-  ta.spellcheck = true;
-
-  const grow = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
-  ta.addEventListener('input', grow);
-  // Enter saves, so one tap out is not the only way to finish. Shift+Enter and
-  // the newline the detail needs still work.
-  ta.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ta.blur(); }
-    if (e.key === 'Escape') { e.preventDefault(); openEditor = null; render(); }
-  });
-  ta.addEventListener('blur', () => commitEditor(ta, item, day));
-
-  node.replaceWith(ta);
-  openEditor = { ta, item, day };
-  grow();
-  ta.focus();
-  // Caret at the end, not the start, so tapping a line to add to it does not
-  // put you in front of what is already written.
-  try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {}
-}
-
-function closeEditor() {
-  if (!openEditor) return;
-  const { ta } = openEditor;
-  openEditor = null;
-  ta.removeEventListener('blur', closeEditor);
-  render();
-}
-
-/// Save what was typed, into the same columns the sheet writes.
-async function commitEditor(ta, item, day) {
-  if (!openEditor || openEditor.ta !== ta) return;
-  const text = ta.value;
-  openEditor = null;
-
-  // Re-parsed against its OWN category, so editing the name of an old row filed
-  // under "plan" does not silently re-file it as an activity.
-  const parsed = TripLine.parse(text, { defaultCategory: item ? (item.category || 'plan') : undefined });
-
-  // Tapped in and tapped out again. Not a row.
-  if (TripLine.isEmpty(parsed)) {
-    if (!item) { render(); return; }
-    // An existing line emptied is a deletion, and deletion is never silent on a
-    // page eight people share.
-    if (!confirm('Delete "' + (item.title || 'this') + '" from the plan?\n\nEveryone loses it, and there is no undo.')) { render(); return; }
-    setStatus('Removing…');
-    try { await db('DELETE', `trip_items?id=eq.${item.id}`); await load(true); }
-    catch (e) { setStatus('Not removed'); render(); }
-    return;
-  }
-
-  // Nothing actually changed. Do not write, do not touch updated_at, and above
-  // all do not re-fire the booked-and-paid prompt for a line somebody only
-  // looked at.
-  if (item && TripLine.format(item) === TripLine.format(Object.assign({}, item, parsed))) { render(); return; }
-
-  if (!NAME) askName();
-  const wasBooked = !!(item && item.booked);
-  const payload = {
-    at_time: parsed.at_time,
-    title: parsed.title,
-    place: parsed.place,
-    detail: parsed.detail,
-    category: parsed.category,
-    booked: parsed.booked,
-    author: NAME || 'someone',
-    updated_at: new Date().toISOString(),
-  };
-
-  setStatus('Saving…');
-  try {
-    if (item) await db('PATCH', `trip_items?id=eq.${item.id}`, payload);
-    else await db('POST', 'trip_items', Object.assign({ trip: TRIP, day_id: day.id }, payload));
-    await load(true);
-
-    // Same rule the checkbox had: only on the tick ITSELF, never on a later
-    // edit of something already booked, and only where a bill could be shared.
-    // Somebody who has just written that they booked and paid is holding the
-    // receipt, and this is the one moment they remember the number.
-    const dayOfItem = day || days.find(d => d.id === (item && item.day_id));
-    if (payload.booked && !wasBooked && SPLITTABLE.has(payload.category) && moneyReady && people.length) {
-      openExpense(null, { description: payload.title, spent_on: dayOfItem && dayOfItem.date, fromPlan: true });
-    }
-  } catch (e) {
-    setStatus('Not saved');
-    render();
   }
 }
 
@@ -701,57 +538,51 @@ function el(tag, cls, text) {
 /// likely shared bill of the whole trip.
 const SPLITTABLE = new Set(['activity', 'plan', 'food']);
 
-/// One entry, as the line of text it is stored as.
-///
-/// Shown as text, edited as text. What you get when you tap it is exactly what
-/// the parser will read back, so the thing you edit is never a different string
-/// from the thing you saw.
-function lineRow(it) {
-  const row = el('div', 'line' + (it.booked ? ' booked' : ''));
+function itemRow(it) {
+  const row = el('div', 'item' + (it.booked ? ' booked' : ''));
+  row.appendChild(el('div', 't', fmtTime(it.at_time)));
 
-  const txt = el('div', 'txt', TripLine.format(it));
-  txt.onclick = () => startEditing(txt, it, null);
-  row.appendChild(txt);
+  const body = el('div', 'body');
+  const title = el('div', 'title', (it.booked ? '✓ ' : '') + (it.title || 'Untitled'));
+  body.appendChild(title);
+  if (it.detail) body.appendChild(el('div', 'detail', it.detail));
 
-  // The second line: who added it, and the things you can do with it.
-  const meta = el('div', 'meta');
-  const sep = () => el('span', 'sep', '\u00B7');
-  if (it.author) meta.appendChild(el('span', null, 'added by ' + it.author));
-
+  const foot = el('div', 'by');
+  if (it.category && it.category !== 'plan') {
+    foot.appendChild(el('span', 'tag', it.category + ' '));
+  }
+  if (it.author) foot.appendChild(el('span', null, 'added by ' + it.author + ' '));
   if (it.place) {
-    if (meta.childNodes.length) meta.appendChild(sep());
-    const a = el('a', null, 'map');
+    const a = el('a', 'map', 'Map');
     // A plain Maps search URL, which opens the native app on an iPhone and on
     // an Android without either of them needing anything installed first.
     a.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(it.place);
     a.target = '_blank'; a.rel = 'noopener';
-    meta.appendChild(a);
+    foot.appendChild(a);
   }
+  if (foot.childNodes.length) body.appendChild(foot);
+
+  row.appendChild(body);
 
   // Adding what a thing cost should start from the thing, not from a blank form
-  // further down the page that has to be filled in again from memory.
+  // on another tab that has to be filled in again from memory.
   //
-  // Only where a bill could actually be shared. Nobody splits the cost of
-  // landing in Austin, checking out of a hotel, or a train booked and paid for
-  // months ago. Anything unusual, a taxi shared four ways say, can still be
-  // added from Money.
+  // Only on rows that could actually be a shared bill. Nobody splits the cost
+  // of landing in Austin, checking out of a hotel, or a train that was booked
+  // and paid for months ago, and a cost button beside those is a button that
+  // exists to be pressed by mistake. Anything unusual, a taxi shared four ways
+  // say, can still be added from the Money tab.
   if (SPLITTABLE.has(it.category || 'plan')) {
-    if (meta.childNodes.length) meta.appendChild(sep());
-    const cost = el('button', null, 'cost');
+    const cost = el('button', 'cost', 'cost');
     cost.setAttribute('aria-label', 'Add what ' + (it.title || 'this') + ' cost');
     cost.onclick = () => openExpenseForItem(it);
-    meta.appendChild(cost);
+    row.appendChild(cost);
   }
 
-  // The form, kept. Eight people use this page and none of them wrote the
-  // syntax; anyone who would rather tick a box than type a tick still can.
-  if (meta.childNodes.length) meta.appendChild(sep());
-  const edit = el('button', null, 'edit');
-  edit.setAttribute('aria-label', 'Edit ' + (it.title || 'this') + ' in a form');
+  const edit = el('button', 'edit', '\u270E');
+  edit.setAttribute('aria-label', 'Edit ' + (it.title || 'this'));
   edit.onclick = () => openSheet(null, it);
-  meta.appendChild(edit);
-
-  row.appendChild(meta);
+  row.appendChild(edit);
   return row;
 }
 
@@ -880,13 +711,12 @@ async function shiftDates() {
 // ── Boot ────────────────────────────────────────────────────────────────────
 // ── Money ───────────────────────────────────────────────────────────────────
 
-// Plan and Money are one scroll now, so "go to the money" is a scroll, not a
-// mode change. Kept as a named function because two places call it for a real
-// reason: after recording what something cost, the thing just recorded has to
-// be visible rather than disappearing somewhere nobody scrolled to.
-function goToMoney() {
-  const el = document.getElementById('money');
-  if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+function showTab(which) {
+  tab = which;
+  document.getElementById('tab-plan').classList.toggle('on', which === 'plan');
+  document.getElementById('tab-money').classList.toggle('on', which === 'money');
+  document.getElementById('days').classList.toggle('hidden', which !== 'plan');
+  document.getElementById('money').classList.toggle('hidden', which !== 'money');
 }
 
 const eur = (cents) => '€' + (cents / 100).toFixed(2);
@@ -1134,7 +964,7 @@ async function renamePerson(p) {
 // on another, which is how an amount ends up filed against the wrong day.
 function openExpenseForItem(it) {
   if (!moneyReady) { alert('Expenses are not switched on yet.'); return; }
-  if (!people.length) { goToMoney(); addPerson(); return; }
+  if (!people.length) { showTab('money'); addPerson(); return; }
   const day = days.find(d => d.id === it.day_id);
   openExpense(null, { description: it.title || '', spent_on: day && day.date, fromPlan: true });
 }
@@ -1240,9 +1070,9 @@ async function saveExpense() {
     if (editingExpense) await db('PATCH', `trip_expenses?id=eq.${editingExpense.id}`, payload);
     else await db('POST', 'trip_expenses', Object.assign({ trip: TRIP }, payload));
     closeExpense();
-    // Scroll to Money, so the thing just recorded is visible rather than
-    // sitting further down a page nobody scrolled.
-    if (cameFromPlan) { goToMoney(); cameFromPlan = false; }
+    // Land on Money, so the thing just recorded is visible rather than
+    // disappearing into a tab nobody switched to.
+    if (cameFromPlan) { showTab('money'); cameFromPlan = false; }
     await load(true);
   } catch (e) {
     err.textContent = 'Could not save. Check your connection.';
