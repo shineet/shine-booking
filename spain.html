@@ -137,6 +137,13 @@
   }
   .shot:active { background: var(--line); }
   .shot.busy { color: var(--muted); border-style: solid; }
+  #a2hs {
+    background: var(--card); border: 1px solid var(--accent); border-radius: 14px;
+    padding: 12px 14px; margin: 0 0 14px; font-size: 14px;
+  }
+  #a2hs ol { margin: 8px 0; padding-left: 20px; }
+  #a2hs li { margin: 3px 0; }
+  #a2hs p { margin: 8px 0; color: var(--muted); font-size: 13px; }
   .settled { padding: 16px 14px; color: var(--good); font-weight: 600; }
   .totals { display: flex; gap: 0; padding: 12px 0 14px; }
   .totals div { flex: 1; text-align: center; }
@@ -170,7 +177,23 @@
     <span>You are <b id="me">—</b></span>
     <button class="linkish" onclick="askName()">change</button>
     <span style="margin-left:auto"></span>
+    <button class="linkish hidden" id="a2hs-btn" onclick="showAddToHome()">add to home screen</button>
     <button class="linkish" onclick="shiftDates()">trip dates</button>
+  </div>
+
+  <!-- Shown only while somebody is deliberately saving a shortcut. The PIN is
+       back in the address bar for exactly this long, which is the whole point:
+       iOS captures whatever the URL says at the moment Add to Home Screen is
+       tapped, and the link arrives with the PIN already stripped. -->
+  <div id="a2hs" class="hidden">
+    <b>Save this trip to your home screen</b>
+    <ol>
+      <li>Tap <b>Share</b> at the bottom of Safari</li>
+      <li>Tap <b>Add to Home Screen</b></li>
+      <li>Come back here and tap Done</li>
+    </ol>
+    <p>The address bar is showing the trip PIN right now, just so iOS saves it with the shortcut. Tapping Done hides it again. After this the icon opens straight into the trip with nothing to type, ever.</p>
+    <button class="linkish" onclick="doneAddToHome()">Done</button>
   </div>
 
   <div class="tabs">
@@ -306,6 +329,13 @@ const API = '/api/get-booking';
 const TRIP = 'spain';
 const CACHE = 'spainPlanCache';
 let TOKEN = localStorage.getItem('tripToken') || '';
+// Kept so "add to home screen" can put it back in the address bar for the few
+// seconds iOS needs to capture it.
+//
+// No worse than the token sitting beside it: both are bearer credentials for
+// this one page, and rotating TRIP_PIN kills both at once. The token cannot be
+// used to reconstruct the link, which is the whole reason this is here.
+let PIN = localStorage.getItem('tripPin') || '';
 let NAME  = localStorage.getItem('tripName') || '';
 let days = [], items = [], editing = null, editingDay = null;
 let people = [], expenses = [], editingExpense = null, splitWith = new Set();
@@ -345,6 +375,7 @@ async function db(method, path, bodyObj, prefer) {
 
 function logout(msg) {
   TOKEN = ''; localStorage.removeItem('tripToken');
+  PIN = ''; localStorage.removeItem('tripPin');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('gate').classList.remove('hidden');
   if (msg) document.getElementById('gate-err').textContent = msg;
@@ -360,6 +391,8 @@ async function submitPin(pinOverride) {
   if (!r.ok) { if (pinOverride === undefined) err.textContent = 'Wrong PIN.'; return false; }
   TOKEN = (await r.json()).token;
   localStorage.setItem('tripToken', TOKEN);
+  PIN = pin;
+  localStorage.setItem('tripPin', pin);
   boot();
   return true;
 }
@@ -1217,11 +1250,62 @@ async function deleteExpense() {
   } catch (e) { setStatus('Not removed'); }
 }
 
+// ── Saving a shortcut that actually opens ───────────────────────────────────
+//
+// The link carries the PIN in its hash, and tryLinkKey wipes that the instant
+// it is used so a screenshot of the page does not hand over the trip. Which is
+// right, and which quietly broke Add to Home Screen: by the time anyone taps
+// Share the address bar says /spain.html, iOS saves THAT, and the icon opens a
+// page with no credential in it.
+//
+// It was worse than it looked, because an icon added to the home screen runs as
+// a standalone app and iOS gives those their own storage -- so the token from
+// Safari is not there either. No PIN in the URL, no token in the box, and the
+// PIN is a thing they never knew because it only ever lived inside the link.
+//
+// So: put the hash back for the few seconds iOS needs to read it, and take it
+// away again. The protection is unchanged the rest of the time, and in the
+// saved app there is no address bar at all, so it is never on screen there.
+function showAddToHome() {
+  if (!PIN) {
+    alert('This device does not have the trip PIN stored, so the shortcut cannot be saved with it. Open the link Shine sent you again, then try this.');
+    return;
+  }
+  history.replaceState(null, '', location.pathname + '#' + PIN);
+  document.getElementById('a2hs').classList.remove('hidden');
+  document.getElementById('a2hs').scrollIntoView({ block: 'center' });
+}
+
+function doneAddToHome() {
+  document.getElementById('a2hs').classList.add('hidden');
+  hideThePin();
+}
+
+function hideThePin() {
+  if (location.hash) history.replaceState(null, '', location.pathname);
+}
+// Belt and braces: never leave the PIN in the bar because somebody wandered off
+// mid-way through, or backgrounded the phone with the panel still open.
+window.addEventListener('pagehide', hideThePin);
+document.addEventListener('visibilitychange', () => { if (document.hidden) hideThePin(); });
+
+/// Offer it only where it does something.
+///
+/// Hidden inside the saved app itself (navigator.standalone), which is the one
+/// place the button would be pure confusion -- they are already looking at the
+/// thing it makes.
+function updateAddToHomeButton() {
+  const standalone = window.navigator.standalone === true
+    || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  document.getElementById('a2hs-btn').classList.toggle('hidden', standalone || !PIN);
+}
+
 function boot() {
   document.getElementById('gate').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('me').textContent = NAME || '—';
   if (!NAME) setTimeout(askName, 300);
+  updateAddToHomeButton();
   cacheRead();
   load();
 }
