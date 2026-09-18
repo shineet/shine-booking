@@ -5,3 +5,7 @@ node_modules
 tools/family-note-sync/.env
 tools/family-note-sync/*.log
 tools/family-note-sync/__pycache__/
+
+# Local-only backups. Never committed, so they never deploy as a second
+# publicly reachable copy of a page that has eight people's plans on it.
+*.html.bak
