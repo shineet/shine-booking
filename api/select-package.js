@@ -90,6 +90,10 @@ export default async function handler(req, res) {
     let finalClientChannel = null;
     let finalEventType = category === 'corporate' ? 'Corporate event' : 'Private celebration';
     let finalEventDate = null;
+    // The booking this client already has, if any. See the reuse block below --
+    // this endpoint used to insert unconditionally and hand the same person a
+    // second gig.
+    let existingBookingId = null;
 
     // If we have a clientId, update that client record and fetch its details
     if (clientId) {
@@ -126,6 +130,7 @@ export default async function handler(req, res) {
         finalClientChannel = client.last_channel || null;
         finalEventType = client.event_type || finalEventType;
         finalEventDate = client.event_date || null;
+        existingBookingId = client.booking_id || null;
       }
     } else {
       // No clientId in URL — create a new lead from this selection
@@ -162,6 +167,26 @@ export default async function handler(req, res) {
       }
     }
 
+    // Read the booking this client already has, once, before anything is
+    // written or sent. Both the notification below and the reuse block further
+    // down need it, and they must agree: Shine's "a questionnaire is being sent"
+    // line was a lie the moment the send learned to skip an answered one.
+    let existingBooking = null;
+    if (readyToBook && existingBookingId) {
+      try {
+        const exRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${existingBookingId}&select=event_date,intake_status&limit=1`, {
+          headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` }
+        });
+        const exRows = await exRes.json();
+        existingBooking = Array.isArray(exRows) ? exRows[0] : null;
+      } catch (e) {
+        // Not fatal: without it we simply treat this as a fresh booking, which
+        // is the behaviour this endpoint had before.
+        console.error('select-package: existing booking lookup failed:', e.message);
+      }
+    }
+    const intakeAlreadyCompleted = !!(existingBooking && existingBooking.intake_status === 'completed');
+
     // Notify you immediately
     const notifyName = finalClientName || name || 'A client';
     const notifyContact = finalClientEmail || contact || 'on file';
@@ -175,8 +200,15 @@ export default async function handler(req, res) {
     else if (finalClientChannel === 'email' && finalClientEmail) intakeChannel = 'email';
     else if (finalClientEmail) intakeChannel = 'email';
     else if (finalClientPhone) intakeChannel = 'sms';
-    const willSendQuestionnaire = readyToBook && finalClientId && !!intakeChannel;
+    const willSendQuestionnaire = readyToBook && finalClientId && !!intakeChannel && !intakeAlreadyCompleted;
     const questionnaireChannel = intakeChannel === 'sms' ? 'text' : (intakeChannel === 'email' ? 'email' : null);
+    // Three outcomes, not two. "No contact on file" used to be printed for every
+    // case where nothing was sent, which would now misreport an answered one.
+    const questionnaireNote = willSendQuestionnaire
+      ? ` A thank-you note with the intake questionnaire is being sent to them now by ${questionnaireChannel}.`
+      : intakeAlreadyCompleted
+        ? ` Their questionnaire is already filled in, so no second one was sent. This updates their existing gig rather than adding another.`
+        : ` Heads up: no email or phone is on file, so the questionnaire could not be sent automatically. Follow up to collect their contact info.`;
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -188,7 +220,7 @@ export default async function handler(req, res) {
         to: 'shinethementalist@gmail.com',
         subject: readyToBook ? `🎯 ${notifyName} is ready to book!` : `${notifyName} selected the ${label} package`,
         text: readyToBook
-          ? `Great news!\n\n${notifyName} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}${formatLine}\n\nContact: ${notifyContact}\n\nThey confirmed they're ready to book.${willSendQuestionnaire ? ` A thank-you note with the intake questionnaire is being sent to them now by ${questionnaireChannel}.` : ` Heads up: no email or phone is on file, so the questionnaire could not be sent automatically. Follow up to collect their contact info.`}`
+          ? `Great news!\n\n${notifyName} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}${formatLine}\n\nContact: ${notifyContact}\n\nThey confirmed they're ready to book.${questionnaireNote}`
           : `${notifyName} selected:\n${category === 'corporate' ? 'Corporate' : 'Private'} — ${label}\nPrice: $${price}${formatLine}\n\nContact: ${notifyContact}\n\nThey chose "I need more time" — not ready to confirm yet. No questionnaire was sent.`
       })
     });
@@ -197,34 +229,101 @@ export default async function handler(req, res) {
     // Send by email when we have one; otherwise by SMS (this flow is often used with SMS-only leads).
     if (readyToBook && finalClientId) {
       try {
-        const bookingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': process.env.SUPABASE_SECRET_KEY,
-            'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
-            'Prefer': 'return=representation'
-          },
-          body: JSON.stringify({
-            client_id: finalClientId,
-            client_name: finalClientName,
-            client_email: finalClientEmail,
-            event_type: finalEventType,
-            event_date: finalEventDate,
-            fee: price || null,
-            duration: strollingDurationMinutes ? `${strollingDurationMinutes / 60} hour${strollingDurationMinutes > 60 ? 's' : ''} strolling` : null,
-            contract_status: 'not_sent',
-            intake_status: 'sent'
-          })
-        });
-        const bookingRows = await bookingRes.json();
-        const booking = Array.isArray(bookingRows) ? bookingRows[0] : null;
+        const bkHeaders = {
+          'Content-Type': 'application/json',
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+          'Prefer': 'return=representation'
+        };
+        const durationValue = strollingDurationMinutes
+          ? `${strollingDurationMinutes / 60} hour${strollingDurationMinutes > 60 ? 's' : ''} strolling`
+          : null;
+
+        async function insertNewBooking() {
+          const bookingRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings`, {
+            method: 'POST',
+            headers: bkHeaders,
+            body: JSON.stringify({
+              client_id: finalClientId,
+              client_name: finalClientName,
+              client_email: finalClientEmail,
+              event_type: finalEventType,
+              event_date: finalEventDate,
+              fee: price || null,
+              duration: durationValue,
+              contract_status: 'not_sent',
+              intake_status: 'sent'
+            })
+          });
+          const bookingRows = await bookingRes.json();
+          return Array.isArray(bookingRows) ? bookingRows[0] : null;
+        }
+
+        // Reuse the client's existing booking instead of always inserting.
+        //
+        // This endpoint inserted unconditionally, so anyone who already had a
+        // gig and then came through here got a SECOND one. The live trigger is
+        // paying an advance: stripe.js's bookOnPay path calls this with
+        // readyToBook, which made a duplicate row and then repointed the client
+        // at it, so the questionnaire answers and the money could end up on
+        // different rows. Isabella, Dec 2026. api/intake.js was given the same
+        // treatment earlier and this is the matching half.
+        let booking = null;
+        if (existingBookingId) {
+          // Two things on the existing row must survive this write.
+          //
+          // event_date: the gig owns its own date once it exists. finalEventDate
+          // comes from the CLIENT record, which is written when the lead is
+          // created and not maintained after, so when the two disagree it is the
+          // client's copy that is stale. Only fill a blank. (Same reasoning as
+          // intake.js, which was moved to a booked gig by exactly this.)
+          //
+          // intake_status: a questionnaire already marked completed must not be
+          // knocked back to 'sent' and re-badged as Awaiting on the Dashboard.
+          const cur = existingBooking; // read once, above, before anything was sent
+          const updateRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${existingBookingId}`, {
+            method: 'PATCH',
+            headers: bkHeaders,
+            body: JSON.stringify({
+              client_name:  finalClientName || undefined,
+              client_email: finalClientEmail || undefined,
+              event_type:   finalEventType || undefined,
+              // Blank only. Never overwrite a date the gig already holds.
+              event_date:   (cur && cur.event_date) ? undefined : (finalEventDate || undefined),
+              // The package they just picked is the live number, so this one
+              // does win over whatever was there.
+              fee:          price || undefined,
+              duration:     durationValue || undefined,
+              // contract_status is deliberately NOT reset: a contract may
+              // already be sent or signed against this booking.
+              intake_status: (cur && cur.intake_status === 'completed') ? undefined : 'sent'
+            })
+          });
+          const updateRows = await updateRes.json();
+          booking = Array.isArray(updateRows) ? updateRows[0] : null;
+          // booking_id pointed at a row that no longer exists (deleted by hand,
+          // or a stale reference from an older flow). Fall through and make a
+          // fresh one rather than failing the confirmation.
+          if (!booking) {
+            console.error(`select-package: client ${finalClientId}'s booking_id ${existingBookingId} no longer exists -- creating a replacement`);
+          }
+        }
+        if (!booking) booking = await insertNewBooking();
 
         // The household finds out when the client confirms, not when Shine next
-        // opens the app.
-        await addGigToFamilyNote(finalEventDate, booking && booking.start_time, finalClientName);
+        // opens the app. The booking's own date wins: on a reuse it is the
+        // maintained one, and finalEventDate is the client record's stale copy.
+        await addGigToFamilyNote((booking && booking.event_date) || finalEventDate,
+                                 booking && booking.start_time, finalClientName);
 
-        if (booking) {
+        // A questionnaire that is already filled in is not asked for again.
+        // Reusing the booking is what makes this reachable: before, every pass
+        // made a brand new row that genuinely had no answers on it.
+        if (booking && intakeAlreadyCompleted) {
+          console.log(`select-package: booking ${booking.id} already has a completed questionnaire -- not sending another`);
+        }
+
+        if (booking && !intakeAlreadyCompleted) {
           const intakeLink = `https://shine-booking.vercel.app/intake.html?bid=${booking.id}`;
           const firstName = finalClientName ? finalClientName.split(' ')[0] : 'there';
 
