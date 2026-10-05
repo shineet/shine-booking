@@ -136,12 +136,37 @@ async function load() {
       invoiceNumber: '', invoiceDate: '', dueDate: '',
       eventName: booking.eventTitle || '', eventDate: fmtDate(booking.eventDate),
       venue: booking.venueAddress || '',
-      depositPercent: 50, cardSurchargePercent: 0,
+      // A deposit secures a DATE. Once the date has gone there is nothing left
+      // to secure, so the whole outstanding amount is due.
+      //
+      // This link is sent bid-only, with no invoice payload, so everything here
+      // is a default -- and the default used to be a 50% deposit whatever the
+      // date. A thank-you sent after a show therefore offered the client half
+      // the fee: Tim Moore, October 2026, invoiced $400 and offered $200.
+      //
+      // Only the percentage moves. A booking where the deposit WAS paid still
+      // falls into 'balance' mode below and subtracts what was paid, which is
+      // already right; setting isFinalBalance here as well would stop that
+      // subtraction and overcharge.
+      depositPercent: eventHasPassed(booking.eventDate) ? 100 : 50,
+      cardSurchargePercent: 0,
       lineItems: booking.fee ? [{ description: 'Performance Fee', details: booking.eventTitle || '', amount: booking.fee }] : [],
       total: booking.fee || 0
     };
   }
   render();
+}
+
+/// Is the event date in the past? Compared as plain YYYY-MM-DD strings in local
+/// time, so a show earlier today still counts as done -- which is exactly when a
+/// thank-you goes out.
+function eventHasPassed(iso) {
+  if (!iso) return false;
+  const d = new Date();
+  const today = d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+  return String(iso).slice(0, 10) <= today;
 }
 
 function render() {
@@ -171,8 +196,11 @@ function render() {
   const dep = invoiceData.depositPercent || 50;
   const sc  = Number(invoiceData.cardSurchargePercent) || 0;
   const baseDep = Math.round(total * dep / 100);
+  const past = eventHasPassed(booking && booking.eventDate);
   document.getElementById('dep-note').textContent = dep >= 100
-    ? 'Full payment ($' + total.toLocaleString() + ') due on or before the event date.'
+    ? (past
+        ? 'Full payment ($' + total.toLocaleString() + ') due upon receipt.'
+        : 'Full payment ($' + total.toLocaleString() + ') due on or before the event date.')
     : dep + '% deposit ($' + baseDep.toLocaleString() + ') due to secure the date. Balance due on day of performance.';
 
   // Three states: nothing paid yet (deposit-only invoices collect just the
