@@ -1,6 +1,6 @@
 import { claudeText } from '../lib/claude-text.js';
 import { notifyNewReply } from '../lib/apns.js';
-import { storeTwilioMedia } from '../lib/message-media.js';
+import { storeTwilioMedia, signedMediaUrl } from '../lib/message-media.js';
 
 // Last 10 digits of any phone format — used to match an inbound E.164 number
 // against client records that may have been stored in a non-normalized format.
@@ -355,9 +355,10 @@ export default async function handler(req, res) {
     // takes seconds and can fail; the message must already be safe before any
     // of that is attempted. A failure here leaves the file named but not
     // stored, which the conversation says out loud.
+    let stored = [];
     if (media.length && client && inboundRowId) {
       try {
-        const stored = await storeTwilioMedia(media, {
+        stored = await storeTwilioMedia(media, {
           clientId: client.id,
           messageSid: req.body.MessageSid || req.body.SmsMessageSid || String(Date.now()),
         });
@@ -386,7 +387,18 @@ export default async function handler(req, res) {
         To: '+16128657681',
         Body: `📱 ${senderLabel}: ${messageText}`
       });
-      for (const m of media) forwardParams.append('MediaUrl', m.url);
+      // The app's OWN copy where there is one, by a one-hour signed link.
+      // Twilio's media URLs need the account login to open, so handing Twilio
+      // its own URL to attach is accepted at once and then fails later, on
+      // Twilio's side, when it cannot fetch it. fwdRes.ok is true, the text-
+      // only retry below never runs, and the forward silently never arrives
+      // (Joe P's photos, 2026-10-07). A file that did not copy still falls
+      // back to the Twilio URL, which is no worse than before.
+      for (let i = 0; i < media.length; i++) {
+        const copy = stored[i];
+        const signed = copy && copy.stored && copy.path ? await signedMediaUrl(copy.path, 3600) : null;
+        forwardParams.append('MediaUrl', signed || media[i].url);
+      }
       const fwdRes = await fetch(twilioUrl, {
         method: 'POST',
         headers: { 'Authorization': `Basic ${twilioAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
