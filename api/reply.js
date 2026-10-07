@@ -523,10 +523,13 @@ Call/meeting detection (separate from the actual performance date):
     if (client && client.id) {
       try {
         const histRes = await fetch(
-          `${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${client.id}&channel=eq.sms&status=not.in.(discarded)&order=created_at.asc&limit=20&select=direction,content`,
+          `${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${client.id}&channel=eq.sms&status=not.in.(discarded)&order=created_at.desc&limit=20&select=direction,content`,
           { headers: supaHeaders }
         );
+        // Newest 20 in time order; asc+limit was the OLDEST 20 and dropped the
+        // message being answered once a thread grew past 20.
         const histRows = await histRes.json();
+        if (Array.isArray(histRows)) histRows.reverse();
         if (Array.isArray(histRows) && histRows.length) {
           const lines = histRows
             .map(m => (m.direction === 'inbound' ? 'THEM: ' : 'SHINE: ') + String(m.content || '').replace(/\s+/g, ' ').trim())

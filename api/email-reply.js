@@ -753,10 +753,12 @@ export default async function handler(req, res) {
     if (client) {
       try {
         const historyRes = await fetch(
-          `${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${client.id}&channel=eq.email&status=not.in.(pending_review,discarded)&order=created_at.asc&limit=20`,
+          `${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${client.id}&channel=eq.email&status=not.in.(pending_review,discarded)&order=created_at.desc&limit=20`,
           { headers: { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` } }
         );
+        // Newest 20 in time order (asc+limit was the OLDEST 20).
         const historyRows = await historyRes.json();
+        if (Array.isArray(historyRows)) historyRows.reverse();
         if (Array.isArray(historyRows)) {
           priorMessages = historyRows.map(m => ({
             role: m.direction === 'inbound' ? 'user' : 'assistant',

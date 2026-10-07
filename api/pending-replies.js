@@ -346,8 +346,10 @@ async function fetchLeadConversation(clientId) {
   if (!clientId) return '';
   try {
     const sb = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
-    const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${clientId}&status=not.in.(discarded)&order=created_at.asc&limit=12`, { headers: sb });
-    const rows = await r.json();
+    const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${clientId}&status=not.in.(discarded)&order=created_at.desc&limit=12`, { headers: sb });
+    // NEWEST 12, put back in order. asc+limit took the OLDEST 12, so a long
+    // thread lost exactly the message being answered.
+    const rows = (await r.json()).reverse?.() || [];
     if (!Array.isArray(rows) || !rows.length) return '';
     const lines = rows
       // 4000 chars, not 500: a full email (e.g. one that quotes a specific price partway
@@ -777,7 +779,7 @@ PRICING:
     // POST action=regenerate -> re-draft this pending reply, optionally steered by a
     // per-message instruction the owner types after reading the client's message.
     if (req.method === 'POST' && req.body.action === 'regenerate') {
-      const { messageId, instruction } = req.body;
+      const { messageId, instruction, currentDraft } = req.body;
       if (!messageId) { res.status(400).json({ error: 'messageId required' }); return; }
       const sbHeaders = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
 
@@ -794,10 +796,15 @@ PRICING:
       if (draftMsg.client_id) {
         try {
           const hRes = await fetch(
-            `${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${draftMsg.client_id}&channel=eq.${channel}&status=not.in.(pending_review,discarded)&order=created_at.asc&limit=20`,
+            `${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${draftMsg.client_id}&channel=eq.${channel}&status=not.in.(pending_review,discarded)&order=created_at.desc&limit=20`,
             { headers: sbHeaders }
           );
+          // NEWEST 20, then back into time order. This was asc+limit=20, which is
+          // the OLDEST 20: once a client passed 20 messages, Redraft never saw
+          // what they had just said and answered something from weeks ago
+          // (Tim, Oct 2026: a thank-you-and-paid text got a reply to an old one).
           const hRows = await hRes.json();
+          if (Array.isArray(hRows)) hRows.reverse();
           if (Array.isArray(hRows)) {
             history = hRows
               // An empty or null message body makes Anthropic reject the whole
@@ -822,6 +829,21 @@ PRICING:
       }
       if (!msgs.length || msgs[0].role !== 'user') msgs.unshift({ role: 'user', content: '(Start of conversation.)' });
       if (msgs[msgs.length - 1].role !== 'user') msgs.push({ role: 'user', content: '(Please draft my reply to the latest message above.)' });
+
+      // An instruction is an EDIT to the draft on screen, not a fresh start.
+      // Without the draft the model had nothing to edit, so "make it a bit
+      // warmer" came back as a whole new reply, and each retry wandered
+      // further. The draft on screen wins over the stored one, since Shine
+      // may have typed into it. Plain Regenerate (no instruction) still
+      // writes from scratch.
+      const editing = (instruction && String(instruction).trim())
+        ? String(currentDraft || draftMsg.content || '').trim() : '';
+      if (editing) {
+        msgs[msgs.length - 1].content +=
+          `\n\n---\nMY CURRENT DRAFT REPLY TO THE LATEST MESSAGE ABOVE:\n${editing}\n---\n` +
+          `Revise THIS draft per my instruction. Change only what the instruction asks; keep every other sentence as it is. ` +
+          `It is still a reply to the latest message above, never to an earlier one. Return only the revised reply text.`;
+      }
 
       const baseVoice = channel === 'sms' ? SMS_VOICE : EMAIL_VOICE;
       const instrBlock = (instruction && String(instruction).trim())
