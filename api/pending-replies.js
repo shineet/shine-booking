@@ -845,11 +845,29 @@ PRICING:
           `It is still a reply to the latest message above, never to an earlier one. Return only the revised reply text.`;
       }
 
+      // Name the message being answered outright, the same one the Replies
+      // screen shows under "wrote". Left to infer it from the thread, the model
+      // answered an older message (emails quote the whole thread below the new
+      // text, and a long history buries it).
+      let answering = '';
+      if (draftMsg.client_id) {
+        try {
+          const lRes = await fetch(
+            `${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${draftMsg.client_id}&channel=eq.${channel}&direction=eq.inbound&order=created_at.desc&limit=1&select=content`,
+            { headers: sbHeaders });
+          const lRows = await lRes.json();
+          answering = (Array.isArray(lRows) && lRows[0] && String(lRows[0].content || '').trim()) || '';
+        } catch(e) { console.error('Regenerate latest inbound failed:', e.message); }
+      }
+      const answeringBlock = answering
+        ? `\n\nTHE MESSAGE YOU ARE REPLYING TO (their newest; reply to THIS and nothing older. Earlier messages are background only, and anything quoted below their new text is old):\n${answering.slice(0, 4000)}`
+        : '';
+
       const baseVoice = channel === 'sms' ? SMS_VOICE : EMAIL_VOICE;
       const instrBlock = (instruction && String(instruction).trim())
         ? `\n\nSHINE'S INSTRUCTION FOR THIS SPECIFIC REPLY (highest priority — follow this for this one draft; it wins over anything above except: never invent availability):\n${String(instruction).trim()}`
         : '';
-      const systemPrompt = baseVoice + (await guidanceSuffix()) + instrBlock;
+      const systemPrompt = baseVoice + (await guidanceSuffix()) + answeringBlock + instrBlock;
 
       // Why the last attempt failed, kept so the app can say something better
       // than "try again". A redraft that fails silently is indistinguishable
