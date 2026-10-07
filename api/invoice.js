@@ -164,8 +164,103 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: err.message });
     }
 
+  } else if (action === 'send-link') {
+    // The invoice link, short and by text or email -- the default way to send
+    // an invoice from the app.
+    //
+    // The older stable link carries the whole invoice in its URL. Fine in an
+    // email button, wrong in a text: a wall of characters, and past Twilio's
+    // 1600-character limit (a few line items) the text is refused outright.
+    // So the invoice is saved onto the booking (bookings.invoice_data) and the
+    // link carries only the booking id; invoice-view.html reads it back.
+    //
+    // Gated on the dashboard token, unlike the actions above: this one WRITES
+    // what a client will be asked to pay.
+    //
+    // POST { action:'send-link', token, invoiceData, bookingId, clientId?,
+    //        send:'sms'|'email'|'none', clientEmail?, greeting?, message? }
+    //   -> { success, url }   ('none' saves and returns the link, for Copy)
+    const { token, invoiceData, bookingId, clientId, send, clientEmail, message } = req.body;
+    const { tokenValid } = await import('../lib/dashboard-token.js');
+    if (!tokenValid(token)) return res.status(401).json({ error: 'Not authorised.' });
+    if (!invoiceData || !bookingId) return res.status(400).json({ error: 'Missing invoiceData or bookingId' });
+
+    const SB = process.env.SUPABASE_URL;
+    const SBH = { apikey: process.env.SUPABASE_SECRET_KEY, Authorization: `Bearer ${process.env.SUPABASE_SECRET_KEY}`,
+                  'Content-Type': 'application/json' };
+    try {
+      // Saved first, and checked: a link sent for an invoice that did not save
+      // would show the client the old one, or the defaults.
+      const up = await fetch(`${SB}/rest/v1/bookings?id=eq.${encodeURIComponent(bookingId)}`, {
+        method: 'PATCH', headers: { ...SBH, Prefer: 'return=representation' },
+        body: JSON.stringify({ invoice_data: invoiceData }),
+      });
+      if (!up.ok) throw new Error('Saving the invoice failed: ' + (await up.text()).slice(0, 150));
+      const saved = await up.json();
+      if (!Array.isArray(saved) || !saved.length) throw new Error('No booking with that id.');
+
+      const url = `https://shine-booking.vercel.app/invoice-view.html?bid=${encodeURIComponent(bookingId)}`;
+      if (send !== 'sms' && send !== 'email') return res.status(200).json({ success: true, url });
+
+      let email = clientEmail || '', phone = '', name = '';
+      if (clientId) {
+        const cr = await fetch(`${SB}/rest/v1/clients?id=eq.${encodeURIComponent(clientId)}&select=email,phone,name&limit=1`, { headers: SBH });
+        const rows = await cr.json();
+        if (Array.isArray(rows) && rows[0]) {
+          email = email || rows[0].email || '';
+          phone = rows[0].phone || '';
+          name  = rows[0].name  || '';
+        }
+      }
+      const firstName = (invoiceData.contactName || name || 'there').split(' ')[0];
+      const eventName = invoiceData.eventName || 'your event';
+      const note = (message && String(message).trim()) ? String(message).trim() + '\n\n' : '';
+
+      if (send === 'sms') {
+        if (!phone) return res.status(400).json({ error: 'No phone number on file for this client.' });
+        const d = String(phone).replace(/[^0-9]/g, '');
+        const to = d.length === 10 ? '+1' + d : (d.length === 11 && d[0] === '1' ? '+' + d : phone);
+        const body = `Hi ${firstName}, here's your invoice for ${eventName}: ${url}\n\n${note}You can pay there by card, Venmo, PayPal or Zelle. Thank you! - Shine, The Mentalist`;
+        const auth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64');
+        const tw = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
+          method: 'POST',
+          headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: to, Body: body }).toString(),
+        });
+        if (!tw.ok) throw new Error('SMS failed: ' + (await tw.text()).slice(0, 150));
+        phone = to;
+      } else {
+        if (!email) return res.status(400).json({ error: 'No email on file for this client.' });
+        const resend = new Resend(process.env.RESEND_KEY);
+        const noteHtml = note ? note.trim().split('\n').map(l => l ? `<p style="margin:6px 0">${l}</p>` : '<br>').join('') : '';
+        await resend.emails.send({
+          from: 'Shine, The Mentalist <shine@texasmentalist.com>',
+          to: [email],
+          bcc: ['shinethementalist@gmail.com'],
+          subject: `Invoice - ${eventName}`,
+          text: `Hi ${firstName},\n\nHere's your invoice for ${eventName}:\n${url}\n\n${note}You can pay there by card, Venmo, PayPal or Zelle.\n\nThank you!\nShine, The Mentalist\n(737) 271-5308`,
+          html: `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;color:#1a1a2e"><p>Hi ${firstName},</p><p>Here's your invoice for <strong>${eventName}</strong>.</p>${noteHtml}<div style="text-align:center;margin:24px 0"><a href="${url}" style="background:#1a7f5a;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-size:16px;font-weight:bold;display:inline-block">📄 View Invoice &amp; Pay</a></div><p>You can pay there by card, Venmo, PayPal or Zelle.</p><p>Thank you!<br>Shine, The Mentalist<br>(737) 271-5308</p></div>`,
+        });
+      }
+
+      // Into the client's thread like every other outbound message.
+      if (clientId) {
+        try {
+          await fetch(`${SB}/rest/v1/messages`, {
+            method: 'POST', headers: SBH,
+            body: JSON.stringify({ client_id: clientId, channel: send, direction: 'outbound',
+              content: 'Invoice link sent: ' + url, status: 'sent', to_address: send === 'email' ? email : phone }),
+          });
+        } catch (e) { console.error('log invoice-link message failed:', e.message); }
+      }
+      return res.status(200).json({ success: true, url, sent: send });
+    } catch (err) {
+      console.error('invoice send-link error:', err);
+      return res.status(500).json({ error: err.message });
+    }
+
   } else {
-    return res.status(400).json({ error: 'Invalid action. Use "generate", "send", or "send-note".' });
+    return res.status(400).json({ error: 'Invalid action. Use "generate", "send", "send-note" or "send-link".' });
   }
 };
 

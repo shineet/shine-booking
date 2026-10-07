@@ -125,6 +125,10 @@ async function load() {
     const d = await r.json();
     if (d.error) throw new Error(d.error);
     booking = d;
+    // A short link (bid only) shows the invoice saved with the booking when it
+    // was sent. A link that carries its own invoice (d=) keeps showing that one,
+    // so every link already sent still reads exactly as it did.
+    if (!invoiceData && d.invoiceData && typeof d.invoiceData === 'object') invoiceData = d.invoiceData;
   } catch (e) {
     showError('Could not load this invoice. Please contact Shine directly at shine@texasmentalist.com.');
     return;

@@ -763,7 +763,10 @@ Rules:
         paymentAmount: booking.payment_amount || null,
         eventDate: booking.event_date,
         eventTitle: booking.event_title,
-        venueAddress: booking.venue_address
+        venueAddress: booking.venue_address,
+        // The invoice as last sent from the app (api/invoice action=send-link),
+        // so a short bid-only link shows exactly that invoice.
+        invoiceData: booking.invoice_data || null
       });
       return;
     }
