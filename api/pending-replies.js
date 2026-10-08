@@ -342,7 +342,35 @@ function eventTimingBlock(eventDateISO) {
 
 // Pull the lead's actual conversation (what they messaged Shine) so research + drafts
 // factor in their own words, not just the notes field. Inbound + outbound, oldest first.
+// Every detail on file for the lead, straight from the database. The apps
+// send a hand-picked few fields, and the venue was not one of them, so a draft
+// asked a client where her party was after she had said (Tina, Oct 2026).
+// Reading the whole row means a field added later is seen too. Prepended by
+// fetchLeadConversation, so every draft that reads the conversation sees it.
+const LEAD_RECORD_SKIP = new Set(['id', 'created_at', 'updated_at', 'last_activity', 'status', 'hot_lead',
+  'linked_client_id', 'contact_type', 'last_channel', 'notes', 'email', 'phone', 'cc_address']);
+async function fetchLeadRecord(clientId) {
+  if (!clientId) return '';
+  try {
+    const sb = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+    const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientId}&limit=1`, { headers: sb });
+    const rows = await r.json();
+    const row = Array.isArray(rows) && rows[0];
+    if (!row) return '';
+    const lines = Object.entries(row)
+      .filter(([k, v]) => !LEAD_RECORD_SKIP.has(k) && v !== null && v !== '' && typeof v !== 'object' && typeof v !== 'boolean')
+      .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${String(v).slice(0, 500)}`);
+    return lines.length
+      ? '\n\nEVERYTHING ON FILE FOR THIS LEAD (they already gave you all of this; never ask for any of it, including where the event is or how many are coming):\n' + lines.join('\n')
+      : '';
+  } catch(e) { console.error('fetchLeadRecord failed:', e.message); return ''; }
+}
+
 async function fetchLeadConversation(clientId) {
+  return (await fetchLeadRecord(clientId)) + (await fetchLeadConversationOnly(clientId));
+}
+
+async function fetchLeadConversationOnly(clientId) {
   if (!clientId) return '';
   try {
     const sb = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
