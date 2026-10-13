@@ -388,6 +388,23 @@ async function fetchLeadConversationOnly(clientId) {
   } catch(e) { console.error('fetchLeadConversation failed:', e.message); return ''; }
 }
 
+// The channel this conversation is on: whatever they last wrote to me on, or,
+// if they have never written, whatever I last wrote on. null for a lead with no
+// messages yet, where Shine picks. A reply on a different channel from the one
+// a client used reads as though their message was not seen.
+async function conversationChannel(clientId) {
+  if (!clientId) return null;
+  try {
+    const sb = { 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+    const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${clientId}&status=not.in.(discarded)&select=channel,direction&order=created_at.desc&limit=30`, { headers: sb });
+    const rows = await r.json();
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const norm = (c) => (String(c || '').toLowerCase() === 'email' ? 'email' : 'sms');
+    const inbound = rows.find((m) => m.direction === 'inbound');
+    return norm((inbound || rows[0]).channel);
+  } catch (e) { console.error('conversationChannel failed:', e.message); return null; }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -586,14 +603,22 @@ export default async function handler(req, res) {
 
       const followUpContext = statusContext[status] || 'Follow up professionally about the next step.';
 
-      const systemPrompt = `You are writing a follow-up email on behalf of Shine, The Mentalist — a professional mentalism and magic performer in Texas.
+      // Same channel as the conversation, not "email whenever there is an
+      // address": a client who texted gets a text back.
+      const asked = req.body.channel === 'email' || req.body.channel === 'sms' ? req.body.channel : null;
+      let fuChannel = asked || (await conversationChannel(clientId)) || (toEmail ? 'email' : 'sms');
+      if (fuChannel === 'email' && !toEmail && toPhone) fuChannel = 'sms';
+      if (fuChannel === 'sms' && !toPhone && toEmail) fuChannel = 'email';
+      const fuNoun = fuChannel === 'email' ? 'email' : 'text message (SMS)';
+
+      const systemPrompt = `You are writing a follow-up ${fuNoun} on behalf of Shine, The Mentalist — a professional mentalism and magic performer in Texas.
 
 RULES:
 - This is NOT a first contact. Do NOT introduce yourself or describe your show.
 - Write only what is appropriate for the stage described below.
 - Warm, brief, natural. Under 80 words total.
 - Sign off as: Shine, The Mentalist | +1 (737) 271-5308
-- Return ONLY the email body. No subject line. No commentary.
+- Return ONLY the ${fuChannel === 'email' ? 'email body. No subject line' : 'text itself. Do not mention or refer to an email'}. No commentary.
 
 STAGE: ${followUpContext}`;
 
@@ -628,7 +653,7 @@ Hours since last contact: ${hoursAgo}` + eventTimingBlock(eventDate) + (await fe
       }
       if (!draft) throw new Error('No draft generated');
 
-      res.status(200).json({ success: true, draft, channel: toEmail ? 'email' : 'sms' });
+      res.status(200).json({ success: true, draft, channel: fuChannel });
       return;
     }
 
@@ -1083,10 +1108,17 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
       const rc = req.body.research || {};
       const hasEmail = !!(lead.email && String(lead.email).trim());
       const sourceLabel = (lead.lead_source && String(lead.lead_source).trim()) || '';
+      // Which message to write. 'sms' or 'email' = Shine picked one channel and
+      // gets ONE standalone message for it. Absent = the original pair (the web
+      // dashboard), where the text is written as a companion to the email.
+      // A text written as a companion says "I just emailed you", so it could
+      // never be sent on its own -- which is why the app now always picks.
+      const wantChannel = req.body.channel === 'email' || req.body.channel === 'sms' ? req.body.channel : null;
+      const hasResearch = !!(rc.company || rc.affordability || rc.recommendedAnchor || rc.fit);
 
       const DRAFT_SYSTEM_BASE = `You are Shine Thankappan, a corporate mentalist and magician based in Austin, TX (website texasmentalist.com, phone +1 737-271-5308). You perform a 45-60 minute interactive mentalism + visual-magic STAGE SHOW (your strength) and also do strolling/walk-around magic. Draft outreach for a new lead. These are DRAFTS you will review and send yourself.
 
-Use the research context provided (company, affordability, recommended anchor, event details) to write a confident, specific reply that shows you understood their event. Do NOT quote a specific price or dollar figure in this first message, even if a recommended anchor price is given, use it only to inform your tone and confidence, not to state a number. Show genuine interest and offer to send over pricing/next steps once you know a bit more. Never invent availability.
+Use the research context provided, if any (company, affordability, recommended anchor, event details), to write a confident, specific reply that shows you understood their event. Do NOT quote a specific price or dollar figure in this first message, even if a recommended anchor price is given, use it only to inform your tone and confidence, not to state a number. Show genuine interest and offer to send over pricing/next steps once you know a bit more. Never invent availability.
 
 THIS IS FIRST CONTACT. Open by thanking them for getting in touch, in your own words and about their actual event. Not the flat "Thank you for reaching out", and not a stock opener, but a genuine thanks that names what they wrote to you about.
 
@@ -1140,7 +1172,25 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
   "sms": "the full text message, warm and specific, signed off with the website"
 }`;
 
-      const DRAFT_SYSTEM = DRAFT_SYSTEM_BASE + (hasEmail ? DRAFT_SYSTEM_EMAIL_TAIL : DRAFT_SYSTEM_SMS_ONLY_TAIL);
+      const DRAFT_SYSTEM_EMAIL_ONLY_TAIL = `
+
+Shine has chosen to send this first message by EMAIL only. Draft ONLY the email, leave "sms" as an empty string. It is the only thing they will receive from you, so do not mention or promise a text.
+
+Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \`\`\`) and nothing else, with exactly these string fields:
+{
+  "note": "1-2 short sentences replying to Shine's feedback/question, or \\"\\" on a first draft",
+  "emailSubject": "the email subject line",
+  "emailBody": "the full email body, signed 'Shine, The Mentalist / texasmentalist.com / 737-271-5308'",
+  "sms": ""
+}`;
+
+      let tail;
+      if (wantChannel === 'email' && hasEmail) tail = DRAFT_SYSTEM_EMAIL_ONLY_TAIL;
+      else if (wantChannel === 'sms') tail = DRAFT_SYSTEM_SMS_ONLY_TAIL
+        .replace('This lead has NO email on file, only a phone number, so SMS is the only way to reach them.',
+                 'Shine has chosen to send this first message by TEXT only. It is the only thing they will receive from you: never mention, promise or point to an email.');
+      else tail = hasEmail ? DRAFT_SYSTEM_EMAIL_TAIL : DRAFT_SYSTEM_SMS_ONLY_TAIL;
+      const DRAFT_SYSTEM = DRAFT_SYSTEM_BASE + tail;
 
       let draftUser = [
         `Lead name: ${lead.name || '(unknown)'}`,
@@ -1149,9 +1199,9 @@ Return your ENTIRE response as a SINGLE fenced JSON code block (\`\`\`json ... \
         lead.guests ? `Guests: ${lead.guests}` : '',
         lead.notes ? `Their message / notes: ${lead.notes}` : '',
         sourceLabel ? `Lead source: ${sourceLabel}` : '',
-        hasEmail ? '' : 'NOTE: this lead has no email on file, SMS only.',
+        (hasEmail || wantChannel) ? '' : 'NOTE: this lead has no email on file, SMS only.',
         '',
-        'RESEARCH CONTEXT:',
+        hasResearch ? 'RESEARCH CONTEXT:' : '',
         rc.company ? `Company: ${rc.company}` : '',
         rc.affordability ? `Affordability: ${rc.affordability}` : '',
         rc.recommendedAnchor ? `Recommended anchor price: ${rc.recommendedAnchor}` : '',
