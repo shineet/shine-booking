@@ -1142,6 +1142,8 @@ If a CURRENT DRAFT and feedback from Shine are shown below, you are REVISING: ch
 
 This lead has an email on file, so draft BOTH an email and an SMS. The email is the primary, more detailed message, one or two short paragraphs. The SMS should be noticeably shorter and more condensed than the email, a natural-sounding text pointing to and complementing it, not a copy-paste of the same content, but it does NOT need to be capped at ~160 chars — let it run a bit longer if there's a bit more worth saying in the moment. (If Shine wants a bare one-line reminder text for a specific lead, he can just edit the SMS himself before sending.)
 
+The two go out together, the email first and the text right after it. So the SMS must say plainly that you just sent them an email (for example "I just sent you an email with the details"), so they know to look for it, and must not repeat the email's details.
+
 THE TEXT IS LAID OUT TOO, it is not one run-on blob. Use real line breaks (\n):
 - "Hi Christian," on its own line
 - blank line
