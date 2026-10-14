@@ -475,7 +475,7 @@ export default async function handler(req, res) {
       // Best-effort, like every other call site. A push that fails must never
       // fail the lead capture; the email has already gone either way.
       try {
-        await notifyNewLead({ clientName: leadName, source: 'website' });
+        await notifyNewLead({ clientName: leadName, source: 'website', clientId: client?.id });
       } catch (pushErr) { console.error('New website lead push failed:', pushErr.message); }
 
       return res.status(200).json({ success: true, leadCreated: !!client, clientId: client?.id || null });

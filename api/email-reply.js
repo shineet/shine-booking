@@ -590,7 +590,7 @@ export default async function handler(req, res) {
         // most at risk of being missed. Leaving it email-only would have fixed
         // the common case and left the failure case silent.
         try {
-          await notifyNewLead({ clientName: leadName, source: 'website' });
+          await notifyNewLead({ clientName: leadName, source: 'website', clientId: client?.id });
         } catch (pushErr) { console.error('Wix-form lead push failed:', pushErr.message); }
 
         res.status(200).json({ received: true, wixForm: true, leadCreated: !!client });
@@ -1270,7 +1270,7 @@ Only include this block once. Do not mention this block or its contents in the v
             // Was notifyNewReply, which made the phone say "Reply waiting for
             // review -- a draft is ready to send" about somebody who had never
             // written before. The event is a new lead; say that.
-            await notifyNewLead({ clientName: leadName || fromEmail, source: 'email' });
+            await notifyNewLead({ clientName: leadName || fromEmail, source: 'email', clientId: newClient?.id });
           } catch(pushErr) {
             console.error('New-lead push failed:', pushErr.message);
           }
