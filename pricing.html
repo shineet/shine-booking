@@ -4,6 +4,33 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shine, The Mentalist — Packages & Pricing</title>
+    <script>
+    // Withdrawn links: a pricing link that went out before Shine meant it to
+    // (Brooke Wall, 2026-10-17, sent while a custom quote was being worked
+    // out). Texts and emails cannot be recalled, so the page itself stops
+    // showing prices for that exact link: its query string, parameters in
+    // any order. A new link for the same client (custom tiers, a quote)
+    // differs in its parameters and opens normally.
+    (function () {
+        var WITHDRAWN = [
+            // Brooke Wall, wedding cocktail hour: standard corporate strolling, sent by mistake.
+            '?format=strolling&type=corporate&cid=f33a4e30-2557-4918-bd10-8619ee60690c&cname=Brooke%20Wall&etype=Wedding',
+        ];
+        function key(search) {
+            var p = new URLSearchParams(search), out = [];
+            p.forEach(function (v, k) { out.push(k + '=' + v); });
+            return out.sort().join('&');
+        }
+        if (WITHDRAWN.map(key).indexOf(key(window.location.search)) < 0) return;
+        document.documentElement.style.visibility = 'hidden';
+        document.addEventListener('DOMContentLoaded', function () {
+            document.body.innerHTML =
+                '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px;text-align:center;font-family:-apple-system,system-ui,sans-serif;background:#0b0b0f;color:#eee">' +
+                '<p style="max-width:460px;font-size:19px;line-height:1.6">I’m putting together options tailored to your cocktail hour. You’ll have them from me shortly.<br><br>Shine</p></div>';
+            document.documentElement.style.visibility = 'visible';
+        });
+    })();
+    </script>
     <style>
     * {
         box-sizing: border-box;
