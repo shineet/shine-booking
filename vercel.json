@@ -12,12 +12,5 @@
       "path": "/api/get-booking?mode=send-weekly-summary",
       "schedule": "0 13 * * 1"
     }
-  ],
-  "redirects": [
-    {
-      "source": "/q/brooke-wall",
-      "permanent": false,
-      "destination": "/pricing.html?quote=1&q1t=Strolling%20Magic&q1p=1650&q1f=1%20hour%20of%20up-close%20mind%20reading%20and%20card%20magic%2C%20moving%20through%20your%20cocktail%20hour%7CPersonal%20moments%20for%20small%20groups%20as%20guests%20mingle%7CNo%20stage%2C%20mic%20or%20setup%20needed%7CIncludes%20travel%20to%20Galveston%20and%20an%20overnight%20stay%20%28%241%2C000%20show%20%2B%20%24650%20travel%20and%20hotel%29&q2t=Strolling%20Magic%20%2B%20Grand%20Finale&q2p=1950&q2f=Everything%20in%20Strolling%20Magic%7CA%2015-minute%20grand%20finale%20that%20brings%20all%20your%20guests%20together%7CA%20big%20shared%20moment%20to%20close%20out%20the%20cocktail%20hour%7CIncludes%20travel%20to%20Galveston%20and%20an%20overnight%20stay%20%28%241%2C300%20show%20%2B%20%24650%20travel%20and%20hotel%29&cid=f33a4e30-2557-4918-bd10-8619ee60690c&cname=Brooke%20Wall&etype=Wedding"
-    }
   ]
 }

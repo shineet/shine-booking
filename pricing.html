@@ -164,6 +164,22 @@
         margin-bottom: 8px
     }
 
+    .travel-line, .travel-total {
+        display: flex;
+        justify-content: space-between;
+        font-size: 14px;
+        color: #ccc;
+        padding-top: 10px;
+        border-top: 0.5px solid #2a2a2a;
+        margin-top: 4px
+    }
+
+    .travel-total {
+        color: #f5f5f7;
+        font-weight: 600;
+        margin-bottom: 16px
+    }
+
     .feature:last-child {
         margin-bottom: 16px
     }
@@ -739,6 +755,11 @@
             // built for. Each option carries its own title, price and feature
             // lines (pipe separated).
             quote: p.get('quote') === '1',
+            // Travel for an out-of-town quote, shown under each option as its
+            // own line with the total beneath, so the show fee stays the fee
+            // the client knows (Shine, 2026-10-17). Booking is at the total.
+            travelFee: parseInt(p.get('tf')) || 0,
+            travelLabel: p.get('tl') || 'Out-of-town travel & hotel',
             quoteOptions: [1, 2, 3].map(function (i) {
                 return {
                     title: p.get('q' + i + 't') || '',
@@ -762,7 +783,13 @@
         return fallback;
     }
 
-    function makeCard(category, tier, label, price, tagline, features, featured, single) {
+    function makeCard(category, tier, label, price, tagline, features, featured, single, travel) {
+        const fee = price;
+        const extra = travel && travel.fee > 0 ? travel.fee : 0;
+        price = fee + extra;
+        const travelHtml = extra ? `
+      <div class="travel-line"><span>+ ${travel.label}</span><span>$${extra.toLocaleString()}</span></div>
+      <div class="travel-total"><span>Total</span><span>$${price.toLocaleString()}</span></div>` : '';
         const badgeHtml = featured ? '<div class="badge">Most popular</div>' : '';
         const featuresHtml = features.map(f => `<div class="feature"><span class="check">✓</span>${f}</div>`).join('');
         const btnText = single ? 'Confirm &amp; reserve your date' : 'Select this package';
@@ -771,9 +798,9 @@
     <div class="card${featured ? ' featured' : ''}${single ? ' picked' : ''}" id="card-${category}-${tier}">
       ${badgeHtml}
       <div class="tier">${label}</div>
-      <div class="price">$${price.toLocaleString()} <span>/ show</span></div>
+      <div class="price">$${fee.toLocaleString()} <span>/ show</span></div>
       <div class="tagline">${tagline}</div>
-      ${featuresHtml}
+      ${featuresHtml}${travelHtml}
       <button class="select-btn" id="btn-${category}-${tier}" onclick="${btnClick}">${btnText}</button>
     </div>
   `
@@ -877,7 +904,8 @@
             p.quoteOptions.length > 1 ? 'Your options' : 'Your quote';
         document.getElementById('corporate-cards').innerHTML = p.quoteOptions.map(function (o, i) {
             return makeCard('corporate', 'quote' + (i + 1), o.title, o.price, '',
-                            o.features, false, p.quoteOptions.length === 1);
+                            o.features, false, p.quoteOptions.length === 1,
+                            { fee: p.travelFee, label: p.travelLabel });
         }).join('');
         document.getElementById('subtitle').textContent =
             buildSubtitle(p, 'Prepared for your event · Texas');
