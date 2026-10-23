@@ -1239,17 +1239,35 @@ Only include this block once. Do not mention this block or its contents in the v
           // otherwise leaves the inbound/outbound pair's order undefined.
           const inboundTs2 = new Date();
           const outboundTs2 = new Date(inboundTs2.getTime() + 500);
+          // email_message_id is on BOTH rows (null on the reply) for the same
+          // reason as the existing-client insert above: mismatched keys make
+          // PostgREST refuse the whole array. This one was missed, so every
+          // brand-new email lead (Morgan Odell, 2026-10-22) arrived with an
+          // empty conversation and no draft.
+          const newLeadRows = [
+            { client_id: newClient.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, email_message_id: inboundMsgId, cc_address: ccAddresses, created_at: inboundTs2.toISOString() },
+            { client_id: newClient.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject, email_message_id: null, cc_address: ccAddresses, created_at: outboundTs2.toISOString() }
+          ];
           const messagesRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
-            body: JSON.stringify([
-              { client_id: newClient.id, channel: 'email', direction: 'inbound', content: emailBody, status: 'received', to_address: null, email_subject: null, email_message_id: inboundMsgId, cc_address: ccAddresses, created_at: inboundTs2.toISOString() },
-              { client_id: newClient.id, channel: 'email', direction: 'outbound', content: cleanReply, status: reviewMode ? 'pending_review' : 'sent', to_address: fromEmail, email_subject: replySubject, cc_address: ccAddresses, created_at: outboundTs2.toISOString() }
-            ])
+            body: JSON.stringify(newLeadRows)
           });
           if (!messagesRes.ok) {
             const errBody = await messagesRes.text();
             console.error('Messages insert failed for new lead:', messagesRes.status, errBody);
+            // Same as above: their words must survive even if the draft cannot.
+            try {
+              const retry = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_SECRET_KEY, 'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}` },
+                body: JSON.stringify([newLeadRows[0]])
+              });
+              if (!retry.ok) console.error('New-lead inbound-only retry failed too:', retry.status, await retry.text());
+              else console.error('New-lead inbound message saved on retry; the draft was lost.');
+            } catch (e) {
+              console.error('New-lead inbound-only retry threw:', e.message);
+            }
           }
 
           try {
