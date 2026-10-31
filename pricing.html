@@ -928,6 +928,11 @@
             ? 'Up-close magic that moves through your event · Texas'
             : 'Up-close magic that mingles with your guests · Texas');
 
+        // A length already asked for arrives selected (dur=90 opens on 1.5 hr),
+        // so the client sees the price of what she asked for, not the 1 hr
+        // minimum. Kayla, wedding, Oct 2026. Still adjustable with - and +.
+        if (p.dur && p.dur >= 60) strollingDuration = Math.round(p.dur / 30) * 30;
+
         updateDurationDisplay();
         renderStrollingCards();
     }
