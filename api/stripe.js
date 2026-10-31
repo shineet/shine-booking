@@ -83,11 +83,28 @@ export default async function handler(req, res) {
             } catch (e) { console.error('bookOnPay booking lookup failed:', e.message); }
           }
 
+          // payment_amount is the running total paid, so a balance payment adds
+          // to the deposit rather than replacing it (Bradley B., Oct 31 2026: the
+          // $250 balance overwrote the $250 deposit and the app showed $250 paid
+          // against $500). Stripe can deliver the same event twice; a session
+          // already recorded is not added again.
+          let paidSoFar = 0, alreadyRecorded = false;
           if (bookingId) {
+            try {
+              const pRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${bookingId}&select=payment_amount,stripe_session_id&limit=1`, { headers: sbHeaders() });
+              const pRows = await pRes.json();
+              if (Array.isArray(pRows) && pRows[0]) {
+                paidSoFar = Number(pRows[0].payment_amount) || 0;
+                alreadyRecorded = pRows[0].stripe_session_id === session.id;
+              }
+            } catch (e) { console.error('Booking paid-so-far lookup failed:', e.message); }
+          }
+
+          if (bookingId && !alreadyRecorded) {
             const patch = {
               deposit_paid: true, // any successful payment satisfies the deposit
               paid_at: new Date().toISOString(),
-              payment_amount: credit,
+              payment_amount: paidSoFar + credit,
               payment_type: type,
               stripe_session_id: session.id
             };
