@@ -1059,6 +1059,7 @@
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 action: 'create', type: 'deposit', amountDollars: depAmt,
+                credit: baseDep,
                 label: sc ? `Deposit (${params.depPct}%) + ${sc}% card fee — ${pickedLabel}` : `Deposit (${params.depPct}%) — ${pickedLabel}`,
                 description: 'Shine, The Mentalist',
                 clientId: params.clientId || '',
@@ -1186,6 +1187,7 @@
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 action: 'create', type: 'deposit', amountDollars: depAmt,
+                credit: baseDep,
                 label: sc ? `Deposit (${params.depPct}%) + ${sc}% card fee — ${pickedLabel}` : `Deposit (${params.depPct}%) — ${pickedLabel}`,
                 description: 'Shine, The Mentalist',
                 clientId: params.clientId || '',

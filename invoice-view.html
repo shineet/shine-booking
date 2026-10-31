@@ -301,6 +301,8 @@ async function payOnline(mode, amountDueNow) {
         // paying off the balance or a full-payment invoice settles everything, so
         // both use type:'full' to also flag the booking paid_in_full.
         action: 'create', type: mode === 'deposit' ? 'deposit' : 'full', amountDollars: stripeAmount,
+        // The part that pays the fee: not the card fee, not the tip.
+        credit: amountDueNow,
         label: modeLabel + (tip ? ' + $' + tip + ' tip' : '') + (sc ? ' + ' + sc + '% card fee' : '') + ' — ' + (invoiceData.eventName || 'event'),
         description: 'Shine, The Mentalist — ' + (invoiceData.eventName || 'event'),
         clientEmail: booking.clientEmail || undefined,

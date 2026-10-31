@@ -48,6 +48,11 @@ export default async function handler(req, res) {
           let   bookingId = md.bookingId || '';
           const type      = md.type || 'payment';
           const amount    = (session.amount_total || 0) / 100;
+          // What counts towards the fee. The charge can include a card fee
+          // (and a tip) that the client paid on top; recording those as paid
+          // made the invoice take them off the balance (Bradley B., Oct 2026:
+          // paid $258 for a $250 deposit and was shown $242 owing, not $250).
+          const credit    = Number(md.credit) > 0 ? Number(md.credit) : amount;
           const payerEmail = (session.customer_details && session.customer_details.email) || session.customer_email || 'unknown';
 
           // Pricing-page "Pay deposit & book": the payment gates the booking. Reuse
@@ -82,7 +87,7 @@ export default async function handler(req, res) {
             const patch = {
               deposit_paid: true, // any successful payment satisfies the deposit
               paid_at: new Date().toISOString(),
-              payment_amount: amount,
+              payment_amount: credit,
               payment_type: type,
               stripe_session_id: session.id
             };
@@ -200,7 +205,10 @@ export default async function handler(req, res) {
       bookingId: body.bookingId || '',
       clientId: body.clientId || '',
       type,
-      extraMetadata: (body.extraMetadata && typeof body.extraMetadata === 'object') ? body.extraMetadata : undefined,
+      extraMetadata: {
+        ...((body.extraMetadata && typeof body.extraMetadata === 'object') ? body.extraMetadata : {}),
+        credit: Number(body.credit) > 0 ? Number(body.credit) : undefined
+      },
       successUrl: body.successUrl || `${APP_BASE}/payment-success.html`,
       cancelUrl: body.cancelUrl || `${APP_BASE}/payment-success.html?canceled=1`
     });
