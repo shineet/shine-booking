@@ -9,6 +9,10 @@
       "schedule": "0 22 * * *"
     },
     {
+      "path": "/api/get-booking?mode=occasion-drafts",
+      "schedule": "0 14 * * *"
+    },
+    {
       "path": "/api/get-booking?mode=send-weekly-summary",
       "schedule": "0 13 * * 1"
     }

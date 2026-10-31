@@ -283,6 +283,146 @@ async function sendShineDigest(rangeStart, rangeEnd, tag) {
 // at the top of the week -- separate from the per-client day-before reminders above. Sends
 // nothing (silent no-op) if the week has no active gigs, per Shine's ask ("if I have some
 // shows that week").
+// Wedding and birthday notes, as DRAFTS in the Replies tab (Shine, 2026-10-31).
+// Bachelor and bachelorette intakes give a wedding day; most intakes give the
+// guest of honour's date of birth. Each morning: a wedding TOMORROW gets a note
+// to whoever booked him, wishing the couple a happy married life, and a
+// birthday TODAY gets one asking them to pass on his wishes. Nothing is sent:
+// they are pending_review messages, approved and sent from the Replies tab
+// like any other draft. Fixed wording rather than generated, so what lands is
+// predictable and never needs a model to be up at 9am.
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+function normalizePhone(phone) {
+  const d = String(phone || '').replace(/[^0-9]/g, '');
+  if (d.length === 10) return '+1' + d;
+  if (d.length === 11 && d[0] === '1') return '+' + d;
+  return String(phone || '').trim().startsWith('+') ? '+' + d : phone;
+}
+
+function firstName(name) {
+  return String(name || '').trim().split(/\s+/)[0] || '';
+}
+
+// "Bachelorette party" -> "bachelorette", "Birthday party" -> "birthday party".
+function partyWords(eventType) {
+  const t = String(eventType || 'event').trim().toLowerCase();
+  if (t.includes('bachelorette')) return 'bachelorette';
+  if (t.includes('bachelor')) return 'bachelor party';
+  return t;
+}
+
+// When the show was, as a person says it: "in August", "in August 2025".
+function whenWords(eventDate, today) {
+  if (!eventDate) return '';
+  const [y, m] = String(eventDate).slice(0, 10).split('-').map(Number);
+  if (!y || !m) return '';
+  return 'in ' + MONTHS[m - 1] + (String(y) === today.slice(0, 4) ? '' : ' ' + y);
+}
+
+function daysBetween(a, b) {
+  return Math.round((new Date(a + 'T12:00:00Z') - new Date(b + 'T12:00:00Z')) / 86400000);
+}
+
+// The occasions one booking produces on `today`, as {kind, subject, text}.
+// Exported shape kept plain so it can be checked without the database.
+function occasionsFor(b, today, tomorrow) {
+  const a = b.intake_answers || {};
+  const out = [];
+  const booker = firstName(b.client_name) || 'there';
+  const party = partyWords(b.event_type);
+  const past = b.event_date && String(b.event_date).slice(0, 10) < today;
+  const when = whenWords(b.event_date, today);
+  const isBachelorette = String(b.event_type || '').toLowerCase().includes('bachelorette');
+  const isBachelor = !isBachelorette && String(b.event_type || '').toLowerCase().includes('bachelor');
+
+  if (a.q_wedding_date && String(a.q_wedding_date).slice(0, 10) === tomorrow) {
+    const bride = firstName(isBachelorette ? a.q_honoree : a.q_bride_name);
+    const groom = firstName(isBachelor ? a.q_honoree : a.q_groom_name);
+    const couple = [bride, groom].filter(Boolean).join(' and ') || 'the happy couple';
+    const honoree = firstName(a.q_honoree);
+    const fun = past && honoree
+      ? `I had so much fun at ${honoree}'s ${party}${when ? ' ' + when : ''}, and I know the big day is tomorrow! `
+      : 'I know the big day is tomorrow! ';
+    out.push({
+      kind: 'wedding',
+      subject: `Wishing ${couple} a happy married life`,
+      text: `Hi ${booker}, it's Shine. ${fun}Please pass on my warmest wishes to ${couple} for a wonderful wedding and a long, happy married life together. Thank you again for letting me be part of the celebration!\n\nShine, The Mentalist`
+    });
+  }
+
+  // Birthdays: the guest of honour, and the groom on a bachelorette intake.
+  // Not when the show itself is within three days: that IS the birthday party.
+  const nearShow = b.event_date && Math.abs(daysBetween(String(b.event_date).slice(0, 10), today)) <= 3;
+  const people = [[a.q_honoree, a.q_honoree_dob], [a.q_groom_name, a.q_groom_dob]];
+  for (const [name, dob] of people) {
+    const who = firstName(name);
+    if (!who || !dob || nearShow || String(dob).slice(5, 10) !== today.slice(5, 10)) continue;
+    const memory = past
+      ? `I still remember the fun we had at ${firstName(a.q_honoree) ? firstName(a.q_honoree) + "'s" : 'the'} ${party}${when ? ' ' + when : ''}. `
+      : '';
+    out.push({
+      kind: 'birthday',
+      subject: `Happy birthday, ${who}!`,
+      text: `Hi ${booker}, it's Shine. Today is ${who}'s birthday! ${memory}Please wish ${who} a very happy birthday from me.\n\nShine, The Mentalist`
+    });
+  }
+  return out;
+}
+
+async function occasionDrafts(req, res) {
+  const auth = req.headers.authorization || '';
+  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  const today = centralDateString(0);
+  const tomorrow = centralDateString(1);
+  const results = { today, drafted: [], skipped: [], errors: [] };
+  try {
+    const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?intake_answers=not.is.null&select=id,client_id,client_name,client_email,event_type,event_date,status,intake_answers`, { headers: SB_HDR() });
+    const bookings = await bRes.json();
+    if (!Array.isArray(bookings)) throw new Error('Unexpected bookings response');
+    for (const b of bookings) {
+      const status = String(b.status || '').toLowerCase();
+      if (status === 'lost' || status === 'cancelled') continue;
+      for (const o of occasionsFor(b, today, tomorrow)) {
+        try {
+          if (!b.client_id) { results.skipped.push({ id: b.id, kind: o.kind, reason: 'no client' }); continue; }
+          // Once a year per client and occasion, whatever became of the draft.
+          const since = new Date(Date.now() - 300 * 86400000).toISOString();
+          const dupRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages?client_id=eq.${b.client_id}&email_subject=eq.${encodeURIComponent(o.subject)}&created_at=gte.${since}&select=id&limit=1`, { headers: SB_HDR() });
+          const dup = await dupRes.json().catch(() => []);
+          if (Array.isArray(dup) && dup[0]) { results.skipped.push({ id: b.id, kind: o.kind, reason: 'already drafted' }); continue; }
+
+          const cRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${b.client_id}&select=phone,email`, { headers: SB_HDR() });
+          const c = ((await cRes.json().catch(() => [])) || [])[0] || {};
+          const email = b.client_email || c.email || '';
+          const channel = c.phone ? 'sms' : (email ? 'email' : null);
+          if (!channel) { results.skipped.push({ id: b.id, kind: o.kind, reason: 'no phone or email' }); continue; }
+          const to = channel === 'sms' ? normalizePhone(c.phone) : email;
+
+          const ins = await fetch(`${process.env.SUPABASE_URL}/rest/v1/messages`, {
+            method: 'POST', headers: SB_HDR(),
+            body: JSON.stringify({
+              client_id: b.client_id, channel, direction: 'outbound', content: o.text,
+              status: 'pending_review', to_address: to, email_subject: o.subject,
+            }),
+          });
+          if (!ins.ok) throw new Error('insert ' + ins.status + ' ' + (await ins.text()).slice(0, 200));
+          results.drafted.push({ id: b.id, client: b.client_name, kind: o.kind, channel });
+        } catch (e) {
+          results.errors.push({ id: b.id, kind: o.kind, error: e.message });
+        }
+      }
+    }
+    res.status(200).json(results);
+  } catch (e) {
+    console.error('occasion-drafts error:', e);
+    res.status(500).json({ error: e.message, ...results });
+  }
+}
+
 async function sendWeeklySummary(req, res) {
   const auth = req.headers.authorization || '';
   if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -700,6 +840,10 @@ Rules:
 
     if (mode === 'send-weekly-summary') {
       return await sendWeeklySummary(req, res);
+    }
+
+    if (mode === 'occasion-drafts') {
+      return await occasionDrafts(req, res);
     }
 
     if (!bid) {
