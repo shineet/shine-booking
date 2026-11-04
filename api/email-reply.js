@@ -7,6 +7,7 @@
 import { claudeText } from '../lib/claude-text.js';
 import { notifyNewReply, notifyNewLead } from '../lib/apns.js';
 import { extractMessageId, threadHeaders, lastInboundMessageId } from '../lib/email-thread.js';
+import { shouldDropAsSpam } from '../lib/spam-filter.js';
 
 function emailIlikeParam(email) {
   return encodeURIComponent(String(email || '').trim().replace(/[%_\\]/g, m => '\\' + m));
@@ -475,6 +476,15 @@ export default async function handler(req, res) {
         }
         const cleanForm = (footerIdx > -1 ? summary.slice(0, footerIdx) : summary).trim();
 
+        // A bot submitting the website contact form is the same sales spam as the
+        // inbound-email path, just arriving through Wix. Drop it before it becomes
+        // a "Website form" lead + alert, using the decoded submission text and the
+        // submitter's address.
+        if (shouldDropAsSpam({ text: `${subject || ''}\n${cleanForm}`, email: clientEmail })) {
+          res.status(200).json({ received: true, wixForm: true, skipped: 'cold solicitation / sales spam detected' });
+          return;
+        }
+
         // Map the form's fields to lead columns. The two unlabeled dropdowns arrive as
         // "Choose an option" (event type) and "Choose an option 2" (guest count).
         const firstName = field(['First Name']);
@@ -724,6 +734,18 @@ export default async function handler(req, res) {
 
     if (looksLikeAutoReply(rawEmail, subject, emailBody)) {
       res.status(200).json({ received: true, skipped: 'auto-reply / out-of-office detected' });
+      return;
+    }
+
+    // Cold B2B sales spam (web/app dev, SEO, marketing, outsourcing "we build X,
+    // starting at $N/hour, reply NO to opt out") kept landing as brand-new leads
+    // and auto-drafting a reply, every one of which Shine then had to delete by
+    // hand along with its history (Shine, 2026-11-04). Skip it the same way an
+    // out-of-office is skipped: no lead, no draft, nothing to clean up. The gate
+    // lives in lib/spam-filter.js and is applied on every lead-creating path.
+    const spamSender = stripBatvTag(from.match(/<(.+)>/)?.[1] || from);
+    if (shouldDropAsSpam({ text: `${subject || ''}\n${emailBody || ''}`, email: spamSender })) {
+      res.status(200).json({ received: true, skipped: 'cold solicitation / sales spam detected' });
       return;
     }
 

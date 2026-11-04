@@ -5,6 +5,7 @@
 
 import { gigLine, upsertGigLine } from '../lib/family-note-server.js';
 import { notify, notifyNewLead } from '../lib/apns.js';
+import { shouldDropAsSpam } from '../lib/spam-filter.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -390,6 +391,13 @@ export default async function handler(req, res) {
       const rawDate   = (b.eventDate || '').trim();
       const eDate     = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null;
       const noteLine  = messageVal || `Lead from website contact form${company ? ` — ${company}` : ''}`;
+
+      // Bot/sales spam submitted through the website form: drop it before it
+      // becomes a lead + alert. Same shared gate as the email paths. Return a
+      // plain 200 so the posting form sees success and does not retry.
+      if (shouldDropAsSpam({ text: `${company || ''}\n${eventType || ''}\n${messageVal}`, email: clientEmail })) {
+        return res.status(200).json({ success: true, leadCreated: false, skipped: 'spam' });
+      }
 
       const supaHdrs = {
         'Content-Type': 'application/json',
