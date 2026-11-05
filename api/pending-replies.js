@@ -1,5 +1,6 @@
 import { claudeText } from '../lib/claude-text.js';
 import { threadHeaders, lastInboundMessageId } from '../lib/email-thread.js';
+import { tokenValid } from '../lib/dashboard-token.js';
 
 function normalizePhone(phone) {
   if (!phone) return phone;
@@ -436,8 +437,29 @@ async function conversationChannel(clientId) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-dashboard-token');
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
+
+  // Auth. This endpoint serves the app's review queue -- pending client drafts
+  // and their messages -- plus every mutating and AI-spend action. It was wide
+  // open: a plain GET returned real client data to anyone with the URL (Shine,
+  // 2026-11-05). Require the same dashboard session token the rest of the app
+  // already carries (sent as the x-dashboard-token header; body.token/query
+  // token also accepted). The only exceptions are the Google OAuth browser
+  // redirects, which arrive in a plain browser that cannot carry the token and
+  // are guarded by OAuth state instead.
+  {
+    const OAUTH_OPEN = new Set(['gmail-authstart', 'gmail-callback']);
+    let body = req.body;
+    if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }
+    const action = (req.method === 'GET' ? req.query.action : (body && body.action)) || '';
+    if (!OAUTH_OPEN.has(action)) {
+      const tok = req.headers['x-dashboard-token']
+        || (body && typeof body === 'object' ? body.token : null)
+        || req.query.token || '';
+      if (!tokenValid(tok)) { res.status(401).json({ error: 'Unauthorized' }); return; }
+    }
+  }
 
   try {
     // Owner's custom response guidance (editable from the app, under Settings).
