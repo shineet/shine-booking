@@ -37,6 +37,34 @@ function emailIlikeParam(email) {
   return encodeURIComponent(String(email || '').trim().replace(/[%_\\]/g, function(m) { return '\\' + m; }));
 }
 
+// The nightly job in get-booking.js (occasionsFor) creates proactive "occasion"
+// drafts -- wedding and birthday wishes -- as pending_review messages. They are
+// not replies to anything, so the Replies screen must flag them and must NOT
+// show the client's last inbound as the thing being replied to. We own those
+// templates, so match their exact subject/body shape.
+function occasionDraftKind(subject, body) {
+  const s = String(subject || '');
+  const b = String(body || '');
+  if (/^Wishing .+ a happy married life$/.test(s) || /\bthe big day is tomorrow!/.test(b)) return 'wedding';
+  if (/^Happy birthday, .+!$/.test(s) || /\bToday is .+'s birthday!/.test(b)) return 'birthday';
+  return null;
+}
+
+// A short human reference to what the proactive draft is about, read straight
+// from its own subject so no extra booking lookup is needed.
+function occasionAbout(kind, subject) {
+  const s = String(subject || '');
+  if (kind === 'wedding') {
+    const m = s.match(/^Wishing (.+) a happy married life$/);
+    return m ? `${m[1]}'s wedding` : 'their wedding';
+  }
+  if (kind === 'birthday') {
+    const m = s.match(/^Happy birthday, (.+)!$/);
+    return m ? `${m[1]}'s birthday` : 'their birthday';
+  }
+  return null;
+}
+
 // Best-effort safety net for action=findleads: the model is told today's real date and told to
 // exclude events that have already happened, but web search results (event calendar aggregators
 // especially) routinely surface past events without labeling them as such, and the model can
@@ -556,6 +584,12 @@ export default async function handler(req, res) {
 
       const result = pending.map(m => {
         const inb = inboundByClient[m.client_id + '|' + m.channel] || null;
+        // A proactive occasion draft (wedding/birthday wishes) is NOT a reply.
+        // Do not pin the client's last inbound under it: doing so stapled a
+        // stale, unrelated message beneath a congratulations note and made the
+        // draft look like it contradicted the client (Shine, 2026-11-05).
+        const kind = occasionDraftKind(m.email_subject, m.content);
+        const proactive = kind !== null;
         return {
           id: m.id,
           clientId: m.client_id,
@@ -566,8 +600,12 @@ export default async function handler(req, res) {
           createdAt: m.created_at,
           subject: m.email_subject || null,
           cc: m.cc_address || null,
-          incoming: inb ? inb.content : null,
-          incomingAt: inb ? inb.created_at : null
+          incoming: proactive ? null : (inb ? inb.content : null),
+          incomingAt: proactive ? null : (inb ? inb.created_at : null),
+          kind,                                                           // null for a normal reply
+          tag: kind === 'wedding' ? 'Wedding wishes'
+             : kind === 'birthday' ? 'Birthday wishes' : null,
+          about: occasionAbout(kind, m.email_subject)
         };
       });
 
