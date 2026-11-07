@@ -862,6 +862,33 @@ Rules:
       return;
     }
 
+    // On-demand "wishes in the next 7 days" for the ShineBooking app (Shine, 2026-11-07).
+    // A read-only preview of the same birthday/anniversary occasions the daily cron will
+    // draft: it drafts NOTHING and sends NOTHING, just reports what's coming. Built from
+    // the same occasionsFor() walk as occasion-drafts and the heads-up text, so a button
+    // in the app can never disagree with what actually lands in Replies.
+    if (body.action === 'upcoming-wishes') {
+      if (!tokenValid(body.token)) { res.status(401).json({ error: 'Unauthorized' }); return; }
+      const today = centralDateString(0);
+      const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?select=id,client_id,client_name,client_email,event_type,event_date,status,intake_answers`, { headers: SB_HDR() });
+      const bookings = await bRes.json();
+      if (!Array.isArray(bookings)) { res.status(500).json({ error: 'Unexpected bookings response' }); return; }
+      const items = [];
+      for (let d = 0; d <= 7; d++) {
+        const day = centralDateString(d);
+        const next = centralDateString(d + 1);
+        for (const b of bookings) {
+          const st = String(b.status || '').toLowerCase();
+          if (st === 'lost' || st === 'cancelled') continue;
+          for (const o of occasionsFor(b, day, next)) {
+            items.push({ date: day, kind: o.kind, subject: o.subject, text: o.text, client: b.client_name || '', clientId: b.client_id || null });
+          }
+        }
+      }
+      res.status(200).json({ today, count: items.length, items });
+      return;
+    }
+
     // Delete a client + its messages/bookings (was api/delete-client.js; merged here
     // and now token-protected). FK order: messages -> bookings -> client.
     if (body.action === 'delete-client') {
