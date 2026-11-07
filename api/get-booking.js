@@ -324,6 +324,17 @@ function daysBetween(a, b) {
   return Math.round((new Date(a + 'T12:00:00Z') - new Date(b + 'T12:00:00Z')) / 86400000);
 }
 
+// "MM-DD" of a Y-M-D (or longer ISO) date string.
+function monthDay(dateStr) {
+  return String(dateStr || '').slice(5, 10);
+}
+
+// 1 -> "1st", 2 -> "2nd", 3 -> "3rd", 11 -> "11th", 21 -> "21st".
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
 // The occasions one booking produces on `today`, as {kind, subject, text}.
 // Exported shape kept plain so it can be checked without the database.
 function occasionsFor(b, today, tomorrow) {
@@ -367,6 +378,53 @@ function occasionsFor(b, today, tomorrow) {
       text: `Hi ${booker}, it's Shine. Today is ${who}'s birthday! ${memory}Please wish ${who} a very happy birthday from me.\n\nShine, The Mentalist`
     });
   }
+
+  // Anniversary of a PAST wedding, every year (Shine, 2026-11-07). The one-time
+  // "wedding is tomorrow" note above keys off q_wedding_date and fires once, before
+  // the actual wedding. This one is for weddings that have already happened: it fires
+  // the day BEFORE each anniversary (so the draft is ready to send on the morning of),
+  // dated off the captured wedding date if there is one, else the gig's own date -- a
+  // wedding gig lands on the wedding day. Only for Wedding-type gigs, and only once a
+  // full year has gone by. The yearly dedup in occasionDrafts (300-day window) lets it
+  // recur each anniversary.
+  const isWedding = String(b.event_type || '').toLowerCase().includes('wedding');
+  const annivDate = (a.q_wedding_date && String(a.q_wedding_date).slice(0, 10))
+    || (isWedding && b.event_date && String(b.event_date).slice(0, 10)) || '';
+  if (annivDate && monthDay(annivDate) === monthDay(tomorrow)) {
+    const years = Number(tomorrow.slice(0, 4)) - Number(annivDate.slice(0, 4));
+    if (years >= 1) {
+      const couple = [firstName(a.q_bride_name), firstName(a.q_groom_name)].filter(Boolean).join(' and ');
+      const who = couple || 'you both';
+      out.push({
+        kind: 'anniversary',
+        subject: `Happy anniversary${couple ? ', ' + couple : ''}!`,
+        text: `Hi ${booker}, it's Shine. Tomorrow is your ${ordinal(years)} wedding anniversary! It was a joy to be part of the wedding${when ? ' ' + when : ''}. Wishing ${who} a very happy anniversary and many more happy years together.\n\nShine, The Mentalist`
+      });
+    }
+  }
+
+  // Birthday inferred from a PAST birthday-party gig when no date of birth was ever
+  // captured (Shine, 2026-11-07). A birthday party sits on or beside the birthday, so
+  // the gig date's month-day is a good-enough proxy. Guarded so it never doubles the
+  // DOB-driven birthday above (only fires when there's no DOB on file), only for
+  // Birthday-party gigs, and only once a prior year has elapsed (>= 300 days, which the
+  // month-day match makes "about a year or more"). Wording stays hedged because the
+  // proxy can be a day or two off the real birthday.
+  const isBirthdayParty = String(b.event_type || '').toLowerCase().includes('birthday');
+  const haveDob = a.q_honoree_dob || a.q_groom_dob;
+  const gig = b.event_date ? String(b.event_date).slice(0, 10) : '';
+  if (isBirthdayParty && !haveDob && gig && gig < today
+      && daysBetween(today, gig) >= 300 && monthDay(gig) === monthDay(today)) {
+    const who = firstName(a.q_honoree) || booker;
+    out.push({
+      kind: 'birthday-proxy',
+      subject: `Happy birthday, ${who}!`,
+      text: who === booker
+        ? `Hi ${booker}, it's Shine. I think your birthday is around now -- I had such a great time at your birthday party last year! Wishing you a very happy birthday.\n\nShine, The Mentalist`
+        : `Hi ${booker}, it's Shine. I think ${who}'s birthday is around now -- I had such a great time at ${who}'s birthday party last year! Please wish ${who} a very happy birthday from me.\n\nShine, The Mentalist`
+    });
+  }
+
   return out;
 }
 
@@ -380,7 +438,10 @@ async function occasionDrafts(req, res) {
   const tomorrow = centralDateString(1);
   const results = { today, drafted: [], skipped: [], errors: [] };
   try {
-    const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?intake_answers=not.is.null&select=id,client_id,client_name,client_email,event_type,event_date,status,intake_answers`, { headers: SB_HDR() });
+    // No intake_answers filter: past birthday/wedding gigs (especially imported ones)
+    // may have none, and the gig-date-proxy occasions need exactly those rows. Branches
+    // that read intake_answers simply no-op when it is null.
+    const bRes = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?select=id,client_id,client_name,client_email,event_type,event_date,status,intake_answers`, { headers: SB_HDR() });
     const bookings = await bRes.json();
     if (!Array.isArray(bookings)) throw new Error('Unexpected bookings response');
     for (const b of bookings) {
@@ -416,11 +477,49 @@ async function occasionDrafts(req, res) {
         }
       }
     }
+
+    // Heads-up to Shine himself: every wish coming in the next 7 days, so he has lead
+    // time even though the drafts land day-of (option A, Shine 2026-11-07). Built from
+    // the SAME occasion generator, walked one day at a time across the window, so the
+    // preview can never disagree with what actually gets drafted. Silent no-op when
+    // nothing is coming. Never fails the drafting run.
+    try {
+      const upcoming = [];
+      for (let d = 0; d <= 7; d++) {
+        const day = centralDateString(d);
+        const next = centralDateString(d + 1);
+        const label = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(day + 'T12:00:00Z'));
+        for (const b of bookings) {
+          const st = String(b.status || '').toLowerCase();
+          if (st === 'lost' || st === 'cancelled') continue;
+          for (const o of occasionsFor(b, day, next)) upcoming.push(`${label} -- ${o.subject}`);
+        }
+      }
+      results.headsUp = await sendShineWishes(upcoming);
+    } catch (e) {
+      results.headsUp = { sent: false, error: e.message };
+    }
+
     res.status(200).json(results);
   } catch (e) {
     console.error('occasion-drafts error:', e);
     res.status(500).json({ error: e.message, ...results });
   }
+}
+
+// Texts Shine a single heads-up of the wishes due in the next 7 days. Shares the Twilio
+// number and tagged-digest style of sendShineDigest. Silent (sent: false) when the week
+// is empty, so he only hears from it when there's something to prepare for.
+async function sendShineWishes(lines) {
+  if (!Array.isArray(lines) || !lines.length) return { sent: false, count: 0, reason: 'no wishes in the next 7 days' };
+  const smsText = `WISHES: next 7 days (${lines.length}):\n${lines.join('\n')}`;
+  const twRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_SID}/Messages.json`, {
+    method: 'POST',
+    headers: { Authorization: 'Basic ' + Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ From: process.env.TWILIO_FROM, To: SHINE_PHONE, Body: smsText }).toString(),
+  });
+  if (!twRes.ok) return { sent: false, count: lines.length, twilioError: (await twRes.text()).slice(0, 200) };
+  return { sent: true, count: lines.length };
 }
 
 async function sendWeeklySummary(req, res) {
