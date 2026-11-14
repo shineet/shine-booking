@@ -262,9 +262,12 @@ Notes: ${notes || 'none'}`;
 
   if (mode === 'pricing') {
     try {
-      const { clientId, clientName, phone, email, lastChannel, pricingLink } = req.body;
-      const message = `Hi! Here are my show packages and pricing: ${pricingLink} — Shine, The Mentalist`;
-      const emailText = `Hi ${clientName},\n\nHere's a link to my packages and pricing — you can view all three options and what's included:\n\n${pricingLink}\n\nFeel free to reach out if you have any questions!\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`;
+      const { clientId, clientName, phone, email, lastChannel, pricingLink, customSubject, customBody } = req.body;
+      // Optional hand-edited wording from the app's review step. Absent = the default text, unchanged.
+      const edited = typeof customBody === 'string' && customBody.trim() ? customBody.trim() : null;
+      const emailSubject = typeof customSubject === 'string' && customSubject.trim() ? customSubject.trim() : 'My show packages & pricing';
+      const message = edited || `Hi! Here are my show packages and pricing: ${pricingLink} — Shine, The Mentalist`;
+      const emailText = edited || `Hi ${clientName},\n\nHere's a link to my packages and pricing — you can view all three options and what's included:\n\n${pricingLink}\n\nFeel free to reach out if you have any questions!\n\nShine, The Mentalist\n+1 (737) 271-5308\nwww.texasmentalist.com`;
       let sent = false;
       const channel = lastChannel || (phone ? 'sms' : 'email');
       // Send via SMS if that's the channel they used
@@ -288,7 +291,7 @@ Notes: ${notes || 'none'}`;
             from: 'Shine, The Mentalist <shine@texasmentalist.com>',
             to: email,
             bcc: ['shinethementalist@gmail.com'],
-            subject: 'My show packages & pricing',
+            subject: emailSubject,
             text: emailText
           })
         });
@@ -331,7 +334,7 @@ Notes: ${notes || 'none'}`;
                 content: channel === 'email' ? emailText : message,
                 status: 'sent',
                 to_address: channel === 'email' ? email : phone,
-                email_subject: channel === 'email' ? 'My show packages & pricing' : null
+                email_subject: channel === 'email' ? emailSubject : null
               }])
             });
           } catch (logErr) {
