@@ -1,3 +1,4 @@
+import { resolveBookingId } from '../lib/booking-alias.js';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 // Parses free-text start times like "7 PM", "7:30pm", "7-8 PM", "19:00".
@@ -128,7 +129,9 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
   try {
-    const { bookingId, printedName, signatureData, depositPercent, paymentMode, clientOrgName, clientAddress } = req.body;
+    const { bookingId: rawBookingId, printedName, signatureData, depositPercent, paymentMode, clientOrgName, clientAddress } = req.body;
+    // An old link to a merged booking signs the booking it was merged into.
+    const bookingId = await resolveBookingId(rawBookingId);
     if (!bookingId || !printedName || !signatureData) {
       res.status(400).json({ error: 'Missing required fields' });
       return;

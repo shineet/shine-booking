@@ -1,4 +1,5 @@
 import { signedMediaUrl } from '../lib/message-media.js';
+import { resolveBookingId } from '../lib/booking-alias.js';
 import { claudeText } from '../lib/claude-text.js';
 import { makeToken, tokenValid } from '../lib/dashboard-token.js';
 import crypto from 'node:crypto';
@@ -977,14 +978,22 @@ Rules:
       return;
     }
 
-    const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${bid}&limit=1`, {
-      headers: {
-        'apikey': process.env.SUPABASE_SECRET_KEY,
-        'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
-      }
-    });
-    const rows = await r.json();
-    const booking = Array.isArray(rows) ? rows[0] : null;
+    const fetchBooking = async (id) => {
+      const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/bookings?id=eq.${id}&limit=1`, {
+        headers: {
+          'apikey': process.env.SUPABASE_SECRET_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_SECRET_KEY}`
+        }
+      });
+      const rows = await r.json();
+      return Array.isArray(rows) ? rows[0] : null;
+    };
+    let booking = await fetchBooking(bid);
+    // A merged-away booking: an old link still opens the booking it was merged into.
+    if (!booking) {
+      const merged = await resolveBookingId(bid);
+      if (merged && merged !== bid) booking = await fetchBooking(merged);
+    }
 
     if (!booking) {
       res.status(404).json({ error: 'Booking not found' });
