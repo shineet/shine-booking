@@ -5,6 +5,7 @@
 
 import { gigLine, upsertGigLine } from '../lib/family-note-server.js';
 import { notify, notifyNewLead } from '../lib/apns.js';
+import { resolveBookingId } from '../lib/booking-alias.js';
 import { shouldDropAsSpam } from '../lib/spam-filter.js';
 
 export default async function handler(req, res) {
@@ -244,7 +245,9 @@ export default async function handler(req, res) {
   } else if (action === 'submit') {
     // ── formerly submit-intake.js ─────────────────────────────────────────────
     try {
-      const { bookingId, answers, draft } = req.body;
+      const { bookingId: rawBookingId, answers, draft } = req.body;
+      // An old intake link to a merged booking saves onto the booking it was merged into.
+      const bookingId = await resolveBookingId(rawBookingId);
       if (!bookingId) return res.status(400).json({ error: 'Missing booking id' });
 
       // Save the answers. Only overwrite venue/start time when the client
