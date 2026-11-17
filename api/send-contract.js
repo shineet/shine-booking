@@ -106,6 +106,21 @@ module.exports = async function handler(req, res) {
     // ── 1. Upsert booking record ─────────────────────────────────────────────
     let resolvedBookingId = safeBookingId;
 
+    // No booking id came in (the native app never sends one). Reuse the client's
+    // ACTIVE booking for this event date instead of creating another: every press
+    // of Send contract used to make a fresh record, and a second press or a retry
+    // left duplicates on the Dashboard (Sarah Prochot, 2026-11-17: three bookings,
+    // one holding a live Stripe deposit). Matches on client + date only, so a
+    // returning client's genuinely different date still gets its own booking.
+    if (!resolvedBookingId && safeClientId && eventDate) {
+      const q = `${SB_URL}/rest/v1/bookings?client_id=eq.${encodeURIComponent(safeClientId)}`
+        + `&event_date=eq.${encodeURIComponent(eventDate)}&status=not.in.(completed,lost,cancelled)`
+        + `&select=id&order=created_at.asc&limit=1`;
+      const exRes = await fetch(q, { headers: SB_HDR });
+      const exRows = await exRes.json().catch(() => []);
+      if (Array.isArray(exRows) && exRows[0] && exRows[0].id) resolvedBookingId = exRows[0].id;
+    }
+
     if (resolvedBookingId) {
       // Update existing booking with latest event details
       const updRes = await fetch(`${SB_URL}/rest/v1/bookings?id=eq.${resolvedBookingId}`, {
